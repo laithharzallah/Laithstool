@@ -248,9 +248,14 @@
                     </div>
                 </div>
                 
-                <button type="submit" class="btn" id="submitBtn">
-                    🚀 Start AI-Powered Web Search & Analysis
-                </button>
+                <div style="display: flex; gap: 15px;">
+                    <button type="submit" class="btn" id="submitBtn" style="flex: 1;">
+                        🚀 Start AI-Powered Web Search & Analysis
+                    </button>
+                    <button type="button" class="btn-secondary" id="healthBtn" style="padding: 20px 30px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; border: none; border-radius: 16px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                        🔧 System Check
+                    </button>
+                </div>
             </form>
         </div>
         
@@ -291,6 +296,111 @@
                 submitBtn.innerHTML = '🚀 Start AI-Powered Web Search & Analysis';
             }
         });
+        
+        // Health check functionality
+        document.getElementById('healthBtn').addEventListener('click', async function() {
+            const healthBtn = document.getElementById('healthBtn');
+            const resultsDiv = document.getElementById('results');
+            
+            // Show loading
+            healthBtn.disabled = true;
+            healthBtn.innerHTML = '⏳ Checking...';
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>🔧 Running system diagnostics...</p></div>';
+            
+            try {
+                const response = await fetch('/api/health', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Health check failed: ${response.status}`);
+                }
+                
+                const healthData = await response.json();
+                displayHealthResults(healthData);
+                
+            } catch (error) {
+                console.error('Health check error:', error);
+                resultsDiv.innerHTML = `<div class="error">❌ Health Check Failed: ${error.message}</div>`;
+            } finally {
+                healthBtn.disabled = false;
+                healthBtn.innerHTML = '🔧 System Check';
+            }
+        });
+        
+        function displayHealthResults(data) {
+            const resultsDiv = document.getElementById('results');
+            
+            const statusIcon = data.status === 'healthy' ? '✅' : data.status === 'warning' ? '⚠️' : '❌';
+            const statusColor = data.status === 'healthy' ? '#10b981' : data.status === 'warning' ? '#f59e0b' : '#ef4444';
+            
+            let html = `
+                <div class="results">
+                    <h2>${statusIcon} System Health Check</h2>
+                    <p><strong>Overall Status:</strong> <span style="color: ${statusColor}; font-weight: bold;">${data.status.toUpperCase()}</span></p>
+                    <p><small>🕐 Checked: ${data.timestamp}</small></p>
+                    <hr style="margin: 25px 0; border: none; height: 2px; background: linear-gradient(to right, #f7c32e, #e6ac00);">
+            `;
+            
+            // OpenAI Status
+            const openai = data.components.openai;
+            const openaiIcon = openai.status === 'healthy' ? '✅' : '❌';
+            html += `
+                <div class="section">
+                    <h3>${openaiIcon} OpenAI API Status</h3>
+                    <div class="website-info" style="background: ${openai.status === 'healthy' ? 'linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)' : 'linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%)'};">
+                        <p><strong>Status:</strong> ${openai.status}</p>
+                        <p><strong>Message:</strong> ${openai.message}</p>
+                        ${openai.model ? `<p><strong>Model:</strong> ${openai.model}</p>` : ''}
+                    </div>
+                </div>
+            `;
+            
+            // Environment Variables
+            const env = data.components.environment;
+            html += `
+                <div class="section">
+                    <h3>🔐 Environment Configuration</h3>
+                    <div class="website-info">
+                        ${Object.entries(env.variables).map(([key, value]) => 
+                            `<p><strong>${key}:</strong> <span style="color: ${value === 'Present' ? '#10b981' : '#ef4444'};">${value}</span></p>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+            
+            // Integrations
+            const integrations = data.components.integrations;
+            const integrationsIcon = integrations.status === 'healthy' ? '✅' : '⚠️';
+            html += `
+                <div class="section">
+                    <h3>${integrationsIcon} Web Search Integrations</h3>
+                    <div class="website-info">
+                        <p><strong>Status:</strong> ${integrations.status}</p>
+                        <p><strong>Message:</strong> ${integrations.message}</p>
+                        ${integrations.serper ? `<p><strong>Serper API:</strong> ${integrations.serper}</p>` : ''}
+                    </div>
+                </div>
+            `;
+            
+            html += `
+                <div style="text-align: center; margin-top: 40px; padding: 25px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 16px; border: 1px solid #e9ecef;">
+                    <p style="color: #666; font-size: 15px; font-weight: 500; margin-bottom: 10px;">
+                        🔧 System Diagnostics Complete
+                    </p>
+                    <p style="color: #888; font-size: 13px;">
+                        All critical components have been tested
+                    </p>
+                </div>
+            </div>
+            `;
+            
+            resultsDiv.innerHTML = html;
+        }
         
         async function screenCompany(companyName, country, screeningLevel) {
             const response = await fetch('/api/screen', {

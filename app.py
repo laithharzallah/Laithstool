@@ -13,7 +13,17 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "5000"))
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Initialize OpenAI client
+try:
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    print(f"✅ OpenAI client initialized successfully")
+    print(f"🔑 API Key present: {'Yes' if OPENAI_API_KEY else 'No'}")
+    print(f"🔑 API Key length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
+    print(f"🤖 Model: {OPENAI_MODEL}")
+except Exception as e:
+    print(f"❌ Failed to initialize OpenAI client: {str(e)}")
+    client = None
+
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production-2024'
 
@@ -176,10 +186,92 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    """Health check endpoint to verify system status"""
+    if 'logged_in' not in session:
+        return jsonify({"error": "Authentication required"}), 401
+    
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "components": {}
+    }
+    
+    # Check OpenAI API
+    try:
+        if not OPENAI_API_KEY:
+            health_status["components"]["openai"] = {
+                "status": "error",
+                "message": "API key not configured"
+            }
+        elif not client:
+            health_status["components"]["openai"] = {
+                "status": "error", 
+                "message": "Client initialization failed"
+            }
+        else:
+            # Test API call
+            test_response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[{"role": "user", "content": "Hello, respond with just 'OK'"}],
+                max_tokens=10
+            )
+            health_status["components"]["openai"] = {
+                "status": "healthy",
+                "model": OPENAI_MODEL,
+                "message": "API connection successful"
+            }
+    except Exception as e:
+        health_status["components"]["openai"] = {
+            "status": "error",
+            "message": f"API test failed: {str(e)}"
+        }
+    
+    # Check environment variables
+    env_vars = {
+        "OPENAI_API_KEY": "Present" if OPENAI_API_KEY else "Missing",
+        "SERPER_API_KEY": "Present" if os.getenv("SERPER_API_KEY") else "Missing",
+        "NEWS_API_KEY": "Present" if os.getenv("NEWS_API_KEY") else "Missing"
+    }
+    health_status["components"]["environment"] = {
+        "status": "healthy" if OPENAI_API_KEY else "warning",
+        "variables": env_vars
+    }
+    
+    # Check integrations
+    try:
+        # Test a simple search
+        test_result = integrations.search_serper("test", num=1)
+        serper_status = "healthy" if "error" not in test_result else "warning"
+        health_status["components"]["integrations"] = {
+            "status": serper_status,
+            "serper": "Available" if serper_status == "healthy" else "Limited",
+            "message": "Web search capabilities checked"
+        }
+    except Exception as e:
+        health_status["components"]["integrations"] = {
+            "status": "warning",
+            "message": f"Integration test failed: {str(e)}"
+        }
+    
+    # Overall status
+    component_statuses = [comp["status"] for comp in health_status["components"].values()]
+    if "error" in component_statuses:
+        health_status["status"] = "degraded"
+    elif "warning" in component_statuses:
+        health_status["status"] = "warning"
+    
+    return jsonify(health_status)
+
 @app.route("/api/screen", methods=["POST"])
 def screen():
     if 'logged_in' not in session:
         return jsonify({"error": "Authentication required"}), 401
+    
+    # Check OpenAI availability
+    if not client:
+        return jsonify({"error": "OpenAI service not available. Please check API key configuration."}), 503
         
     data = request.get_json(force=True) or {}
     company = (data.get("company_name") or "").strip()
@@ -195,14 +287,14 @@ def screen():
     
     try:
         # First, gather real-time web data
-        print(f"Gathering real-time data for {company}...")
+        print(f"🔍 Gathering real-time data for {company}...")
         web_data = integrations.comprehensive_company_search(company, country)
         
         # Create enhanced prompt with real-time data
         user_prompt = create_enhanced_prompt(company, country_hint, level, web_data)
         
         # Get GPT analysis
-        print("Analyzing data with GPT...")
+        print(f"🤖 Analyzing data with GPT using model: {OPENAI_MODEL}")
         resp = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[{"role":"system","content":SYSTEM_PROMPT},
@@ -212,12 +304,16 @@ def screen():
         )
         
         raw = resp.choices[0].message.content.strip()
+        print(f"✅ GPT response received, length: {len(raw)} characters")
+        
         if raw.startswith("```"):
             raw = raw.split("```", 2)[1].lstrip("json\n").lstrip()
         
         try:
             payload = json.loads(raw)
-        except json.JSONDecodeError:
+            print("✅ GPT response parsed successfully")
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON parsing failed: {str(e)}")
             # Fallback: use web data directly if GPT response is malformed
             payload = {
                 "website_info": web_data.get("website_info", {}),
@@ -226,7 +322,7 @@ def screen():
                 "financial_highlights": web_data.get("financial_highlights", {}),
                 "risk_assessment": {
                     "overall_risk": "Medium",
-                    "key_risks": ["Data analysis incomplete"],
+                    "key_risks": ["GPT analysis incomplete - using web data only"],
                     "recommendations": ["Manual review recommended"]
                 }
             }
@@ -250,6 +346,8 @@ def screen():
             data_sources.append("Google Search")
         if not web_data.get("news_search", {}).get("error"):
             data_sources.append("News API")
+        if web_data.get("sanctions_check") and not web_data["sanctions_check"].get("error"):
+            data_sources.append("Sanctions Databases")
         
         out = ScreenResponse(
             company_name=company,
@@ -261,13 +359,16 @@ def screen():
             **payload
         )
         
+        print(f"✅ Screening completed successfully for {company}")
         return jsonify(out.model_dump())
         
     except ValidationError as ve:
+        print(f"❌ Validation error: {str(ve)}")
         return jsonify({"error":"Schema validation failed","details":json.loads(ve.json())}), 422
     except Exception as e:
-        print(f"Error during screening: {str(e)}")
+        print(f"❌ Error during screening: {str(e)}")
         return jsonify({"error":str(e)}), 500
 
 if __name__ == "__main__":
+    print(f"🚀 Starting Laith's Tool on {HOST}:{PORT}")
     app.run(host=HOST, port=PORT, debug=False)
