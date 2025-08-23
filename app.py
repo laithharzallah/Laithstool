@@ -1,6 +1,6 @@
 import os, json
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash
 from pydantic import BaseModel, Field, ValidationError
 from typing import List, Optional, Literal
 from dotenv import load_dotenv
@@ -15,6 +15,11 @@ PORT = int(os.getenv("PORT", "5000"))
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 app = Flask(__name__)
+app.secret_key = 'your-secret-key-change-in-production-2024'
+
+# Authentication credentials
+VALID_USERNAME = "ens@123"
+VALID_PASSWORD = "$$$$55"
 
 class Executive(BaseModel):
     name: str
@@ -147,10 +152,35 @@ Use the real-time data provided above to fill out this structure. Focus on accur
 
 @app.route("/")
 def home():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
     return render_template("index.html")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        
+        if username == VALID_USERNAME and password == VALID_PASSWORD:
+            session['logged_in'] = True
+            session['username'] = username
+            return redirect(url_for('home'))
+        else:
+            flash("Invalid credentials. Please try again.", "error")
+    
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route("/api/screen", methods=["POST"])
 def screen():
+    if 'logged_in' not in session:
+        return jsonify({"error": "Authentication required"}), 401
+        
     data = request.get_json(force=True) or {}
     company = (data.get("company_name") or "").strip()
     country = (data.get("country") or "").strip()
