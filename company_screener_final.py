@@ -590,3 +590,79 @@ if __name__ == '__main__':
 @app.route("/healthz")
 def healthz():
     return {"status":"ok"}
+
+
+
+# ==== JSON-MODE version of screen_company_with_gpt ====
+def screen_company_with_gpt(company_name, country="", screening_level="basic"):
+    if client is None:
+        return {"website_info":{"official_website":"Error","title":"OpenAI client not available","status":"Error","source":"System"}, "executives": [], "adverse_media": []}
+
+    # Bring in external context safely as JSON strings (NOT Python dict reprs)
+    try:
+        import integrations, json, re
+        serper_dict = integrations.search_serper(company_name + (f" {country}" if country else ""))
+        news_dict   = integrations.search_newsapi(company_name + (f" {country}" if country else ""))
+        serper_json = json.dumps(serper_dict, ensure_ascii=False)
+        news_json   = json.dumps(news_dict, ensure_ascii=False)
+    except Exception as _e:
+        serper_json = "{}"; news_json = "{}"
+
+    # Prompt (concise, structured)
+    base_schema = {
+        "website_info": {
+            "official_website": "URL or 'Not found'",
+            "title": "short description",
+            "status": "Found/Not found",
+            "source": "Source name"
+        },
+        "executives": [
+            {"name":"...", "position":"...", "background":"optional", "source":"..."}
+        ],
+        "adverse_media": [
+            {"title":"...", "summary":"...", "severity":"High/Medium/Low", "date":"Recent/ISO", "source":"...", "category":"Legal/Financial/Regulatory/Operational/Reputational"}
+        ]
+    }
+    if screening_level == "advanced":
+        base_schema.update({
+            "financial_highlights": {"revenue":"...", "employees":"...", "founded":"...", "industry":"...", "market_cap":"..."},
+            "risk_assessment": {"overall_risk":"Low/Medium/High", "key_risks":["..."], "recommendations":["..."]}
+        })
+
+    try:
+        # Force JSON output
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            response_format={"type": "json_object"},
+            temperature=0.2,
+            max_tokens=2200 if screening_level == "advanced" else 1200,
+            messages=[
+                {"role":"system","content":"Return ONLY valid JSON that matches the requested schema. No markdown fences."},
+                {"role":"user","content": (
+                    f"Company: {company_name}" + (f" ({country})" if country else "") +
+                    "\n\nEXTERNAL_CONTEXT:" +
+                    f"\nSerperJSON={serper_json}" +
+                    f"\nNewsJSON={news_json}" +
+                    "\n\nSchema:" + json.dumps(base_schema, ensure_ascii=False)
+                )}
+            ]
+        )
+        raw = resp.choices[0].message.content
+
+        # Strict parse (should succeed in JSON mode)
+        import json, re
+        try:
+            return json.loads(raw)
+        except Exception:
+            m = re.search(r'\{.*\}', raw, re.S)
+            if m:
+                return json.loads(m.group(0))
+            return {
+                "website_info":{"official_website":"Error","title":"Model returned non-JSON","status":"Error","source":"System"},
+                "executives":[], "adverse_media":[]
+            }
+    except Exception as e:
+        return {
+            "website_info":{"official_website":"Error","title":f"Screening failed: {e}","status":"Error","source":"System"},
+            "executives":[], "adverse_media":[]
+        }
