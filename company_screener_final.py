@@ -15,11 +15,14 @@ import time
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
+import integrations
 
 # Initialize OpenAI client with environment API key
 client = openai.OpenAI()
 
 def screen_company_with_gpt(company_name, country="", screening_level="basic"):
+    serper_data = integrations.search_serper(company_name + (f" {country}" if country else ""))
+    news_data   = integrations.search_newsapi(company_name + (f" {country}" if country else ""))
     """Screen a company using GPT with comprehensive analysis"""
     
     if screening_level == "advanced":
@@ -121,6 +124,7 @@ Company to research: {company_name} {f"({country})" if country else ""}
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
+                {"role":"user","content": f"CONTEXT from Serper: {serper_data}\n\nCONTEXT from NewsAPI: {news_data}"},
                 {"role": "system", "content": "You are a professional due diligence researcher. Always respond with valid JSON only. Do not include any text before or after the JSON."},
                 {"role": "user", "content": prompt}
             ],
@@ -581,3 +585,8 @@ if __name__ == '__main__':
     
     app.run(host='0.0.0.0', port=5000, debug=False)
 
+
+
+@app.route("/healthz")
+def healthz():
+    return {"status":"ok"}
