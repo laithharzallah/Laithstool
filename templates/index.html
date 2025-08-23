@@ -263,6 +263,19 @@
     </div>
 
     <script>
+        // Session keepalive - ping server every 5 minutes to keep session active
+        function keepSessionAlive() {
+            fetch('/api/health', { 
+                method: 'GET',
+                credentials: 'same-origin'
+            }).catch(() => {
+                console.log('Session keepalive failed - may need to refresh');
+            });
+        }
+        
+        // Start keepalive timer
+        setInterval(keepSessionAlive, 5 * 60 * 1000); // Every 5 minutes
+        
         document.getElementById('screeningForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -403,11 +416,16 @@
         }
         
         async function screenCompany(companyName, country, screeningLevel) {
+            // First, refresh session to prevent expiration during long request
+            await fetch('/api/health', { method: 'GET' }).catch(() => {});
+            
             const response = await fetch('/api/screen', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
                 },
+                credentials: 'same-origin',  // Ensure cookies are sent
                 body: JSON.stringify({
                     company_name: companyName,
                     country: country,
@@ -418,12 +436,16 @@
             // Check if we got redirected to login (HTML response)
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.includes('text/html')) {
-                throw new Error('Session expired. Please refresh the page and log in again.');
+                // Try to refresh the page to get a new session
+                window.location.reload();
+                throw new Error('Session expired. Refreshing page...');
             }
 
             if (!response.ok) {
                 if (response.status === 401) {
-                    throw new Error('Authentication required. Please refresh the page and log in again.');
+                    // Try to refresh the page to get a new session
+                    window.location.reload();
+                    throw new Error('Authentication expired. Refreshing page...');
                 }
                 
                 try {
@@ -435,8 +457,11 @@
             }
 
             try {
-                return await response.json();
+                const result = await response.json();
+                console.log('✅ Screening completed successfully');
+                return result;
             } catch (jsonError) {
+                console.error('JSON parsing error:', jsonError);
                 throw new Error('Invalid response format. Please try again or refresh the page.');
             }
         }

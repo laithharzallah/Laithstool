@@ -1,5 +1,5 @@
 import os, json
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash
 from pydantic import BaseModel, Field, ValidationError
 from typing import List, Optional, Literal
@@ -27,9 +27,26 @@ except Exception as e:
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production-2024'
 
+# Configure session to last longer and be more persistent
+app.config.update(
+    SESSION_COOKIE_SECURE=False,  # Set to True in production with HTTPS
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=24),  # 24 hour sessions
+    SESSION_COOKIE_NAME='laiths_tool_session'
+)
+
 # Authentication credentials
 VALID_USERNAME = "ens@123"
 VALID_PASSWORD = "$$$$55"
+
+# Add before_request handler to refresh session on each request
+@app.before_request
+def refresh_session():
+    """Refresh session on each request to prevent expiration during long operations"""
+    if 'logged_in' in session:
+        session.permanent = True
+        session.modified = True
 
 class Executive(BaseModel):
     name: str
@@ -173,8 +190,11 @@ def login():
         password = request.form.get("password")
         
         if username == VALID_USERNAME and password == VALID_PASSWORD:
+            session.permanent = True  # Make session permanent
             session['logged_in'] = True
             session['username'] = username
+            session['login_time'] = datetime.utcnow().isoformat()
+            print(f"✅ User {username} logged in successfully")
             return redirect(url_for('home'))
         else:
             flash("Invalid credentials. Please try again.", "error")
@@ -183,6 +203,7 @@ def login():
 
 @app.route("/logout")
 def logout():
+    print(f"🚪 User {session.get('username', 'unknown')} logged out")
     session.clear()
     return redirect(url_for('login'))
 
@@ -266,8 +287,14 @@ def health_check():
 
 @app.route("/api/screen", methods=["POST"])
 def screen():
+    # Enhanced session checking
     if 'logged_in' not in session:
+        print("❌ Authentication failed - no logged_in in session")
         return jsonify({"error": "Authentication required"}), 401
+    
+    # Refresh session on screening request
+    session.permanent = True
+    session.modified = True
     
     # Check OpenAI availability
     if not client:
@@ -290,6 +317,9 @@ def screen():
         print(f"🔍 Gathering real-time data for {company}...")
         web_data = integrations.comprehensive_company_search(company, country)
         
+        # Refresh session again during long operation
+        session.modified = True
+        
         # Create enhanced prompt with real-time data
         user_prompt = create_enhanced_prompt(company, country_hint, level, web_data)
         
@@ -302,6 +332,9 @@ def screen():
             temperature=0.2,
             max_tokens=4000 if level=="advanced" else 2500
         )
+        
+        # Refresh session after GPT call
+        session.modified = True
         
         raw = resp.choices[0].message.content.strip()
         print(f"✅ GPT response received, length: {len(raw)} characters")
