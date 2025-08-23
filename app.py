@@ -1,6 +1,6 @@
 import os, json
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash, make_response
 from pydantic import BaseModel, Field, ValidationError
 from typing import List, Optional, Literal
 from dotenv import load_dotenv
@@ -26,6 +26,14 @@ except Exception as e:
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production-2024'
+
+# Add CORS headers to all responses
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE')
+    return response
 
 # Configure session to last longer and be more persistent
 app.config.update(
@@ -287,10 +295,15 @@ def health_check():
 
 @app.route("/api/screen", methods=["POST"])
 def screen():
-    # Enhanced session checking
+    # Enhanced session checking with debugging
+    print(f"🔍 Session check - session keys: {list(session.keys())}")
+    print(f"🔍 Logged in status: {'logged_in' in session}")
+    
     if 'logged_in' not in session:
         print("❌ Authentication failed - no logged_in in session")
         return jsonify({"error": "Authentication required"}), 401
+    
+    print(f"✅ Authentication successful for user: {session.get('username', 'unknown')}")
     
     # Refresh session on screening request
     session.permanent = True
@@ -301,9 +314,11 @@ def screen():
         return jsonify({"error": "OpenAI service not available. Please check API key configuration."}), 503
         
     data = request.get_json(force=True) or {}
-    company = (data.get("company_name") or "").strip()
+    # Handle both old and new UI formats
+    company = (data.get("company_name") or data.get("company") or "").strip()
     country = (data.get("country") or "").strip()
     level = (data.get("screening_level") or "basic").strip()
+    options = data.get("options", {})
     
     if not company:
         return jsonify({"error": "company_name is required"}), 400
@@ -382,18 +397,59 @@ def screen():
         if web_data.get("sanctions_check") and not web_data["sanctions_check"].get("error"):
             data_sources.append("Sanctions Databases")
         
-        out = ScreenResponse(
-            company_name=company,
-            country=country or None,
-            screening_level=level,
-            timestamp=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
-            model=OPENAI_MODEL,
-            data_sources=data_sources,
-            **payload
-        )
+        # Transform to new UI format
+        transformed_response = {
+            "task_id": f"task_{int(datetime.utcnow().timestamp())}",
+            "company_name": company,
+            "status": "completed",
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "executive_summary": {
+                "overview": payload.get("risk_assessment", {}).get("key_risks", ["Analysis completed"])[0] if payload.get("risk_assessment", {}).get("key_risks") else "Company screening completed successfully.",
+                "key_points": payload.get("risk_assessment", {}).get("key_risks", [])[:3]
+            },
+            "company_profile": {
+                "legal_name": company,
+                "primary_industry": payload.get("financial_highlights", {}).get("industry", "Not available"),
+                "founded_year": payload.get("financial_highlights", {}).get("founded", "Not available"),
+                "employee_count_band": payload.get("financial_highlights", {}).get("employees", "Not available")
+            },
+            "key_people": [
+                {
+                    "name": exec.get("name", "Unknown"),
+                    "role": exec.get("position", "Unknown position"),
+                    "background": exec.get("background", "No background information"),
+                    "confidence": "high" if exec.get("source") else "medium"
+                } for exec in payload.get("executives", [])
+            ],
+            "web_footprint": {
+                "official_website": payload.get("website_info", {}).get("official_website"),
+                "social_media": {}
+            },
+            "news_and_media": [
+                {
+                    "title": media.get("title", "Unknown title"),
+                    "summary": media.get("summary", "No summary available"),
+                    "source_name": media.get("source", "Unknown source"),
+                    "published_date": media.get("date", "Unknown date"),
+                    "sentiment": "negative" if media.get("severity") == "High" else "neutral"
+                } for media in payload.get("adverse_media", [])
+            ],
+            "sanctions_matches": web_data.get("sanctions_check", {}).get("matches", []),
+            "risk_flags": [
+                {
+                    "category": "General Risk",
+                    "description": risk,
+                    "severity": "medium"
+                } for risk in payload.get("risk_assessment", {}).get("key_risks", [])
+            ],
+            "compliance_notes": {
+                "data_sources_used": data_sources,
+                "methodology": "Automated web-based due diligence screening using AI analysis"
+            }
+        }
         
         print(f"✅ Screening completed successfully for {company}")
-        return jsonify(out.model_dump())
+        return jsonify(transformed_response)
         
     except ValidationError as ve:
         print(f"❌ Validation error: {str(ve)}")
