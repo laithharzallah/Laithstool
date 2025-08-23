@@ -5,6 +5,8 @@ import yfinance as yf
 from bs4 import BeautifulSoup
 import re
 from typing import Dict, List, Optional
+from urllib.parse import quote, urljoin
+import random
 
 load_dotenv()
 
@@ -12,6 +14,23 @@ NEWS_API_KEY   = os.getenv("NEWS_API_KEY")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY")
 FINNHUB_KEY = os.getenv("FINNHUB_KEY")
+
+# User agents for web scraping
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
+]
+
+def get_random_headers():
+    """Get random headers for web scraping"""
+    return {
+        'User-Agent': random.choice(USER_AGENTS),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+    }
 
 def search_serper(query, num=10):
     """Enhanced Serper search with better error handling"""
@@ -62,6 +81,204 @@ def search_newsapi(query, page_size=10, language="en"):
         print(f"NewsAPI search error: {str(e)}")
         return {"error": f"NewsAPI search failed: {str(e)}"}
 
+def search_linkedin_executives(company_name: str) -> List[Dict]:
+    """Search for company executives on LinkedIn using Google search"""
+    try:
+        executives = []
+        
+        # LinkedIn search queries
+        linkedin_queries = [
+            f'site:linkedin.com/in "{company_name}" CEO',
+            f'site:linkedin.com/in "{company_name}" CFO',
+            f'site:linkedin.com/in "{company_name}" CTO',
+            f'site:linkedin.com/in "{company_name}" President',
+            f'site:linkedin.com/in "{company_name}" Executive',
+            f'site:linkedin.com/in "{company_name}" Director',
+            f'site:linkedin.com/in "{company_name}" VP'
+        ]
+        
+        for query in linkedin_queries[:4]:  # Limit queries to avoid rate limits
+            search_results = search_serper(query, num=10)
+            
+            if "organic" in search_results:
+                for result in search_results["organic"]:
+                    title = result.get("title", "")
+                    snippet = result.get("snippet", "")
+                    url = result.get("link", "")
+                    
+                    # Extract executive information from LinkedIn profiles
+                    if "linkedin.com/in/" in url:
+                        # Extract name from title (usually "FirstName LastName - Position at Company")
+                        name_match = re.search(r'^([A-Z][a-z]+ [A-Z][a-z]+)', title)
+                        if name_match:
+                            name = name_match.group(1)
+                            
+                            # Extract position
+                            position = "Executive"
+                            if "CEO" in title.upper() or "Chief Executive" in title:
+                                position = "CEO"
+                            elif "CFO" in title.upper() or "Chief Financial" in title:
+                                position = "CFO"
+                            elif "CTO" in title.upper() or "Chief Technology" in title:
+                                position = "CTO"
+                            elif "President" in title:
+                                position = "President"
+                            elif "VP" in title or "Vice President" in title:
+                                position = "Vice President"
+                            elif "Director" in title:
+                                position = "Director"
+                            
+                            executive = {
+                                "name": name,
+                                "position": position,
+                                "background": snippet[:200] + "..." if len(snippet) > 200 else snippet,
+                                "source": url,
+                                "linkedin_profile": url
+                            }
+                            
+                            # Avoid duplicates
+                            if not any(exec["name"] == executive["name"] for exec in executives):
+                                executives.append(executive)
+            
+            time.sleep(1)  # Rate limiting
+        
+        print(f"Found {len(executives)} LinkedIn executives for {company_name}")
+        return executives[:10]  # Return top 10
+    
+    except Exception as e:
+        print(f"LinkedIn search error: {str(e)}")
+        return []
+
+def check_sanctions_databases(company_name: str, executives: List[Dict]) -> Dict:
+    """Check company and executives against sanctions databases"""
+    try:
+        sanctions_results = {
+            "company_sanctions": [],
+            "executive_sanctions": [],
+            "databases_checked": []
+        }
+        
+        # Sanctions databases to check
+        sanctions_queries = [
+            f'"{company_name}" site:treasury.gov sanctions',
+            f'"{company_name}" site:ofac.treasury.gov',
+            f'"{company_name}" site:export.gov denied persons',
+            f'"{company_name}" OFAC SDN sanctions',
+            f'"{company_name}" EU sanctions list',
+            f'"{company_name}" UN sanctions',
+            f'"{company_name}" BIS denied persons list'
+        ]
+        
+        # Check company sanctions
+        for query in sanctions_queries[:4]:  # Limit to avoid rate limits
+            search_results = search_serper(query, num=5)
+            
+            if "organic" in search_results:
+                for result in search_results["organic"]:
+                    title = result.get("title", "")
+                    snippet = result.get("snippet", "")
+                    url = result.get("link", "")
+                    
+                    # Check if this is a real sanctions hit
+                    sanctions_keywords = ["sanctions", "denied", "blocked", "restricted", "OFAC", "SDN"]
+                    if any(keyword.lower() in title.lower() or keyword.lower() in snippet.lower() 
+                           for keyword in sanctions_keywords):
+                        
+                        sanctions_results["company_sanctions"].append({
+                            "title": title,
+                            "summary": snippet,
+                            "source": url,
+                            "severity": "High" if any(high in snippet.lower() for high in ["blocked", "denied", "SDN"]) else "Medium"
+                        })
+            
+            time.sleep(0.5)
+        
+        # Check executives against sanctions
+        for executive in executives[:5]:  # Check top 5 executives
+            exec_name = executive.get("name", "")
+            if exec_name:
+                exec_sanctions_query = f'"{exec_name}" OFAC sanctions SDN'
+                search_results = search_serper(exec_sanctions_query, num=3)
+                
+                if "organic" in search_results:
+                    for result in search_results["organic"]:
+                        title = result.get("title", "")
+                        snippet = result.get("snippet", "")
+                        url = result.get("link", "")
+                        
+                        if any(keyword in snippet.lower() for keyword in ["sanctions", "ofac", "sdn", "denied"]):
+                            sanctions_results["executive_sanctions"].append({
+                                "executive_name": exec_name,
+                                "title": title,
+                                "summary": snippet,
+                                "source": url,
+                                "severity": "High"
+                            })
+                
+                time.sleep(0.3)
+        
+        sanctions_results["databases_checked"] = [
+            "OFAC SDN List", "Treasury.gov", "BIS Denied Persons", "EU Sanctions", "UN Sanctions"
+        ]
+        
+        print(f"Sanctions check completed: {len(sanctions_results['company_sanctions'])} company hits, {len(sanctions_results['executive_sanctions'])} executive hits")
+        return sanctions_results
+    
+    except Exception as e:
+        print(f"Sanctions check error: {str(e)}")
+        return {"company_sanctions": [], "executive_sanctions": [], "databases_checked": [], "error": str(e)}
+
+def scrape_company_website_details(url: str) -> Dict:
+    """Scrape additional details from company website"""
+    try:
+        headers = get_random_headers()
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Extract meta information
+            description = ""
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            if meta_desc:
+                description = meta_desc.get('content', '')
+            
+            # Look for company information
+            company_info = {
+                "description": description,
+                "title": soup.title.string if soup.title else "",
+                "contact_info": [],
+                "social_media": []
+            }
+            
+            # Find contact information
+            text_content = soup.get_text().lower()
+            email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            emails = re.findall(email_pattern, text_content)
+            company_info["contact_info"] = list(set(emails))[:5]  # Top 5 unique emails
+            
+            # Find social media links
+            social_patterns = {
+                "linkedin": r'linkedin\.com/company/[^"\s]+',
+                "twitter": r'twitter\.com/[^"\s]+',
+                "facebook": r'facebook\.com/[^"\s]+'
+            }
+            
+            for platform, pattern in social_patterns.items():
+                matches = re.findall(pattern, str(soup))
+                if matches:
+                    company_info["social_media"].append({
+                        "platform": platform,
+                        "url": f"https://{matches[0]}" if not matches[0].startswith('http') else matches[0]
+                    })
+            
+            return company_info
+        
+    except Exception as e:
+        print(f"Website scraping error: {str(e)}")
+    
+    return {"description": "", "title": "", "contact_info": [], "social_media": []}
+
 def search_company_website(company_name: str) -> Dict:
     """Search for company's official website and extract information"""
     try:
@@ -92,6 +309,10 @@ def search_company_website(company_name: str) -> Dict:
                     website_info["official_website"] = url
                     website_info["title"] = title
                     website_info["status"] = "Found"
+                    
+                    # Scrape additional details from the website
+                    website_details = scrape_company_website_details(url)
+                    website_info.update(website_details)
                     break
             
             # If no official site found, take the first relevant result
@@ -187,11 +408,11 @@ def format_number(num):
         return str(num)
 
 def search_company_executives(company_name: str) -> List[Dict]:
-    """Search for company executives using multiple sources"""
+    """Search for company executives using multiple sources including LinkedIn"""
     try:
         executives = []
         
-        # Search for executives
+        # Regular search for executives
         exec_queries = [
             f"{company_name} CEO CFO executives",
             f"{company_name} leadership team",
@@ -235,11 +456,18 @@ def search_company_executives(company_name: str) -> List[Dict]:
                                 if not any(exec["name"] == executive["name"] for exec in executives):
                                     executives.append(executive)
             
-            if executives:  # If we found some, don't need to search more
+            if len(executives) >= 3:  # If we found enough, break
                 break
         
-        print(f"Found {len(executives)} executives for {company_name}")
-        return executives[:5]  # Return top 5 executives
+        # Add LinkedIn executives
+        linkedin_executives = search_linkedin_executives(company_name)
+        for linkedin_exec in linkedin_executives:
+            # Check if not already in list
+            if not any(exec["name"] == linkedin_exec["name"] for exec in executives):
+                executives.append(linkedin_exec)
+        
+        print(f"Found {len(executives)} total executives for {company_name}")
+        return executives[:10]  # Return top 10 executives
     
     except Exception as e:
         print(f"Executive search error: {str(e)}")
@@ -353,12 +581,21 @@ def comprehensive_company_search(company_name: str, country: str = "") -> Dict:
             print(f"Website search failed: {e}")
             results["website_info"] = {"error": str(e)}
         
-        # Executive search
+        # Executive search (includes LinkedIn)
         try:
-            results["executives"] = search_company_executives(company_name)
+            executives = search_company_executives(company_name)
+            results["executives"] = executives
         except Exception as e:
             print(f"Executive search failed: {e}")
             results["executives"] = []
+        
+        # Sanctions check
+        try:
+            sanctions_results = check_sanctions_databases(company_name, results.get("executives", []))
+            results["sanctions_check"] = sanctions_results
+        except Exception as e:
+            print(f"Sanctions check failed: {e}")
+            results["sanctions_check"] = {"error": str(e)}
         
         # Adverse media search
         try:
