@@ -1,15 +1,44 @@
-flask
-gunicorn
-python-dotenv
+# Core Flask dependencies
+flask>=2.3.0
+gunicorn>=21.0.0
+python-dotenv>=1.0.0
+
+# API and data validation
+pydantic>=2.0.0
 openai>=1.0.0
-pydantic
-requests
-beautifulsoup4
-lxml
-selenium
-newspaper3k
-yfinance
-alpha-vantage
-finnhub-python
-tweepy
-googlesearch-python
+
+# Web scraping and crawling
+httpx>=0.25.0
+trafilatura>=1.6.0
+readability-lxml>=0.8.0
+beautifulsoup4>=4.12.0
+tenacity>=8.2.0
+
+# NLP and text processing
+spacy>=3.7.0
+
+# PDF generation
+weasyprint>=60.0
+
+# Alternative web servers
+uvicorn>=0.24.0
+waitress>=2.1.0
+
+# Search APIs
+requests>=2.31.0
+
+# Financial data (optional)
+yfinance>=0.2.0
+alpha-vantage>=2.3.0
+finnhub-python>=2.4.0
+
+# Social media APIs (optional)
+tweepy>=4.14.0
+
+# Google search (fallback)
+googlesearch-python>=1.2.0
+
+# Additional utilities
+lxml>=4.9.0
+selenium>=4.15.0
+newspaper3k>=0.2.8
