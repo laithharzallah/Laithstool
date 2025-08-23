@@ -15,7 +15,6 @@
         }
         .container { max-width: 1200px; margin: 0 auto; }
         .header { 
-            text-align: center; 
             color: #374151; 
             margin-bottom: 30px; 
             background: rgba(255,255,255,0.95);
@@ -211,9 +210,18 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🔍 Company Screener</h1>
-            <p>AI-Powered Due Diligence with Real-time Web Search</p>
-            <p style="font-size: 0.9em; margin-top: 10px;">Comprehensive company intelligence from the internet - websites, executives, news, and risk analysis</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <div style="text-align: left;">
+                    <h1>⚡ Laith's Tool</h1>
+                    <p>Professional Company Intelligence Platform</p>
+                    <p style="font-size: 0.9em; margin-top: 10px;">Comprehensive company intelligence from the internet - websites, executives, news, and risk analysis</p>
+                </div>
+                <div style="text-align: right;">
+                    <a href="/logout" style="background: rgba(107, 114, 128, 0.1); color: #6b7280; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; transition: all 0.3s ease;" onmouseover="this.style.background='rgba(107, 114, 128, 0.2)'" onmouseout="this.style.background='rgba(107, 114, 128, 0.1)'">
+                        🔓 Logout
+                    </a>
+                </div>
+            </div>
         </div>
         
         <div class="search-card">
@@ -297,12 +305,30 @@
                 })
             });
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || `API request failed: ${response.status}`);
+            // Check if we got redirected to login (HTML response)
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('text/html')) {
+                throw new Error('Session expired. Please refresh the page and log in again.');
             }
 
-            return await response.json();
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('Authentication required. Please refresh the page and log in again.');
+                }
+                
+                try {
+                    const error = await response.json();
+                    throw new Error(error.error || `API request failed: ${response.status}`);
+                } catch (jsonError) {
+                    throw new Error(`API request failed: ${response.status} - ${response.statusText}`);
+                }
+            }
+
+            try {
+                return await response.json();
+            } catch (jsonError) {
+                throw new Error('Invalid response format. Please try again or refresh the page.');
+            }
         }
         
         function displayResults(data) {
