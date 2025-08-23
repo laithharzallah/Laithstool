@@ -181,7 +181,7 @@ Use the real-time data provided above to fill out this structure. Focus on accur
 def home():
     if 'logged_in' not in session:
         return redirect(url_for('login'))
-    return render_template("index.html")
+    return render_template("screener.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():

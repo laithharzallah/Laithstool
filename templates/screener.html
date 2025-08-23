@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="corporate">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laith's Tool - Professional Company Screener</title>
+    
+    <!-- TailwindCSS with DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    
+    <!-- Alpine.js for interactivity -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#f7c32e',
+                        'primary-content': '#1f2937',
+                        'secondary': '#6b7280',
+                        'accent': '#e6ac00',
+                        'neutral': '#1f2937',
+                        'base-100': '#ffffff',
+                        'base-200': '#f9fafb',
+                        'base-300': '#e5e7eb',
+                    }
+                }
+            },
+            daisyui: {
+                themes: [
+                    {
+                        corporate: {
+                            "primary": "#f7c32e",
+                            "primary-content": "#1f2937",
+                            "secondary": "#6b7280",
+                            "accent": "#e6ac00",
+                            "neutral": "#1f2937",
+                            "base-100": "#ffffff",
+                            "base-200": "#f9fafb",
+                            "base-300": "#e5e7eb",
+                        }
+                    }
+                ]
+            }
+        }
+    </script>
+    
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #f7c32e 0%, #ffd86f 100%);
+        }
+        
+        .glass-card {
+            backdrop-filter: blur(16px);
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(247, 195, 46, 0.2);
+        }
+        
+        .step-active {
+            @apply bg-primary text-primary-content;
+        }
+        
+        .step-completed {
+            @apply bg-success text-success-content;
+        }
+        
+        .step-pending {
+            @apply bg-base-300 text-base-content;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(247, 195, 46, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(247, 195, 46, 0.8); }
+        }
+        
+        .pulse-glow {
+            animation: pulse-glow 2s infinite;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen gradient-bg" x-data="companyScreener()">
+    <!-- Navigation Header -->
+    <div class="navbar bg-base-100 shadow-lg">
+        <div class="navbar-start">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-bolt text-2xl text-primary"></i>
+                <h1 class="text-xl font-bold text-neutral">Laith's Tool</h1>
+                <div class="badge badge-primary badge-sm">Pro</div>
+            </div>
+        </div>
+        
+        <div class="navbar-center">
+            <span class="text-sm font-medium text-neutral">Professional Company Intelligence Platform</span>
+        </div>
+        
+        <div class="navbar-end space-x-2">
+            <!-- Theme Toggle -->
+            <label class="swap swap-rotate">
+                <input type="checkbox" class="theme-controller" value="dark" x-model="darkMode" @change="toggleTheme()"/>
+                <i class="fas fa-sun swap-off text-xl"></i>
+                <i class="fas fa-moon swap-on text-xl"></i>
+            </label>
+            
+            <!-- Help -->
+            <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-ghost btn-circle">
+                    <i class="fas fa-question-circle text-xl"></i>
+                </div>
+                <div tabindex="0" class="dropdown-content z-[1] card card-compact w-80 p-4 shadow bg-base-100">
+                    <div class="card-body">
+                        <h3 class="card-title text-sm">Quick Help</h3>
+                        <p class="text-xs">Enter a company name to perform comprehensive due diligence research using AI and real-time web data.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Logout -->
+            <a href="/logout" class="btn btn-ghost btn-sm">
+                <i class="fas fa-sign-out-alt"></i>
+                Logout
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="container mx-auto p-4 gap-4 grid grid-cols-1 lg:grid-cols-12 min-h-[calc(100vh-5rem)]">
+        
+        <!-- Left Panel - Input Card -->
+        <div class="lg:col-span-3">
+            <div class="card glass-card shadow-xl h-fit">
+                <div class="card-body">
+                    <h2 class="card-title text-lg flex items-center">
+                        <i class="fas fa-search text-primary"></i>
+                        Company Screening
+                    </h2>
+                    
+                    <form @submit.prevent="startScreening()" class="space-y-4">
+                        <!-- Company Name -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Company Name *</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                placeholder="e.g., Apple Inc., Tesla"
+                                class="input input-bordered focus:input-primary" 
+                                x-model="formData.company"
+                                required>
+                        </div>
+                        
+                        <!-- Domain (Optional) -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Domain (Optional)</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                placeholder="e.g., apple.com"
+                                class="input input-bordered focus:input-primary" 
+                                x-model="formData.domain">
+                        </div>
+                        
+                        <!-- Country -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Country</span>
+                            </label>
+                            <select class="select select-bordered focus:select-primary" x-model="formData.country">
+                                <option value="">Any Country</option>
+                                <option value="United States">United States</option>
+                                <option value="United Kingdom">United Kingdom</option>
+                                <option value="Canada">Canada</option>
+                                <option value="Germany">Germany</option>
+                                <option value="France">France</option>
+                                <option value="Australia">Australia</option>
+                                <option value="Japan">Japan</option>
+                                <option value="Singapore">Singapore</option>
+                                <option value="Saudi Arabia">Saudi Arabia</option>
+                                <option value="UAE">UAE</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Registry Numbers -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Registry Numbers</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                placeholder="Registration/Tax ID (Optional)"
+                                class="input input-bordered focus:input-primary" 
+                                x-model="formData.registryNumbers">
+                        </div>
+                        
+                        <!-- Divider -->
+                        <div class="divider text-xs">Screening Options</div>
+                        
+                        <!-- Options -->
+                        <div class="space-y-2">
+                            <label class="label cursor-pointer">
+                                <span class="label-text">Deep Web Crawl</span>
+                                <input type="checkbox" class="toggle toggle-primary" x-model="formData.options.deep_crawl">
+                            </label>
+                            
+                            <label class="label cursor-pointer">
+                                <span class="label-text">Include Social Media</span>
+                                <input type="checkbox" class="toggle toggle-primary" x-model="formData.options.include_social">
+                            </label>
+                            
+                            <label class="label cursor-pointer">
+                                <span class="label-text">Sanctions Check</span>
+                                <input type="checkbox" class="toggle toggle-primary" x-model="formData.options.include_sanctions">
+                            </label>
+                            
+                            <label class="label cursor-pointer">
+                                <span class="label-text">Financial Data</span>
+                                <input type="checkbox" class="toggle toggle-primary" x-model="formData.options.include_financials">
+                            </label>
+                            
+                            <label class="label cursor-pointer">
+                                <span class="label-text">Adverse Media</span>
+                                <input type="checkbox" class="toggle toggle-primary" x-model="formData.options.include_adverse_media">
+                            </label>
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <button 
+                            type="submit" 
+                            class="btn btn-primary w-full"
+                            :class="{ 'loading': isScreening }"
+                            :disabled="isScreening || !formData.company">
+                            <i class="fas fa-rocket" x-show="!isScreening"></i>
+                            <span x-text="isScreening ? 'Screening in Progress...' : 'Run Screening'"></span>
+                        </button>
+                    </form>
+                    
+                    <!-- API Key Warning -->
+                    <div x-show="!apiKeysAvailable" class="alert alert-warning mt-4">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div>
+                            <div class="font-bold">Limited Functionality</div>
+                            <div class="text-xs">Web search disabled: add search API keys to enable full internet research.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Center Panel - Progress & Logs -->
+        <div class="lg:col-span-4">
+            <div class="space-y-4">
+                <!-- Progress Timeline -->
+                <div class="card glass-card shadow-xl">
+                    <div class="card-body">
+                        <h3 class="card-title text-lg flex items-center">
+                            <i class="fas fa-tasks text-primary"></i>
+                            Progress Timeline
+                        </h3>
+                        
+                        <div class="space-y-3">
+                            <template x-for="(step, index) in progressSteps" :key="index">
+                                <div class="flex items-center space-x-3">
+                                    <div 
+                                        class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                                        :class="{
+                                            'step-completed': step.status === 'completed',
+                                            'step-active pulse-glow': step.status === 'in_progress',
+                                            'step-pending': step.status === 'pending'
+                                        }">
+                                        <i class="fas fa-check" x-show="step.status === 'completed'"></i>
+                                        <i class="fas fa-spinner fa-spin" x-show="step.status === 'in_progress'"></i>
+                                        <span x-show="step.status === 'pending'" x-text="index + 1"></span>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium" x-text="step.name"></div>
+                                        <div class="text-xs opacity-70" x-text="step.message" x-show="step.message"></div>
+                                    </div>
+                                    <div class="text-xs opacity-50" x-show="step.duration">
+                                        <span x-text="step.duration"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        
+                        <!-- Progress Bar -->
+                        <div class="mt-4" x-show="isScreening">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span>Overall Progress</span>
+                                <span x-text="progressPercentage + '%'"></span>
+                            </div>
+                            <progress class="progress progress-primary w-full" :value="progressPercentage" max="100"></progress>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Source Logs -->
+                <div class="card glass-card shadow-xl">
+                    <div class="card-body">
+                        <h3 class="card-title text-lg flex items-center">
+                            <i class="fas fa-list-alt text-primary"></i>
+                            Source Logs
+                        </h3>
+                        
+                        <div class="space-y-2 max-h-64 overflow-y-auto">
+                            <template x-for="(log, index) in sourceLogs" :key="index">
+                                <div class="text-xs p-2 rounded bg-base-200 flex items-center space-x-2">
+                                    <i class="fas fa-globe text-primary"></i>
+                                    <span class="flex-1" x-text="log.message"></span>
+                                    <span class="opacity-50" x-text="log.timestamp"></span>
+                                </div>
+                            </template>
+                            
+                            <div x-show="sourceLogs.length === 0" class="text-center text-xs opacity-50 py-8">
+                                Source queries will appear here during screening
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel - Results -->
+        <div class="lg:col-span-5">
+            <div class="card glass-card shadow-xl h-full">
+                <div class="card-body">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="card-title text-lg flex items-center">
+                            <i class="fas fa-chart-line text-primary"></i>
+                            Screening Results
+                        </h3>
+                        
+                        <div class="flex space-x-2" x-show="hasResults">
+                            <button class="btn btn-outline btn-sm" @click="exportPDF()">
+                                <i class="fas fa-file-pdf"></i>
+                                PDF
+                            </button>
+                            <button class="btn btn-outline btn-sm" @click="exportJSON()">
+                                <i class="fas fa-download"></i>
+                                JSON
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Results Tabs -->
+                    <div x-show="hasResults">
+                        <div class="tabs tabs-bordered mb-4">
+                            <template x-for="tab in resultTabs" :key="tab.id">
+                                <a 
+                                    class="tab"
+                                    :class="{ 'tab-active': activeTab === tab.id }"
+                                    @click="activeTab = tab.id"
+                                    x-text="tab.name">
+                                </a>
+                            </template>
+                        </div>
+                        
+                        <!-- Tab Contents -->
+                        <div class="max-h-[600px] overflow-y-auto">
+                            <!-- Overview Tab -->
+                            <div x-show="activeTab === 'overview'" class="space-y-4">
+                                <div class="card bg-base-200">
+                                    <div class="card-body p-4">
+                                        <h4 class="font-bold text-sm">Executive Summary</h4>
+                                        <p class="text-sm" x-text="results?.executive_summary?.overview || 'No summary available'"></p>
+                                        
+                                        <div class="mt-2" x-show="results?.executive_summary?.key_points">
+                                            <div class="text-xs font-medium mb-1">Key Points:</div>
+                                            <ul class="text-xs space-y-1">
+                                                <template x-for="point in results?.executive_summary?.key_points" :key="point">
+                                                    <li class="flex items-start space-x-1">
+                                                        <span class="text-primary">•</span>
+                                                        <span x-text="point"></span>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Risk Flags -->
+                                <div x-show="results?.risk_flags?.length > 0">
+                                    <h4 class="font-bold text-sm mb-2">Risk Flags</h4>
+                                    <template x-for="flag in results.risk_flags" :key="flag.description">
+                                        <div class="alert mb-2" :class="{
+                                            'alert-error': flag.severity === 'high' || flag.severity === 'critical',
+                                            'alert-warning': flag.severity === 'medium',
+                                            'alert-info': flag.severity === 'low'
+                                        }">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            <div>
+                                                <div class="font-bold text-xs" x-text="flag.category"></div>
+                                                <div class="text-xs" x-text="flag.description"></div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            
+                            <!-- Company Profile Tab -->
+                            <div x-show="activeTab === 'profile'" class="space-y-4">
+                                <!-- Implementation for company profile -->
+                                <div class="card bg-base-200">
+                                    <div class="card-body p-4">
+                                        <h4 class="font-bold text-sm">Company Information</h4>
+                                        <div class="grid grid-cols-1 gap-2 text-xs">
+                                            <div><strong>Legal Name:</strong> <span x-text="results?.company_profile?.legal_name || 'Not available'"></span></div>
+                                            <div><strong>Industry:</strong> <span x-text="results?.company_profile?.primary_industry || 'Not available'"></span></div>
+                                            <div><strong>Founded:</strong> <span x-text="results?.company_profile?.founded_year || 'Not available'"></span></div>
+                                            <div><strong>Employees:</strong> <span x-text="results?.company_profile?.employee_count_band || 'Not available'"></span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- People Tab -->
+                            <div x-show="activeTab === 'people'" class="space-y-2">
+                                <template x-for="person in results?.key_people || []" :key="person.name">
+                                    <div class="card bg-base-200">
+                                        <div class="card-body p-3">
+                                            <div class="flex items-start justify-between">
+                                                <div>
+                                                    <h5 class="font-bold text-sm" x-text="person.name"></h5>
+                                                    <p class="text-xs text-primary" x-text="person.role"></p>
+                                                    <p class="text-xs mt-1" x-text="person.background"></p>
+                                                </div>
+                                                <div class="badge badge-sm" x-text="person.confidence"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                                
+                                <div x-show="!results?.key_people?.length" class="text-center text-xs opacity-50 py-8">
+                                    No executive information found
+                                </div>
+                            </div>
+                            
+                            <!-- Web Footprint Tab -->
+                            <div x-show="activeTab === 'web'" class="space-y-4">
+                                <!-- Website info -->
+                                <div class="card bg-base-200" x-show="results?.web_footprint?.official_website">
+                                    <div class="card-body p-4">
+                                        <h4 class="font-bold text-sm">Official Website</h4>
+                                        <a :href="results?.web_footprint?.official_website" target="_blank" class="link link-primary text-xs">
+                                            <span x-text="results?.web_footprint?.official_website"></span>
+                                        </a>
+                                    </div>
+                                </div>
+                                
+                                <!-- Social Media -->
+                                <div x-show="Object.keys(results?.web_footprint?.social_media || {}).length > 0">
+                                    <h4 class="font-bold text-sm mb-2">Social Media</h4>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <template x-for="[platform, url] in Object.entries(results?.web_footprint?.social_media || {})" :key="platform">
+                                            <a :href="url" target="_blank" class="btn btn-outline btn-sm">
+                                                <i :class="'fab fa-' + platform"></i>
+                                                <span x-text="platform" class="capitalize"></span>
+                                            </a>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- News & Media Tab -->
+                            <div x-show="activeTab === 'news'" class="space-y-2">
+                                <template x-for="article in results?.news_and_media || []" :key="article.url">
+                                    <div class="card bg-base-200">
+                                        <div class="card-body p-3">
+                                            <h5 class="font-bold text-sm" x-text="article.title"></h5>
+                                            <p class="text-xs mb-2" x-text="article.summary"></p>
+                                            <div class="flex items-center justify-between text-xs">
+                                                <span x-text="article.source_name"></span>
+                                                <div class="flex items-center space-x-2">
+                                                    <div class="badge badge-sm" 
+                                                         :class="{
+                                                             'badge-error': article.sentiment === 'negative',
+                                                             'badge-warning': article.sentiment === 'mixed',
+                                                             'badge-success': article.sentiment === 'positive',
+                                                             'badge-neutral': article.sentiment === 'neutral'
+                                                         }"
+                                                         x-text="article.sentiment">
+                                                    </div>
+                                                    <span x-text="article.published_date"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                                
+                                <div x-show="!results?.news_and_media?.length" class="text-center text-xs opacity-50 py-8">
+                                    No recent news found
+                                </div>
+                            </div>
+                            
+                            <!-- Sanctions Tab -->
+                            <div x-show="activeTab === 'sanctions'" class="space-y-2">
+                                <template x-for="match in results?.sanctions_matches || []" :key="match.list_name">
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <div>
+                                            <div class="font-bold text-xs" x-text="match.list_name"></div>
+                                            <div class="text-xs" x-text="match.matched_name + ' (' + (match.match_score * 100).toFixed(1) + '% match)'"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                                
+                                <div x-show="!results?.sanctions_matches?.length" class="alert alert-success">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span class="text-xs">No sanctions matches found</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Compliance Tab -->
+                            <div x-show="activeTab === 'compliance'" class="space-y-4">
+                                <div class="card bg-base-200">
+                                    <div class="card-body p-4">
+                                        <h4 class="font-bold text-sm">Data Sources</h4>
+                                        <div class="text-xs space-y-1">
+                                            <template x-for="source in results?.compliance_notes?.data_sources_used || []" :key="source">
+                                                <div class="flex items-center space-x-2">
+                                                    <i class="fas fa-check text-success"></i>
+                                                    <span x-text="source"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="card bg-base-200">
+                                    <div class="card-body p-4">
+                                        <h4 class="font-bold text-sm">Methodology</h4>
+                                        <p class="text-xs" x-text="results?.compliance_notes?.methodology || 'Standard web-based due diligence screening'"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div x-show="!hasResults && !isScreening" class="text-center py-16">
+                        <i class="fas fa-search text-6xl text-base-300 mb-4"></i>
+                        <h3 class="text-lg font-bold text-base-content mb-2">Ready to Screen</h3>
+                        <p class="text-sm text-base-content opacity-70">Enter a company name and click "Run Screening" to begin comprehensive due diligence research.</p>
+                    </div>
+                    
+                    <!-- Loading State -->
+                    <div x-show="isScreening && !hasResults" class="text-center py-16">
+                        <div class="loading loading-spinner loading-lg text-primary mb-4"></div>
+                        <h3 class="text-lg font-bold text-base-content mb-2">Screening in Progress</h3>
+                        <p class="text-sm text-base-content opacity-70">Gathering intelligence from multiple sources...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function companyScreener() {
+            return {
+                // Form data
+                formData: {
+                    company: '',
+                    domain: '',
+                    country: '',
+                    registryNumbers: '',
+                    options: {
+                        deep_crawl: true,
+                        include_social: true,
+                        include_sanctions: true,
+                        include_financials: true,
+                        include_adverse_media: true,
+                        include_tech_stack: false
+                    }
+                },
+                
+                // UI state
+                darkMode: localStorage.getItem('darkMode') === 'true',
+                isScreening: false,
+                hasResults: false,
+                activeTab: 'overview',
+                apiKeysAvailable: true,
+                
+                // Progress tracking
+                progressSteps: [
+                    { name: 'Query Expansion', status: 'pending', message: '', duration: '' },
+                    { name: 'Web Search', status: 'pending', message: '', duration: '' },
+                    { name: 'Content Crawling', status: 'pending', message: '', duration: '' },
+                    { name: 'Sanctions Check', status: 'pending', message: '', duration: '' },
+                    { name: 'Entity Resolution', status: 'pending', message: '', duration: '' },
+                    { name: 'AI Analysis', status: 'pending', message: '', duration: '' },
+                    { name: 'Report Generation', status: 'pending', message: '', duration: '' }
+                ],
+                progressPercentage: 0,
+                
+                // Results data
+                results: null,
+                sourceLogs: [],
+                
+                // Result tabs
+                resultTabs: [
+                    { id: 'overview', name: 'Overview' },
+                    { id: 'profile', name: 'Company Profile' },
+                    { id: 'people', name: 'People' },
+                    { id: 'web', name: 'Web Footprint' },
+                    { id: 'news', name: 'News & Media' },
+                    { id: 'sanctions', name: 'Sanctions' },
+                    { id: 'compliance', name: 'Compliance Notes' }
+                ],
+                
+                init() {
+                    // Initialize theme
+                    this.applyTheme();
+                    
+                    // Check API availability
+                    this.checkApiAvailability();
+                    
+                    // Session keepalive
+                    setInterval(this.keepSessionAlive, 5 * 60 * 1000);
+                },
+                
+                toggleTheme() {
+                    localStorage.setItem('darkMode', this.darkMode);
+                    this.applyTheme();
+                },
+                
+                applyTheme() {
+                    document.documentElement.setAttribute('data-theme', this.darkMode ? 'dark' : 'corporate');
+                },
+                
+                async checkApiAvailability() {
+                    try {
+                        const response = await fetch('/api/health');
+                        const health = await response.json();
+                        this.apiKeysAvailable = health.components?.environment?.variables?.SERPER_API_KEY === 'Present' ||
+                                              health.components?.environment?.variables?.BING_API_KEY === 'Present';
+                    } catch (error) {
+                        console.warn('Could not check API availability:', error);
+                    }
+                },
+                
+                async keepSessionAlive() {
+                    try {
+                        await fetch('/api/health', { credentials: 'same-origin' });
+                    } catch (error) {
+                        console.warn('Session keepalive failed:', error);
+                    }
+                },
+                
+                async startScreening() {
+                    if (!this.formData.company.trim()) return;
+                    
+                    this.isScreening = true;
+                    this.hasResults = false;
+                    this.results = null;
+                    this.sourceLogs = [];
+                    this.progressPercentage = 0;
+                    
+                    // Reset progress steps
+                    this.progressSteps.forEach(step => {
+                        step.status = 'pending';
+                        step.message = '';
+                        step.duration = '';
+                    });
+                    
+                    try {
+                        // TODO: Implement actual API call to new /api/v1/screen endpoint
+                        const response = await fetch('/api/screen', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Cache-Control': 'no-cache'
+                            },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({
+                                company_name: this.formData.company,
+                                domain: this.formData.domain,
+                                country: this.formData.country,
+                                options: this.formData.options
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        
+                        this.results = await response.json();
+                        this.hasResults = true;
+                        this.progressPercentage = 100;
+                        
+                        // Mark all steps as completed
+                        this.progressSteps.forEach(step => {
+                            step.status = 'completed';
+                        });
+                        
+                    } catch (error) {
+                        console.error('Screening failed:', error);
+                        this.showError(error.message);
+                    } finally {
+                        this.isScreening = false;
+                    }
+                },
+                
+                showError(message) {
+                    // TODO: Implement proper error toast
+                    alert('Screening failed: ' + message);
+                },
+                
+                async exportPDF() {
+                    try {
+                        const response = await fetch(`/api/v1/report/${this.results.task_id}/pdf`);
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${this.formData.company}-screening-report.pdf`;
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                    } catch (error) {
+                        console.error('PDF export failed:', error);
+                    }
+                },
+                
+                exportJSON() {
+                    const dataStr = JSON.stringify(this.results, null, 2);
+                    const blob = new Blob([dataStr], { type: 'application/json' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${this.formData.company}-screening-data.json`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
