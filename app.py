@@ -328,21 +328,15 @@ def screen():
     country_hint = f" in {country}" if country else ""
     
     try:
-        # First, gather real-time web data
-        print(f"🔍 Gathering real-time data for {company}...")
-        try:
-            web_data = integrations.comprehensive_company_search(company, country)
-            print(f"✅ Web data gathered successfully")
-        except Exception as web_error:
-            print(f"❌ Web data gathering failed: {str(web_error)}")
-            # Use empty web data as fallback
-            web_data = {
-                "website_info": {"error": "Web search failed"},
-                "executives": [],
-                "adverse_media": [],
-                "financial_highlights": {"error": "Financial data unavailable"},
-                "sanctions_check": {"error": "Sanctions check failed"}
-            }
+        # Skip web data gathering temporarily for debugging
+        print(f"🔍 Skipping web data gathering for debugging...")
+        web_data = {
+            "website_info": {"official_website": f"https://{company.lower().replace(' ', '')}.com"},
+            "executives": [{"name": "Test Executive", "position": "CEO", "background": "Test info"}],
+            "adverse_media": [],
+            "financial_highlights": {"industry": "Technology", "founded": "2020", "employees": "50"},
+            "sanctions_check": {"matches": []}
+        }
         
         # Refresh session again during long operation
         session.modified = True
@@ -535,6 +529,84 @@ def screen():
     except Exception as e:
         print(f"❌ Error during screening: {str(e)}")
         return jsonify({"error":str(e)}), 500
+
+@app.route("/api/test", methods=["POST"])
+def test_endpoint():
+    """Simple test endpoint to debug issues"""
+    try:
+        print("🧪 Test endpoint called")
+        
+        # Check session
+        if 'logged_in' not in session:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        print("✅ Session is valid")
+        
+        # Get request data
+        data = request.get_json() or {}
+        company = data.get("company", "Test Company")
+        
+        print(f"📝 Company: {company}")
+        
+        # Test basic response
+        test_response = {
+            "task_id": f"test_{int(datetime.utcnow().timestamp())}",
+            "company_name": company,
+            "status": "completed",
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "executive_summary": {
+                "overview": "This is a test response to verify the system is working",
+                "key_points": ["Test point 1", "Test point 2", "Test point 3"]
+            },
+            "company_profile": {
+                "legal_name": company,
+                "primary_industry": "Test Industry",
+                "founded_year": "2020",
+                "employee_count_band": "10-50"
+            },
+            "key_people": [
+                {
+                    "name": "Test Executive",
+                    "role": "CEO",
+                    "background": "Test background information",
+                    "confidence": "high"
+                }
+            ],
+            "web_footprint": {
+                "official_website": f"https://{company.lower().replace(' ', '')}.com",
+                "social_media": {"linkedin": "https://linkedin.com/company/test"}
+            },
+            "news_and_media": [
+                {
+                    "title": "Test News Article",
+                    "summary": "This is a test news summary",
+                    "source_name": "Test News Source",
+                    "published_date": "2024-01-01",
+                    "sentiment": "neutral"
+                }
+            ],
+            "sanctions_matches": [],
+            "risk_flags": [
+                {
+                    "category": "Test Risk",
+                    "description": "This is a test risk flag",
+                    "severity": "low"
+                }
+            ],
+            "compliance_notes": {
+                "data_sources_used": ["Test API", "Mock Data"],
+                "methodology": "Test methodology for debugging"
+            }
+        }
+        
+        print("✅ Test response created successfully")
+        return jsonify(test_response)
+        
+    except Exception as e:
+        print(f"❌ Test endpoint error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Test failed: {str(e)}"}), 500
 
 if __name__ == "__main__":
     print(f"🚀 Starting Laith's Tool on {HOST}:{PORT}")
