@@ -22,12 +22,15 @@
                     colors: {
                         'primary': '#f7c32e',
                         'primary-content': '#1f2937',
-                        'secondary': '#6b7280',
+                        'secondary': '#9ca3af',
                         'accent': '#e6ac00',
-                        'neutral': '#1f2937',
-                        'base-100': '#ffffff',
-                        'base-200': '#f9fafb',
-                        'base-300': '#e5e7eb',
+                        'neutral': '#374151',
+                        'base-100': '#2d3748',
+                        'base-200': '#1a202c',
+                        'base-300': '#4a5568',
+                        'dark-bg': '#0B0F19',
+                        'dark-surface': '#1a1f2e',
+                        'dark-border': '#2d3748',
                     }
                 }
             },
@@ -37,12 +40,32 @@
                         corporate: {
                             "primary": "#f7c32e",
                             "primary-content": "#1f2937",
-                            "secondary": "#6b7280",
+                            "secondary": "#9ca3af",
                             "accent": "#e6ac00",
-                            "neutral": "#1f2937",
-                            "base-100": "#ffffff",
-                            "base-200": "#f9fafb",
-                            "base-300": "#e5e7eb",
+                            "neutral": "#374151",
+                            "base-100": "#2d3748",
+                            "base-200": "#1a202c",
+                            "base-300": "#4a5568",
+                            "base-content": "#f1f5f9",
+                            "info": "#3b82f6",
+                            "success": "#10b981",
+                            "warning": "#f59e0b",
+                            "error": "#ef4444",
+                        },
+                        dark: {
+                            "primary": "#f7c32e",
+                            "primary-content": "#0a0a0a",
+                            "secondary": "#64748b",
+                            "accent": "#e6ac00",
+                            "neutral": "#1e293b",
+                            "base-100": "#0B0F19",
+                            "base-200": "#0f172a",
+                            "base-300": "#1e293b",
+                            "base-content": "#f1f5f9",
+                            "info": "#3b82f6",
+                            "success": "#10b981",
+                            "warning": "#f59e0b",
+                            "error": "#ef4444",
                         }
                     }
                 ]
@@ -51,50 +74,187 @@
     </script>
     
     <style>
-        .gradient-bg {
-            background: linear-gradient(135deg, #f7c32e 0%, #ffd86f 100%);
+        /* Professional dark background */
+        .dark-gradient-bg {
+            background: linear-gradient(135deg, #0B0F19 0%, #1a202c 50%, #2d3748 100%);
+            min-height: 100vh;
         }
         
-        .glass-card {
+        /* Enterprise glass cards */
+        .enterprise-card {
+            backdrop-filter: blur(20px);
+            background: rgba(45, 55, 72, 0.95);
+            border: 1px solid rgba(74, 85, 104, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+        }
+        
+        /* Professional navigation */
+        .nav-enterprise {
+            background: rgba(26, 32, 44, 0.98);
             backdrop-filter: blur(16px);
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid rgba(247, 195, 46, 0.2);
+            border-bottom: 1px solid rgba(74, 85, 104, 0.2);
         }
         
+        /* Step indicators */
         .step-active {
-            @apply bg-primary text-primary-content;
+            @apply bg-primary text-primary-content shadow-lg;
+            box-shadow: 0 0 20px rgba(247, 195, 46, 0.4);
         }
         
         .step-completed {
-            @apply bg-success text-success-content;
+            @apply bg-success text-white shadow-md;
         }
         
         .step-pending {
-            @apply bg-base-300 text-base-content;
+            @apply bg-base-300 text-base-content border border-base-content border-opacity-20;
         }
         
-        .tab-content {
-            display: none;
+        .step-failed {
+            @apply bg-error text-white shadow-md;
         }
         
-        .tab-content.active {
-            display: block;
+        /* Professional inputs */
+        .input-enterprise {
+            background: rgba(26, 32, 44, 0.8);
+            border: 1px solid rgba(74, 85, 104, 0.4);
+            color: #f1f5f9;
         }
         
-        @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 5px rgba(247, 195, 46, 0.5); }
-            50% { box-shadow: 0 0 20px rgba(247, 195, 46, 0.8); }
+        .input-enterprise:focus {
+            border-color: #f7c32e;
+            box-shadow: 0 0 0 3px rgba(247, 195, 46, 0.1);
         }
         
-        .pulse-glow {
-            animation: pulse-glow 2s infinite;
+        /* Professional buttons */
+        .btn-enterprise {
+            background: linear-gradient(135deg, #f7c32e 0%, #e6ac00 100%);
+            border: none;
+            color: #1f2937;
+            font-weight: 600;
+            text-transform: none;
+            letter-spacing: 0.025em;
+            transition: all 200ms ease;
+        }
+        
+        .btn-enterprise:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(247, 195, 46, 0.3);
+        }
+        
+        /* Tab styling */
+        .tab-enterprise {
+            border-bottom: 2px solid transparent;
+            color: #9ca3af;
+            padding: 12px 16px;
+            font-weight: 500;
+            transition: all 200ms ease;
+        }
+        
+        .tab-enterprise.tab-active {
+            color: #f7c32e;
+            border-bottom-color: #f7c32e;
+        }
+        
+        /* Professional badges */
+        .badge-enterprise {
+            background: rgba(247, 195, 46, 0.1);
+            color: #f7c32e;
+            border: 1px solid rgba(247, 195, 46, 0.3);
+            font-weight: 500;
+        }
+        
+        /* Risk indicators */
+        .risk-low { 
+            @apply bg-success bg-opacity-20 text-success border border-success border-opacity-30; 
+        }
+        .risk-medium { 
+            @apply bg-warning bg-opacity-20 text-warning border border-warning border-opacity-30; 
+        }
+        .risk-high { 
+            @apply bg-error bg-opacity-20 text-error border border-error border-opacity-30; 
+        }
+        
+        /* Micro-animations */
+        .fade-in {
+            animation: fadeIn 200ms ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .pulse-enterprise {
+            animation: pulseEnterprise 2s infinite;
+        }
+        
+        @keyframes pulseEnterprise {
+            0%, 100% { 
+                box-shadow: 0 0 10px rgba(247, 195, 46, 0.3);
+            }
+            50% { 
+                box-shadow: 0 0 30px rgba(247, 195, 46, 0.6);
+            }
+        }
+        
+        /* Content spacing rhythm (8px base) */
+        .spacing-rhythm > * + * {
+            margin-top: 8px;
+        }
+        
+        /* Professional scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(26, 32, 44, 0.5);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(74, 85, 104, 0.7);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(74, 85, 104, 0.9);
+        }
+        
+        /* Source log styling */
+        .source-log {
+            background: rgba(26, 32, 44, 0.6);
+            border-left: 3px solid #f7c32e;
+            padding: 8px 12px;
+            border-radius: 0 6px 6px 0;
+        }
+        
+        /* Professional tooltips */
+        .tooltip-enterprise {
+            position: relative;
+        }
+        
+        .tooltip-enterprise:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(26, 32, 44, 0.95);
+            color: #f1f5f9;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 1000;
+            border: 1px solid rgba(74, 85, 104, 0.3);
         }
     </style>
 </head>
 
-<body class="min-h-screen gradient-bg" x-data="companyScreener()">
+<body class="min-h-screen dark-gradient-bg" x-data="companyScreener()">
     <!-- Navigation Header -->
-    <div class="navbar bg-base-100 shadow-lg">
+    <div class="navbar nav-enterprise shadow-2xl">
         <div class="navbar-start">
             <div class="flex items-center space-x-3">
                 <i class="fas fa-bolt text-2xl text-primary"></i>
@@ -104,7 +264,7 @@
         </div>
         
         <div class="navbar-center">
-            <span class="text-sm font-medium text-neutral">Professional Company Intelligence Platform</span>
+            <span class="text-sm font-medium text-base-content opacity-80">Professional Third-Party Risk Management Platform</span>
         </div>
         
         <div class="navbar-end space-x-2">
@@ -141,7 +301,7 @@
         
         <!-- Left Panel - Input Card -->
         <div class="lg:col-span-3">
-            <div class="card glass-card shadow-xl h-fit">
+            <div class="card enterprise-card shadow-2xl h-fit">
                 <div class="card-body">
                     <h2 class="card-title text-lg flex items-center">
                         <i class="fas fa-search text-primary"></i>
@@ -156,8 +316,8 @@
                             </label>
                             <input 
                                 type="text" 
-                                placeholder="e.g., Apple Inc., Tesla"
-                                class="input input-bordered focus:input-primary" 
+                                placeholder="e.g., Apple Inc., Tesla, Siemens AG"
+                                class="input input-enterprise" 
                                 x-model="formData.company"
                                 required>
                         </div>
@@ -170,7 +330,7 @@
                             <input 
                                 type="text" 
                                 placeholder="e.g., apple.com"
-                                class="input input-bordered focus:input-primary" 
+                                class="input input-enterprise" 
                                 x-model="formData.domain">
                         </div>
                         
@@ -179,7 +339,7 @@
                             <label class="label">
                                 <span class="label-text font-medium">Country</span>
                             </label>
-                            <select class="select select-bordered focus:select-primary" x-model="formData.country">
+                            <select class="select input-enterprise" x-model="formData.country">
                                 <option value="">Any Country</option>
                                 <option value="United States">United States</option>
                                 <option value="United Kingdom">United Kingdom</option>
@@ -202,7 +362,7 @@
                             <input 
                                 type="text" 
                                 placeholder="Registration/Tax ID (Optional)"
-                                class="input input-bordered focus:input-primary" 
+                                class="input input-enterprise" 
                                 x-model="formData.registryNumbers">
                         </div>
                         
@@ -240,11 +400,11 @@
                         <!-- Submit Button -->
                         <button 
                             type="submit" 
-                            class="btn btn-primary w-full"
+                            class="btn btn-enterprise w-full"
                             :class="{ 'loading': isScreening }"
                             :disabled="isScreening || !formData.company">
-                            <i class="fas fa-rocket" x-show="!isScreening"></i>
-                            <span x-text="isScreening ? 'Screening in Progress...' : 'Run Screening'"></span>
+                            <i class="fas fa-shield-alt" x-show="!isScreening"></i>
+                            <span x-text="isScreening ? 'Due Diligence in Progress...' : 'Start Risk Assessment'"></span>
                         </button>
                     </form>
                     
@@ -264,7 +424,7 @@
         <div class="lg:col-span-4">
             <div class="space-y-4">
                 <!-- Progress Timeline -->
-                <div class="card glass-card shadow-xl">
+                <div class="card enterprise-card shadow-2xl">
                     <div class="card-body">
                         <h3 class="card-title text-lg flex items-center">
                             <i class="fas fa-tasks text-primary"></i>
@@ -275,11 +435,12 @@
                             <template x-for="(step, index) in progressSteps" :key="index">
                                 <div class="flex items-center space-x-3">
                                     <div 
-                                        class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                                        class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200"
                                         :class="{
                                             'step-completed': step.status === 'completed',
-                                            'step-active pulse-glow': step.status === 'in_progress',
-                                            'step-pending': step.status === 'pending'
+                                            'step-active pulse-enterprise': step.status === 'in_progress',
+                                            'step-pending': step.status === 'pending',
+                                            'step-failed': step.status === 'failed'
                                         }">
                                         <i class="fas fa-check" x-show="step.status === 'completed'"></i>
                                         <i class="fas fa-spinner fa-spin" x-show="step.status === 'in_progress'"></i>
@@ -308,16 +469,16 @@
                 </div>
                 
                 <!-- Source Logs -->
-                <div class="card glass-card shadow-xl">
+                <div class="card enterprise-card shadow-2xl">
                     <div class="card-body">
                         <h3 class="card-title text-lg flex items-center">
                             <i class="fas fa-list-alt text-primary"></i>
                             Source Logs
                         </h3>
                         
-                        <div class="space-y-2 max-h-64 overflow-y-auto">
+                        <div class="space-y-2 max-h-64 overflow-y-auto spacing-rhythm">
                             <template x-for="(log, index) in sourceLogs" :key="index">
-                                <div class="text-xs p-2 rounded bg-base-200 flex items-center space-x-2">
+                                <div class="source-log text-xs flex items-center space-x-2 fade-in">
                                     <i class="fas fa-globe text-primary"></i>
                                     <span class="flex-1" x-text="log.message"></span>
                                     <span class="opacity-50" x-text="log.timestamp"></span>
@@ -335,7 +496,7 @@
         
         <!-- Right Panel - Results -->
         <div class="lg:col-span-5">
-            <div class="card glass-card shadow-xl h-full">
+            <div class="card enterprise-card shadow-2xl h-full">
                 <div class="card-body">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="card-title text-lg flex items-center">
@@ -357,10 +518,10 @@
                     
                     <!-- Results Tabs -->
                     <div x-show="hasResults">
-                        <div class="tabs tabs-bordered mb-4">
+                        <div class="flex border-b border-base-300 mb-4">
                             <template x-for="tab in resultTabs" :key="tab.id">
                                 <a 
-                                    class="tab"
+                                    class="tab-enterprise"
                                     :class="{ 'tab-active': activeTab === tab.id }"
                                     @click="activeTab = tab.id"
                                     x-text="tab.name">
@@ -393,17 +554,24 @@
                                 
                                 <!-- Risk Flags -->
                                 <div x-show="results?.risk_flags?.length > 0">
-                                    <h4 class="font-bold text-sm mb-2">Risk Flags</h4>
+                                    <h4 class="font-bold text-sm mb-2 border-b border-base-300 pb-2">Risk Assessment</h4>
                                     <template x-for="flag in results.risk_flags" :key="flag.description">
-                                        <div class="alert mb-2" :class="{
-                                            'alert-error': flag.severity === 'high' || flag.severity === 'critical',
-                                            'alert-warning': flag.severity === 'medium',
-                                            'alert-info': flag.severity === 'low'
+                                        <div class="mb-3 p-3 rounded-lg border-l-4" :class="{
+                                            'risk-high border-l-error': flag.severity === 'high' || flag.severity === 'critical',
+                                            'risk-medium border-l-warning': flag.severity === 'medium',
+                                            'risk-low border-l-success': flag.severity === 'low'
                                         }">
-                                            <i class="fas fa-exclamation-triangle"></i>
-                                            <div>
-                                                <div class="font-bold text-xs" x-text="flag.category"></div>
-                                                <div class="text-xs" x-text="flag.description"></div>
+                                            <div class="flex items-start space-x-2">
+                                                <i class="fas fa-exclamation-triangle mt-1" :class="{
+                                                    'text-error': flag.severity === 'high' || flag.severity === 'critical',
+                                                    'text-warning': flag.severity === 'medium',
+                                                    'text-success': flag.severity === 'low'
+                                                }"></i>
+                                                <div class="flex-1">
+                                                    <div class="font-bold text-xs mb-1" x-text="flag.category"></div>
+                                                    <div class="text-xs opacity-80" x-text="flag.description"></div>
+                                                    <div class="badge-enterprise text-xs mt-1" x-text="flag.severity + ' risk'"></div>
+                                                </div>
                                             </div>
                                         </div>
                                     </template>
