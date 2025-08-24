@@ -149,33 +149,42 @@ Use your comprehensive knowledge to provide detailed intelligence on:
    - Legal disputes, lawsuits, or regulatory actions
    - Negative media coverage from your knowledge base
 
-4. BRIBERY & CORRUPTION:
+4. KEY EXECUTIVES & PEOPLE:
+   - Current CEO, CFO, Chairman, and other C-level executives
+   - Board of Directors members (if known from your training)
+   - Founders, major shareholders, or key stakeholders
+   - Any executive changes, resignations, or appointments
+   - Educational background, previous roles of key executives
+
+5. BRIBERY & CORRUPTION:
    - Any bribery or corruption allegations or convictions
    - FCPA violations or anti-corruption enforcement
    - Ethics violations or misconduct cases
 
-5. POLITICAL EXPOSURE:
+6. POLITICAL EXPOSURE:
    - Government ownership or state enterprise status
    - Political connections of leadership
    - Politically Exposed Persons (PEP) associations
 
-6. RISK FACTORS & DISADVANTAGES:
+7. RISK FACTORS & DISADVANTAGES:
    - Ownership opacity or beneficial ownership issues
    - Operational risks or financial difficulties
    - Reputational risks or market concerns
    - Regulatory or environmental issues
 
-7. EXECUTIVE SUMMARY:
+8. EXECUTIVE SUMMARY:
    - Overall risk assessment and key findings
    - Critical issues that require attention
    - Recommended due diligence focus areas
 
 IMPORTANT INSTRUCTIONS:
-- Draw from your extensive training knowledge about this company
-- Provide specific details, dates, amounts where you know them
-- Be comprehensive but accurate - only include information you're confident about
-- If you don't have specific information about something, indicate "unknown" for that field
-- Prioritize factual accuracy over speculation
+- Draw from your VAST TRAINING KNOWLEDGE about this company and its executives
+- For well-known companies, provide REAL executives, subsidiaries, and controversies from your training data
+- Include specific names, dates, amounts, and details where you know them from training
+- Be comprehensive and detailed - use your full knowledge base
+- For executives: provide actual names and positions you know from your training
+- For controversies: include real scandals, lawsuits, or issues you're aware of
+- Only mark as "unknown" if you genuinely have no training data about that aspect
 
 Return ONLY valid JSON matching this exact schema:
 {{
