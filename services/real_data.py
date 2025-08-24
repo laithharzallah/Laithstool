@@ -1221,28 +1221,27 @@ class RealDataCollector:
             exec_text = f" and executives like {', '.join(exec_names[:3])}" if exec_names else ""
             
             prompt = f"""
-            Find recent adverse media coverage about {company_name}{exec_text}. 
+            Based on your training knowledge, do you know of any adverse media or negative news about {company_name}{exec_text}?
             
-            Search your knowledge for real news articles, lawsuits, investigations, scandals, 
-            regulatory penalties, fraud cases, or other negative coverage from 2022-2024.
-            
-            Return a JSON array of articles:
+            Return ONLY a JSON array - no other text. Use this exact format:
             [
                 {{
-                    "title": "Real article headline",
-                    "url": "https://realurl.com/article",
-                    "source_name": "News outlet name",
-                    "published_date": "2023-MM-DD",
-                    "snippet": "Brief description of the issue",
+                    "title": "News headline you know about",
+                    "url": "https://example.com",
+                    "source_name": "News outlet",
+                    "published_date": "2023-01-01",
+                    "snippet": "Brief description",
                     "sentiment": "negative",
-                    "category": "Legal/Financial/Regulatory/Operational",
-                    "severity": "low/medium/high",
-                    "key_allegations": ["main", "points"]
+                    "category": "Legal",
+                    "severity": "medium",
+                    "key_allegations": ["main issue"]
                 }}
             ]
             
-            Only include REAL, verifiable news stories. If you don't know of any adverse media, return an empty array [].
-            Be factual and cite real sources you're aware of.
+            Include any lawsuits, scandals, investigations, or controversies you know from your training data.
+            If you don't know any adverse media for {company_name}, return: []
+            
+            IMPORTANT: Respond with ONLY the JSON array, no explanations or other text.
             """
             
             response = self.openai_client.chat.completions.create(
@@ -1286,29 +1285,24 @@ class RealDataCollector:
                 return []
             
             prompt = f"""
-            Provide the current key executives of {company_name} as of 2024.
+            Based on your training knowledge, what executives of {company_name} do you know about?
             
-            Return a JSON array of executives with their real names and titles:
+            Return ONLY a JSON array - no other text. Use this exact format:
             [
                 {{
                     "name": "Full Real Name",
                     "title": "Official Title", 
                     "role": "Official Title",
-                    "confidence": "high",
-                    "background": "Brief background if known"
+                    "confidence": "high"
                 }}
             ]
             
-            Only include executives you are confident about. Focus on:
-            - CEO/Chief Executive Officer
-            - CFO/Chief Financial Officer  
-            - CTO/Chief Technology Officer
-            - COO/Chief Operating Officer
-            - President
-            - Chairman
+            Include any executives you know from your training data for {company_name}, focusing on:
+            - CEO, CFO, CTO, COO, President, Chairman
             
-            If you don't have current information about {company_name} executives, return an empty array [].
-            Be factual and only include real people with real titles.
+            If you don't know any executives for {company_name}, return: []
+            
+            IMPORTANT: Respond with ONLY the JSON array, no explanations or other text.
             """
             
             response = self.openai_client.chat.completions.create(
