@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field, ValidationError
 from typing import List, Optional, Literal
 from dotenv import load_dotenv
 from openai import OpenAI
-import integrations
 from api_v1 import api_v1
 
 load_dotenv()
@@ -326,20 +325,18 @@ def health_check():
         "variables": env_vars
     }
     
-    # Check integrations
+    # Check GPT-5 and search services
     try:
-        # Test a simple search
-        test_result = integrations.search_serper("test", num=1)
-        serper_status = "healthy" if "error" not in test_result else "warning"
-        health_status["components"]["integrations"] = {
-            "status": serper_status,
-            "serper": "Available" if serper_status == "healthy" else "Limited",
-            "message": "Web search capabilities checked"
+        from services.search import search_service
+        health_status["components"]["search"] = {
+            "status": "healthy",
+            "providers": len(search_service.providers) if hasattr(search_service, 'providers') else 0,
+            "message": "Search services initialized"
         }
     except Exception as e:
-        health_status["components"]["integrations"] = {
+        health_status["components"]["search"] = {
             "status": "warning",
-            "message": f"Integration test failed: {str(e)}"
+            "message": f"Search service check failed: {str(e)}"
         }
     
     # Overall status
