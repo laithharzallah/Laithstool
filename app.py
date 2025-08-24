@@ -31,6 +31,60 @@ app.secret_key = 'your-secret-key-change-in-production-2024'
 # Register API v1 blueprint
 app.register_blueprint(api_v1)
 
+# Global error handlers - NEVER return raw 500s
+@app.errorhandler(500)
+def handle_internal_error(error):
+    """Global handler for internal server errors"""
+    import traceback
+    error_details = {
+        "error": "Internal server error",
+        "message": "The system encountered an unexpected error but recovered gracefully",
+        "step": "unknown",
+        "timestamp": datetime.utcnow().isoformat(),
+        "partial_results": True
+    }
+    
+    # Log the full error for debugging
+    print(f"❌ Internal Error: {str(error)}")
+    traceback.print_exc()
+    
+    return jsonify(error_details), 500
+
+@app.errorhandler(404)
+def handle_not_found(error):
+    """Handle 404 errors"""
+    return jsonify({
+        "error": "Not found", 
+        "message": "The requested resource was not found",
+        "timestamp": datetime.utcnow().isoformat()
+    }), 404
+
+@app.errorhandler(403)
+def handle_forbidden(error):
+    """Handle 403 errors"""
+    return jsonify({
+        "error": "Forbidden",
+        "message": "Access denied - please check authentication",
+        "timestamp": datetime.utcnow().isoformat()
+    }), 403
+
+@app.errorhandler(Exception)
+def handle_all_exceptions(error):
+    """Catch-all exception handler"""
+    import traceback
+    error_details = {
+        "error": "System error",
+        "message": f"Unexpected error: {str(error)}",
+        "step": "system",
+        "timestamp": datetime.utcnow().isoformat(),
+        "recovered": True
+    }
+    
+    print(f"❌ Unhandled Exception: {str(error)}")
+    traceback.print_exc()
+    
+    return jsonify(error_details), 500
+
 # Add CORS headers to all responses
 @app.after_request
 def after_request(response):
