@@ -666,6 +666,23 @@ def test_endpoint():
         traceback.print_exc()
         return jsonify({"error": f"Test failed: {str(e)}"}), 500
 
-if __name__ == "__main__":
-    print(f"🚀 Starting Laith's Tool on {HOST}:{PORT}")
-    app.run(host=HOST, port=PORT, debug=False)
+if __name__ == '__main__':
+    import os
+    from dotenv import load_dotenv
+    
+    # Load environment variables
+    load_dotenv()
+    
+    # Render deployment configuration
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') == 'development'
+    
+    print(f"🚀 Starting Laith's Tool on 0.0.0.0:{port}")
+    
+    # Production-ready configuration
+    app.run(
+        host='0.0.0.0',
+        port=port,
+        debug=debug,
+        threaded=True  # Enable threading for better performance
+    )
