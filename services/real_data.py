@@ -793,24 +793,27 @@ class RealDataCollector:
             import re
             executives = []
             
-            # Common executive titles and patterns
-            executive_patterns = [
-                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Chief Executive Officer|CEO)',
-                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Chief Technology Officer|CTO)',
-                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Chief Financial Officer|CFO)',
-                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Chief Operating Officer|COO)',
-                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>President)',
-                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Chairman)',
-                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Managing Director)',
-                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Executive Director)',
-                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Vice President)',
-                # Reverse pattern: Title then name
-                r'(?i)(?P<title>CEO|Chief Executive Officer)\s+(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-                r'(?i)(?P<title>CTO|Chief Technology Officer)\s+(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-                r'(?i)(?P<title>CFO|Chief Financial Officer)\s+(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-                r'(?i)(?P<title>President)\s+(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-                r'(?i)(?P<title>Chairman)\s+(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-            ]
+                         # Improved executive title patterns
+             executive_patterns = [
+                 # Pattern: Name is/was Title
+                 r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:is|was|serves?\s+as)\s+(?P<title>Chief Executive Officer|CEO)',
+                 r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:is|was|serves?\s+as)\s+(?P<title>Chief Technology Officer|CTO)',
+                 r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:is|was|serves?\s+as)\s+(?P<title>Chief Financial Officer|CFO)',
+                 r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:is|was|serves?\s+as)\s+(?P<title>Chief Operating Officer|COO)',
+                 r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:is|was|serves?\s+as)\s+(?P<title>President)',
+                 r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:is|was|serves?\s+as)\s+(?P<title>Chairman)',
+                 # Pattern: Name, Title
+                 r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+),\s+(?P<title>CEO|Chief Executive Officer)',
+                 r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+),\s+(?P<title>CTO|Chief Technology Officer)',
+                 r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+),\s+(?P<title>CFO|Chief Financial Officer)',
+                 r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+),\s+(?P<title>President)',
+                 # Pattern: Title Name
+                 r'(?i)(?P<title>CEO|Chief Executive Officer)\s+(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)',
+                 r'(?i)(?P<title>CTO|Chief Technology Officer)\s+(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)',
+                 r'(?i)(?P<title>CFO|Chief Financial Officer)\s+(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)',
+                 r'(?i)(?P<title>President)\s+(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)',
+                 r'(?i)(?P<title>Chairman)\s+(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)',
+             ]
             
             for pattern in executive_patterns:
                 matches = re.finditer(pattern, content)
