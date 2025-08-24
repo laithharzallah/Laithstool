@@ -171,10 +171,20 @@ class RealDataCollector:
                         return website_info
             
             # Fallback: try common domain patterns
+            company_base = company_name.lower().replace(' ', '').replace('.', '')
+            # For companies ending with "AG", "Ltd", "Inc", etc., try without the suffix
+            company_clean = company_base
+            for suffix in ['ag', 'ltd', 'inc', 'corp', 'llc', 'plc', 'sa', 'gmbh']:
+                if company_base.endswith(suffix):
+                    company_clean = company_base[:-len(suffix)]
+                    break
+            
             domain_patterns = [
-                company_name.lower().replace(' ', '').replace('.', '') + '.com',
-                company_name.lower().replace(' ', '').replace('.', '') + '.org',
+                company_clean + '.com',
+                company_base + '.com',
                 company_name.lower().replace(' ', '-').replace('.', '') + '.com',
+                company_clean + '.de',  # For German companies
+                company_clean + '.org',
             ]
             
             for domain in domain_patterns:
@@ -363,10 +373,10 @@ class RealDataCollector:
     async def _check_ofac_sanctions(self, company_name: str, executives: List[Dict] = None) -> Dict:
         """Check OFAC SDN list"""
         try:
-            # OFAC provides XML and CSV downloads
-            url = "https://www.treasury.gov/ofac/downloads/sdn.xml"
+            # OFAC provides XML and CSV downloads - use updated URL
+            url = "https://sanctionslistservice.ofac.treas.gov/api/publicationpreview/exports/sdn.xml"
             
-            response = await async_client.get(url)
+            response = await async_client.get(url, follow_redirects=True)
             response.raise_for_status()
             
             # Parse XML
