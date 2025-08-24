@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="corporate">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Due Diligence Dashboard - Laith's Tool</title>
+    
+    <!-- Professional fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Chart.js for risk gauge -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        'navy': {
+                            50: '#f0f4f8',
+                            100: '#d9e5f0',
+                            500: '#1e3a8a',
+                            600: '#1e40af',
+                            700: '#1d4ed8',
+                            800: '#1e3a8a',
+                            900: '#1e293b'
+                        },
+                        'gold': {
+                            400: '#fbbf24',
+                            500: '#f59e0b',
+                            600: '#d97706'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: #f8fafc;
+        }
+        
+        .professional-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+        }
+        
+        .professional-card:hover {
+            box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15);
+        }
+        
+        .tab-professional {
+            padding: 12px 20px;
+            border-bottom: 3px solid transparent;
+            color: #64748b;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .tab-professional.active {
+            color: #1e40af;
+            border-bottom-color: #f59e0b;
+            background-color: #f8fafc;
+        }
+        
+        .risk-low { color: #059669; background-color: #ecfdf5; border-color: #059669; }
+        .risk-medium { color: #d97706; background-color: #fffbeb; border-color: #d97706; }
+        .risk-high { color: #dc2626; background-color: #fef2f2; border-color: #dc2626; }
+        
+        .loading-spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #1e40af;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .progress-step {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .progress-step.pending {
+            background-color: #f1f5f9;
+            color: #64748b;
+        }
+        
+        .progress-step.active {
+            background-color: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #f59e0b;
+        }
+        
+        .progress-step.completed {
+            background-color: #ecfdf5;
+            color: #059669;
+        }
+        
+        .progress-step.failed {
+            background-color: #fef2f2;
+            color: #dc2626;
+        }
+        
+        .source-citation {
+            font-size: 11px;
+            color: #64748b;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        
+        .source-citation:hover {
+            color: #1e40af;
+        }
+    </style>
+</head>
+
+<body x-data="dueDiligenceDashboard()" class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2">
+                        <i class="fas fa-shield-alt text-2xl text-navy-600"></i>
+                        <h1 class="text-xl font-bold text-navy-800">Due Diligence Dashboard</h1>
+                    </div>
+                    <span class="text-sm text-gray-500">Professional KYC & TPRM Platform</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button @click="exportReport()" :disabled="!hasResults" 
+                            class="btn btn-sm bg-gold-500 hover:bg-gold-600 text-white border-none">
+                        <i class="fas fa-download"></i>
+                        Export PDF
+                    </button>
+                    <a href="/logout" class="btn btn-sm btn-ghost">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Search Form -->
+        <div class="professional-card p-6 mb-8">
+            <h2 class="text-lg font-semibold text-navy-800 mb-4 flex items-center">
+                <i class="fas fa-search text-navy-600 mr-2"></i>
+                Company Due Diligence Screening
+            </h2>
+            
+            <form @submit.prevent="startScreening()" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Company Name *</label>
+                    <input type="text" x-model="searchForm.company" required
+                           placeholder="e.g., Siemens AG, Apple Inc"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Country</label>
+                    <select x-model="searchForm.country" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500">
+                        <option value="">Any Country</option>
+                        <option value="United States">United States</option>
+                        <option value="United Kingdom">United Kingdom</option>
+                        <option value="Germany">Germany</option>
+                        <option value="France">France</option>
+                        <option value="Canada">Canada</option>
+                        <option value="Japan">Japan</option>
+                        <option value="Singapore">Singapore</option>
+                        <option value="Switzerland">Switzerland</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Domain (Optional)</label>
+                    <input type="text" x-model="searchForm.domain"
+                           placeholder="e.g., siemens.com"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" :disabled="isScreening || !searchForm.company"
+                            class="w-full bg-navy-600 hover:bg-navy-700 text-white font-medium py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
+                        <div x-show="isScreening" class="loading-spinner mr-2"></div>
+                        <i x-show="!isScreening" class="fas fa-play mr-2"></i>
+                        <span x-text="isScreening ? 'Screening...' : 'Start Screening'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Progress Section -->
+        <div x-show="isScreening" class="professional-card p-6 mb-8">
+            <h3 class="text-lg font-semibold text-navy-800 mb-4 flex items-center">
+                <i class="fas fa-tasks text-navy-600 mr-2"></i>
+                Screening Progress
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Progress Steps -->
+                <div>
+                    <h4 class="font-medium text-gray-700 mb-3">Processing Steps</h4>
+                    <div class="space-y-2">
+                        <template x-for="(step, index) in progressSteps" :key="index">
+                            <div class="progress-step" :class="step.status">
+                                <div class="flex items-center w-full">
+                                    <div class="w-6 h-6 mr-3 flex items-center justify-center">
+                                        <i x-show="step.status === 'pending'" class="fas fa-clock text-gray-400"></i>
+                                        <div x-show="step.status === 'active'" class="loading-spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+                                        <i x-show="step.status === 'completed'" class="fas fa-check-circle text-green-600"></i>
+                                        <i x-show="step.status === 'failed'" class="fas fa-times-circle text-red-600"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="font-medium text-sm" x-text="step.name"></div>
+                                        <div x-show="step.message" class="text-xs opacity-75" x-text="step.message"></div>
+                                    </div>
+                                    <div x-show="step.duration" class="text-xs opacity-60" x-text="step.duration"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Source Logs -->
+                <div>
+                    <h4 class="font-medium text-gray-700 mb-3">Data Sources</h4>
+                    <div class="max-h-64 overflow-y-auto space-y-1">
+                        <template x-for="(log, index) in sourceLogs" :key="index">
+                            <div class="text-xs p-2 bg-gray-50 rounded flex items-center">
+                                <i class="fas fa-globe text-navy-600 mr-2"></i>
+                                <span class="flex-1" x-text="log.message"></span>
+                                <span class="text-gray-500" x-text="log.timestamp"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="mt-4">
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="text-gray-600">Overall Progress</span>
+                    <span class="text-navy-600 font-medium" x-text="progressPercentage + '%'"></span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-gradient-to-r from-navy-600 to-gold-500 h-2 rounded-full transition-all duration-300" 
+                         :style="`width: ${progressPercentage}%`"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div x-show="hasResults" class="space-y-6">
+            <!-- Overview Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <!-- Risk Score -->
+                <div class="professional-card p-6 text-center">
+                    <h3 class="font-medium text-gray-700 mb-2">Risk Score</h3>
+                    <div class="text-3xl font-bold mb-2" :class="{
+                        'text-green-600': results?.risk_score <= 30,
+                        'text-yellow-600': results?.risk_score > 30 && results?.risk_score <= 70,
+                        'text-red-600': results?.risk_score > 70
+                    }" x-text="results?.risk_score || 0"></div>
+                    <div class="text-sm font-medium px-3 py-1 rounded-full inline-block" :class="{
+                        'risk-low': results?.risk_score <= 30,
+                        'risk-medium': results?.risk_score > 30 && results?.risk_score <= 70,
+                        'risk-high': results?.risk_score > 70
+                    }" x-text="getRiskLevel(results?.risk_score)"></div>
+                </div>
+                
+                <!-- Sanctions -->
+                <div class="professional-card p-6 text-center">
+                    <h3 class="font-medium text-gray-700 mb-2">Sanctions</h3>
+                    <div class="text-2xl font-bold mb-2" :class="{
+                        'text-green-600': !results?.sanctions_matches?.length,
+                        'text-red-600': results?.sanctions_matches?.length > 0
+                    }">
+                        <i :class="results?.sanctions_matches?.length ? 'fas fa-exclamation-triangle' : 'fas fa-shield-check'"></i>
+                    </div>
+                    <div class="text-sm" x-text="results?.sanctions_matches?.length ? `${results.sanctions_matches.length} Match(es)` : 'Clear'"></div>
+                </div>
+                
+                <!-- Adverse Media -->
+                <div class="professional-card p-6 text-center">
+                    <h3 class="font-medium text-gray-700 mb-2">Adverse Media</h3>
+                    <div class="text-2xl font-bold mb-2 text-navy-600" x-text="results?.adverse_media?.length || 0"></div>
+                    <div class="text-sm text-gray-600">Articles Found</div>
+                </div>
+                
+                <!-- Processing Time -->
+                <div class="professional-card p-6 text-center">
+                    <h3 class="font-medium text-gray-700 mb-2">Processing Time</h3>
+                    <div class="text-2xl font-bold mb-2 text-navy-600" x-text="formatProcessingTime(results?.metadata?.processing_time_ms)"></div>
+                    <div class="text-sm text-gray-600">Seconds</div>
+                </div>
+            </div>
+
+            <!-- Detailed Results Tabs -->
+            <div class="professional-card">
+                <!-- Tab Navigation -->
+                <div class="border-b border-gray-200">
+                    <nav class="flex overflow-x-auto">
+                        <template x-for="tab in resultTabs" :key="tab.id">
+                            <button @click="activeTab = tab.id" 
+                                    class="tab-professional whitespace-nowrap"
+                                    :class="{ 'active': activeTab === tab.id }">
+                                <i :class="tab.icon"></i>
+                                <span x-text="tab.name"></span>
+                            </button>
+                        </template>
+                    </nav>
+                </div>
+                
+                <!-- Tab Content -->
+                <div class="p-6">
+                    <!-- Overview Tab -->
+                    <div x-show="activeTab === 'overview'">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="font-semibold text-navy-800 mb-4">Executive Summary</h3>
+                                <p class="text-gray-700 mb-4" x-text="results?.executive_summary?.overview"></p>
+                                <ul class="space-y-2">
+                                    <template x-for="point in results?.executive_summary?.key_points" :key="point">
+                                        <li class="flex items-start">
+                                            <i class="fas fa-chevron-right text-gold-500 mr-2 mt-1"></i>
+                                            <span class="text-gray-700" x-text="point"></span>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-navy-800 mb-4">Risk Flags</h3>
+                                <div class="space-y-3">
+                                    <template x-for="flag in results?.risk_flags" :key="flag.description">
+                                        <div class="border-l-4 p-3 rounded" :class="{
+                                            'border-red-500 bg-red-50': flag.severity === 'high',
+                                            'border-yellow-500 bg-yellow-50': flag.severity === 'medium',
+                                            'border-green-500 bg-green-50': flag.severity === 'low'
+                                        }">
+                                            <div class="font-medium text-sm" x-text="flag.category"></div>
+                                            <div class="text-sm text-gray-600" x-text="flag.description"></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Company Profile Tab -->
+                    <div x-show="activeTab === 'profile'">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="font-semibold text-navy-800 mb-4">Basic Information</h3>
+                                <dl class="space-y-3">
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Legal Name</dt>
+                                        <dd class="text-gray-900" x-text="results?.company_profile?.legal_name"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Industry</dt>
+                                        <dd class="text-gray-900" x-text="results?.company_profile?.primary_industry"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Founded</dt>
+                                        <dd class="text-gray-900" x-text="results?.company_profile?.founded_year"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Employees</dt>
+                                        <dd class="text-gray-900" x-text="results?.company_profile?.employee_count_band"></dd>
+                                    </div>
+                                </dl>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-navy-800 mb-4">Registration Details</h3>
+                                <dl class="space-y-3">
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Jurisdiction</dt>
+                                        <dd class="text-gray-900" x-text="results?.company_profile?.registration_details?.jurisdiction"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Entity Type</dt>
+                                        <dd class="text-gray-900" x-text="results?.company_profile?.registration_details?.entity_type"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Status</dt>
+                                        <dd class="text-gray-900" x-text="results?.company_profile?.registration_details?.status"></dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- People Tab -->
+                    <div x-show="activeTab === 'people'">
+                        <h3 class="font-semibold text-navy-800 mb-4">Key Personnel</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <template x-for="person in results?.key_people" :key="person.name">
+                                <div class="border border-gray-200 rounded-lg p-4">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <h4 class="font-medium text-gray-900" x-text="person.name"></h4>
+                                        <span class="px-2 py-1 bg-navy-100 text-navy-800 text-xs rounded-full" x-text="person.confidence"></span>
+                                    </div>
+                                    <p class="text-sm text-gold-600 mb-2" x-text="person.role"></p>
+                                    <p class="text-sm text-gray-600" x-text="person.background"></p>
+                                    <a x-show="person.linkedin_url" :href="person.linkedin_url" target="_blank" 
+                                       class="source-citation">LinkedIn Profile</a>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- Website Tab -->
+                    <div x-show="activeTab === 'website'">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="font-semibold text-navy-800 mb-4">Official Website</h3>
+                                <div class="space-y-3">
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">URL</dt>
+                                        <dd>
+                                            <a :href="results?.web_footprint?.official_website" target="_blank" 
+                                               class="text-navy-600 hover:text-navy-800 underline" 
+                                               x-text="results?.web_footprint?.official_website"></a>
+                                        </dd>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-navy-800 mb-4">Social Media</h3>
+                                <div class="space-y-2">
+                                    <template x-for="[platform, url] in Object.entries(results?.web_footprint?.social_media || {})" :key="platform">
+                                        <div class="flex items-center space-x-2">
+                                            <i :class="`fab fa-${platform} text-navy-600`"></i>
+                                            <a :href="url" target="_blank" class="text-navy-600 hover:text-navy-800 underline capitalize" x-text="platform"></a>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sanctions Tab -->
+                    <div x-show="activeTab === 'sanctions'">
+                        <h3 class="font-semibold text-navy-800 mb-4">Sanctions & Watchlists</h3>
+                        <div x-show="!results?.sanctions_matches?.length" class="text-center py-8">
+                            <i class="fas fa-shield-check text-6xl text-green-600 mb-4"></i>
+                            <h4 class="text-lg font-medium text-gray-900 mb-2">No Sanctions Found</h4>
+                            <p class="text-gray-600">No matches found in OFAC, EU, UK, or UN sanctions lists.</p>
+                        </div>
+                        <div x-show="results?.sanctions_matches?.length" class="space-y-4">
+                            <template x-for="match in results?.sanctions_matches" :key="match.list_name">
+                                <div class="border-l-4 border-red-500 bg-red-50 p-4 rounded">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <h4 class="font-medium text-gray-900" x-text="match.list_name"></h4>
+                                            <p class="text-sm text-gray-600" x-text="match.matched_name"></p>
+                                        </div>
+                                        <span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full" x-text="`${(match.match_score * 100).toFixed(1)}% match`"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- Adverse Media Tab -->
+                    <div x-show="activeTab === 'adverse_media'">
+                        <h3 class="font-semibold text-navy-800 mb-4">Adverse Media Coverage</h3>
+                        <div class="space-y-4">
+                            <template x-for="article in results?.news_and_media" :key="article.url">
+                                <div class="border border-gray-200 rounded-lg p-4">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <h4 class="font-medium text-gray-900" x-text="article.title"></h4>
+                                        <span class="px-2 py-1 text-xs rounded-full" :class="{
+                                            'bg-red-100 text-red-800': article.sentiment === 'negative',
+                                            'bg-yellow-100 text-yellow-800': article.sentiment === 'mixed',
+                                            'bg-green-100 text-green-800': article.sentiment === 'positive',
+                                            'bg-gray-100 text-gray-800': article.sentiment === 'neutral'
+                                        }" x-text="article.sentiment"></span>
+                                    </div>
+                                    <p class="text-sm text-gray-600 mb-2" x-text="article.summary"></p>
+                                    <div class="flex justify-between items-center text-xs text-gray-500">
+                                        <span x-text="article.source_name"></span>
+                                        <span x-text="article.published_date"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- Political Exposure Tab -->
+                    <div x-show="activeTab === 'political'">
+                        <h3 class="font-semibold text-navy-800 mb-4">Political Exposure & PEP Status</h3>
+                        <div class="text-center py-8">
+                            <i class="fas fa-landmark text-6xl text-gray-300 mb-4"></i>
+                            <h4 class="text-lg font-medium text-gray-900 mb-2">No Political Exposure Detected</h4>
+                            <p class="text-gray-600">No evidence found of politically exposed persons or government connections.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Bribery/Corruption Tab -->
+                    <div x-show="activeTab === 'bribery'">
+                        <h3 class="font-semibold text-navy-800 mb-4">Bribery & Corruption Checks</h3>
+                        <div class="text-center py-8">
+                            <i class="fas fa-handshake text-6xl text-gray-300 mb-4"></i>
+                            <h4 class="text-lg font-medium text-gray-900 mb-2">No Corruption Issues Found</h4>
+                            <p class="text-gray-600">No evidence of bribery, corruption, or fraud allegations detected.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Risk Report Tab -->
+                    <div x-show="activeTab === 'risk_report'">
+                        <h3 class="font-semibold text-navy-800 mb-4">Comprehensive Risk Assessment</h3>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h4 class="font-medium text-gray-700 mb-3">Data Sources Used</h4>
+                                <ul class="space-y-1">
+                                    <template x-for="source in results?.compliance_notes?.data_sources_used" :key="source">
+                                        <li class="flex items-center text-sm text-gray-600">
+                                            <i class="fas fa-check text-green-600 mr-2"></i>
+                                            <span x-text="source"></span>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 class="font-medium text-gray-700 mb-3">Methodology</h4>
+                                <p class="text-sm text-gray-600" x-text="results?.compliance_notes?.methodology"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="!isScreening && !hasResults" class="professional-card p-12 text-center">
+            <i class="fas fa-search text-6xl text-gray-300 mb-4"></i>
+            <h3 class="text-xl font-medium text-gray-900 mb-2">Ready for Due Diligence</h3>
+            <p class="text-gray-600">Enter a company name above to begin comprehensive screening</p>
+        </div>
+    </main>
+
+    <script>
+        function dueDiligenceDashboard() {
+            return {
+                // Form data
+                searchForm: {
+                    company: '',
+                    country: '',
+                    domain: ''
+                },
+                
+                // UI state
+                isScreening: false,
+                hasResults: false,
+                activeTab: 'overview',
+                currentTaskId: null,
+                
+                // Progress tracking
+                progressPercentage: 0,
+                progressSteps: [
+                    { name: 'Query Expansion', status: 'pending', message: '', duration: '' },
+                    { name: 'Web Search', status: 'pending', message: '', duration: '' },
+                    { name: 'Content Extraction', status: 'pending', message: '', duration: '' },
+                    { name: 'Sanctions Check', status: 'pending', message: '', duration: '' },
+                    { name: 'Entity Resolution', status: 'pending', message: '', duration: '' },
+                    { name: 'AI Analysis', status: 'pending', message: '', duration: '' },
+                    { name: 'Report Generation', status: 'pending', message: '', duration: '' }
+                ],
+                
+                // Results data
+                results: null,
+                sourceLogs: [],
+                
+                // Tabs configuration
+                resultTabs: [
+                    { id: 'overview', name: 'Overview', icon: 'fas fa-chart-line' },
+                    { id: 'profile', name: 'Company Profile', icon: 'fas fa-building' },
+                    { id: 'people', name: 'People', icon: 'fas fa-users' },
+                    { id: 'website', name: 'Website', icon: 'fas fa-globe' },
+                    { id: 'sanctions', name: 'Sanctions', icon: 'fas fa-shield-alt' },
+                    { id: 'adverse_media', name: 'Adverse Media', icon: 'fas fa-newspaper' },
+                    { id: 'political', name: 'Political Exposure', icon: 'fas fa-landmark' },
+                    { id: 'bribery', name: 'Bribery/Corruption', icon: 'fas fa-handshake' },
+                    { id: 'risk_report', name: 'Risk Report', icon: 'fas fa-file-alt' }
+                ],
+                
+                async startScreening() {
+                    if (!this.searchForm.company.trim()) return;
+                    
+                    this.isScreening = true;
+                    this.hasResults = false;
+                    this.results = null;
+                    this.sourceLogs = [];
+                    this.progressPercentage = 0;
+                    this.currentTaskId = null;
+                    
+                    // Reset progress steps
+                    this.progressSteps.forEach(step => {
+                        step.status = 'pending';
+                        step.message = '';
+                        step.duration = '';
+                    });
+                    
+                    try {
+                        const response = await fetch('/api/v1/screen', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({
+                                company: this.searchForm.company,
+                                domain: this.searchForm.domain,
+                                country: this.searchForm.country,
+                                options: {
+                                    deep_crawl: true,
+                                    include_social: true,
+                                    include_sanctions: true,
+                                    include_financials: true,
+                                    include_adverse_media: true,
+                                    include_political: true,
+                                    include_bribery: true
+                                }
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || `HTTP ${response.status}`);
+                        }
+                        
+                        const taskData = await response.json();
+                        this.currentTaskId = taskData.task_id;
+                        
+                        // Start polling for progress
+                        this.pollProgress();
+                        
+                    } catch (error) {
+                        console.error('Screening failed:', error);
+                        alert('Screening failed: ' + error.message);
+                        this.isScreening = false;
+                    }
+                },
+                
+                async pollProgress() {
+                    if (!this.currentTaskId) return;
+                    
+                    try {
+                        const response = await fetch(`/api/v1/status/${this.currentTaskId}`, {
+                            credentials: 'same-origin'
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Status check failed: ${response.status}`);
+                        }
+                        
+                        const status = await response.json();
+                        
+                        // Update progress
+                        this.progressPercentage = status.progress_percentage || 0;
+                        this.sourceLogs = status.source_logs || [];
+                        
+                        // Update steps
+                        if (status.steps) {
+                            status.steps.forEach((step, index) => {
+                                if (this.progressSteps[index]) {
+                                    this.progressSteps[index].status = step.status;
+                                    this.progressSteps[index].message = step.message;
+                                    this.progressSteps[index].duration = step.duration_ms ? `${step.duration_ms}ms` : '';
+                                }
+                            });
+                        }
+                        
+                        // Check if completed
+                        if (status.status === 'completed') {
+                            await this.fetchResults();
+                            this.isScreening = false;
+                        } else if (status.status === 'failed') {
+                            alert('Screening failed: ' + (status.error_message || 'Unknown error'));
+                            this.isScreening = false;
+                        } else {
+                            // Continue polling
+                            setTimeout(() => this.pollProgress(), 1500);
+                        }
+                        
+                    } catch (error) {
+                        console.error('Progress polling failed:', error);
+                        setTimeout(() => {
+                            if (this.isScreening) {
+                                this.pollProgress();
+                            }
+                        }, 3000);
+                    }
+                },
+                
+                async fetchResults() {
+                    if (!this.currentTaskId) return;
+                    
+                    try {
+                        const response = await fetch(`/api/v1/report/${this.currentTaskId}`, {
+                            credentials: 'same-origin'
+                        });
+                        
+                        if (response.ok) {
+                            this.results = await response.json();
+                            this.hasResults = true;
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch results:', error);
+                    }
+                },
+                
+                getRiskLevel(score) {
+                    if (score <= 30) return 'Low Risk';
+                    if (score <= 70) return 'Medium Risk';
+                    return 'High Risk';
+                },
+                
+                formatProcessingTime(ms) {
+                    if (!ms) return '0';
+                    return (ms / 1000).toFixed(1);
+                },
+                
+                exportReport() {
+                    if (this.currentTaskId) {
+                        window.open(`/api/v1/report/${this.currentTaskId}/pdf`, '_blank');
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
