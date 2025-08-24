@@ -292,6 +292,7 @@ Return the enhanced analysis in the same JSON format with proper citations.
                 'validation_status': 'passed',
                 'knowledge_based': True
             }
+            result['validation_status'] = 'passed'  # Add at top level too
 
             print(f"✅ GPT-5 primary analysis completed and validated")
             return result
@@ -330,6 +331,7 @@ Return the enhanced analysis in the same JSON format with proper citations.
                 'knowledge_based': True,
                 'web_enhanced': True
             }
+            result['validation_status'] = 'passed'  # Add at top level too
 
             print(f"✅ GPT-5 enhanced analysis completed and validated")
             return result

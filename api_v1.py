@@ -309,29 +309,45 @@ def process_screening_task(task_id: str):
             update_task_step(task_id, "ai_analysis", StepStatus.FAILED, "GPT-5 primary analysis failed")
             add_source_log(task_id, f"❌ GPT-5 Primary Analysis failed")
 
-        # Step 3: Web Search (Supplementary Evidence)
+        # Step 3: Web Search (Supplementary Evidence) - Optional
         update_task_step(task_id, "web_search", StepStatus.ACTIVE, "Collecting web evidence to supplement GPT-5...")
         add_source_log(task_id, f"🔍 Web search for supplementary evidence...")
         
-        from services.search import search_service
-        search_results = asyncio.run(search_service.search_multiple_intents(company_name, country))
-        
-        total_results = sum(len(results) for results in search_results.values())
-        update_task_step(task_id, "web_search", StepStatus.COMPLETED, f"Found {total_results} web sources")
-        add_source_log(task_id, f"📊 Web search: {total_results} sources across {len(search_results)} categories")
+        try:
+            from services.search import search_service
+            search_results = asyncio.run(search_service.search_multiple_intents(company_name, country))
+            
+            total_results = sum(len(results) for results in search_results.values())
+            update_task_step(task_id, "web_search", StepStatus.COMPLETED, f"Found {total_results} web sources")
+            add_source_log(task_id, f"📊 Web search: {total_results} sources across {len(search_results)} categories")
+        except Exception as e:
+            print(f"⚠️ Web search failed: {e}")
+            search_results = {}
+            update_task_step(task_id, "web_search", StepStatus.COMPLETED, "Web search unavailable - using GPT-5 only")
+            add_source_log(task_id, f"⚠️ Web search failed, relying on GPT-5 intelligence")
 
-        # Step 4: Content Extraction
-        update_task_step(task_id, "content_extraction", StepStatus.ACTIVE, "Extracting content from web sources...")
-        
-        from services.extract import extraction_service
-        extracted_results = asyncio.run(extraction_service.extract_multiple(search_results))
-        deduplicated_results = extraction_service.deduplicate_by_content(extracted_results)
-        best_snippets = extraction_service.get_best_snippets(deduplicated_results)
-        
-        update_task_step(task_id, "content_extraction", StepStatus.COMPLETED, f"Extracted {len(best_snippets)} content snippets")
-        add_source_log(task_id, f"📄 Content extraction: {len(best_snippets)} high-quality snippets")
+        # Step 4: Content Extraction - Optional
+        best_snippets = []
+        if search_results:
+            update_task_step(task_id, "content_extraction", StepStatus.ACTIVE, "Extracting content from web sources...")
+            
+            try:
+                from services.extract import extraction_service
+                extracted_results = asyncio.run(extraction_service.extract_multiple(search_results))
+                deduplicated_results = extraction_service.deduplicate_by_content(extracted_results)
+                best_snippets = extraction_service.get_best_snippets(deduplicated_results)
+                
+                update_task_step(task_id, "content_extraction", StepStatus.COMPLETED, f"Extracted {len(best_snippets)} content snippets")
+                add_source_log(task_id, f"📄 Content extraction: {len(best_snippets)} high-quality snippets")
+            except Exception as e:
+                print(f"⚠️ Content extraction failed: {e}")
+                update_task_step(task_id, "content_extraction", StepStatus.COMPLETED, "Content extraction failed - using GPT-5 only")
+                add_source_log(task_id, f"⚠️ Content extraction failed, relying on GPT-5 intelligence")
+        else:
+            update_task_step(task_id, "content_extraction", StepStatus.COMPLETED, "Skipped - no web sources available")
+            add_source_log(task_id, f"📝 No web sources - using pure GPT-5 intelligence")
 
-        # Step 5: GPT-5 Enhancement with Web Evidence
+        # Step 5: GPT-5 Enhancement with Web Evidence (or Pure GPT-5)
         if best_snippets:
             update_task_step(task_id, "ai_analysis", StepStatus.ACTIVE, "GPT-5 Enhancement - Validating with web evidence...")
             add_source_log(task_id, f"🔍 GPT-5 enhancing analysis with {len(best_snippets)} web sources...")
@@ -343,7 +359,8 @@ def process_screening_task(task_id: str):
             add_source_log(task_id, f"✅ GPT-5 Enhanced Analysis: Web-validated intelligence")
         else:
             final_analysis = primary_analysis
-            add_source_log(task_id, f"📝 Using GPT-5 primary analysis (no web enhancement)")
+            update_task_step(task_id, "ai_analysis", StepStatus.COMPLETED, "GPT-5 analysis completed (pure intelligence)")
+            add_source_log(task_id, f"✅ GPT-5 Pure Analysis: Complete intelligence from knowledge base")
 
         # Step 6: Sanctions Check (Supplementary)
         update_task_step(task_id, "sanctions_check", StepStatus.ACTIVE, "Cross-checking sanctions databases...")
