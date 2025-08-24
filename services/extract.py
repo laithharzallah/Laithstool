@@ -66,6 +66,7 @@ class ContentExtractor:
     def __init__(self):
         self.session = httpx.AsyncClient(
             timeout=30.0,
+            follow_redirects=True,  # Follow redirects automatically
             headers={
                 'User-Agent': 'Mozilla/5.0 (compatible; CompanyScreener/1.0; +https://example.com/bot)',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
