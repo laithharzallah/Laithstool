@@ -6,6 +6,7 @@ from typing import List, Optional, Literal
 from dotenv import load_dotenv
 from openai import OpenAI
 import integrations
+from api_v1 import api_v1
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -26,6 +27,9 @@ except Exception as e:
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production-2024'
+
+# Register API v1 blueprint
+app.register_blueprint(api_v1)
 
 # Add CORS headers to all responses
 @app.after_request
