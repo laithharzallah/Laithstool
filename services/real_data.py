@@ -722,9 +722,15 @@ class RealDataCollector:
                 website_executives = await self._scrape_website_executives(company_name)
                 executives.extend(website_executives)
             
-            # Method 3: If still no executives, use sample data for known companies
+            # Method 3: If still no executives, ask ChatGPT
             if len(executives) == 0:
-                print("📊 No executives found via scraping, checking sample data...")
+                print("🤖 No executives found via scraping, asking ChatGPT...")
+                chatgpt_executives = await self._chatgpt_find_executives(company_name)
+                executives.extend(chatgpt_executives)
+            
+            # Method 4: If still no executives, use sample data for known companies
+            if len(executives) == 0:
+                print("📊 No executives found via ChatGPT, checking sample data...")
                 sample_executives = self._get_sample_executives(company_name)
                 executives.extend(sample_executives)
             
@@ -1203,6 +1209,140 @@ class RealDataCollector:
             
         except Exception as e:
             print(f"❌ Sample executive data failed: {e}")
+            return []
+
+    async def _chatgpt_find_adverse_media(self, company_name: str, executives: List[Dict] = None) -> List[Dict]:
+        """Use ChatGPT to find adverse media coverage"""
+        try:
+            if not self.openai_client:
+                return []
+            
+            exec_names = [exec.get('name', '') for exec in (executives or [])]
+            exec_text = f" and executives like {', '.join(exec_names[:3])}" if exec_names else ""
+            
+            prompt = f"""
+            Find recent adverse media coverage about {company_name}{exec_text}. 
+            
+            Search your knowledge for real news articles, lawsuits, investigations, scandals, 
+            regulatory penalties, fraud cases, or other negative coverage from 2022-2024.
+            
+            Return a JSON array of articles:
+            [
+                {{
+                    "title": "Real article headline",
+                    "url": "https://realurl.com/article",
+                    "source_name": "News outlet name",
+                    "published_date": "2023-MM-DD",
+                    "snippet": "Brief description of the issue",
+                    "sentiment": "negative",
+                    "category": "Legal/Financial/Regulatory/Operational",
+                    "severity": "low/medium/high",
+                    "key_allegations": ["main", "points"]
+                }}
+            ]
+            
+            Only include REAL, verifiable news stories. If you don't know of any adverse media, return an empty array [].
+            Be factual and cite real sources you're aware of.
+            """
+            
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a financial researcher. Provide only factual, verifiable adverse media coverage with real sources."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=1000
+            )
+            
+            result = response.choices[0].message.content
+            
+            try:
+                articles = json.loads(result)
+                if isinstance(articles, list):
+                    # Add metadata
+                    for article in articles:
+                        article['is_adverse'] = True
+                        article['relevance_score'] = 50  # Medium relevance
+                        article['source'] = 'ChatGPT Knowledge'
+                        article['extraction_method'] = 'chatgpt'
+                    
+                    print(f"🤖 ChatGPT found {len(articles)} adverse media articles")
+                    return articles
+            except json.JSONDecodeError:
+                print("⚠️ ChatGPT response was not valid JSON")
+                return []
+            
+            return []
+            
+        except Exception as e:
+            print(f"❌ ChatGPT adverse media search failed: {e}")
+            return []
+
+    async def _chatgpt_find_executives(self, company_name: str) -> List[Dict]:
+        """Use ChatGPT to find current executives"""
+        try:
+            if not self.openai_client:
+                return []
+            
+            prompt = f"""
+            Provide the current key executives of {company_name} as of 2024.
+            
+            Return a JSON array of executives with their real names and titles:
+            [
+                {{
+                    "name": "Full Real Name",
+                    "title": "Official Title", 
+                    "role": "Official Title",
+                    "confidence": "high",
+                    "background": "Brief background if known"
+                }}
+            ]
+            
+            Only include executives you are confident about. Focus on:
+            - CEO/Chief Executive Officer
+            - CFO/Chief Financial Officer  
+            - CTO/Chief Technology Officer
+            - COO/Chief Operating Officer
+            - President
+            - Chairman
+            
+            If you don't have current information about {company_name} executives, return an empty array [].
+            Be factual and only include real people with real titles.
+            """
+            
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a business researcher. Provide only factual, verifiable executive information with real names and titles."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=800
+            )
+            
+            result = response.choices[0].message.content
+            
+            try:
+                executives = json.loads(result)
+                if isinstance(executives, list):
+                    # Add metadata
+                    for exec in executives:
+                        exec['source_url'] = 'ChatGPT Knowledge'
+                        exec['extraction_method'] = 'chatgpt'
+                        if 'role' not in exec:
+                            exec['role'] = exec.get('title', 'Unknown')
+                    
+                    print(f"🤖 ChatGPT found {len(executives)} executives")
+                    return executives
+            except json.JSONDecodeError:
+                print("⚠️ ChatGPT executive response was not valid JSON")
+                return []
+            
+            return []
+            
+        except Exception as e:
+            print(f"❌ ChatGPT executive search failed: {e}")
             return []
 
 # Global instance
