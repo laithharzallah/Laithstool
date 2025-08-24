@@ -12,6 +12,9 @@
     <!-- Alpine.js for interactivity -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
+    <!-- HTMX for live updates -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
@@ -760,6 +763,7 @@
                 hasResults: false,
                 activeTab: 'overview',
                 apiKeysAvailable: true,
+                currentTaskId: null,
                 
                 // Progress tracking
                 progressSteps: [
@@ -835,6 +839,7 @@
                     this.results = null;
                     this.sourceLogs = [];
                     this.progressPercentage = 0;
+                    this.currentTaskId = null;
                     
                     // Reset progress steps
                     this.progressSteps.forEach(step => {
@@ -844,8 +849,8 @@
                     });
                     
                     try {
-                        // Test with simple endpoint first
-                        const response = await fetch('/api/test', {
+                        // Start the screening task
+                        const response = await fetch('/api/v1/screen', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -853,7 +858,7 @@
                             },
                             credentials: 'same-origin',
                             body: JSON.stringify({
-                                company_name: this.formData.company,
+                                company: this.formData.company,
                                 domain: this.formData.domain,
                                 country: this.formData.country,
                                 options: this.formData.options
@@ -861,23 +866,93 @@
                         });
                         
                         if (!response.ok) {
-                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
                         }
                         
-                        this.results = await response.json();
-                        this.hasResults = true;
-                        this.progressPercentage = 100;
+                        const taskData = await response.json();
+                        this.currentTaskId = taskData.task_id;
                         
-                        // Mark all steps as completed
-                        this.progressSteps.forEach(step => {
-                            step.status = 'completed';
-                        });
+                        // Start polling for progress
+                        this.pollProgress();
                         
                     } catch (error) {
                         console.error('Screening failed:', error);
                         this.showError(error.message);
-                    } finally {
                         this.isScreening = false;
+                    }
+                },
+                
+                async pollProgress() {
+                    if (!this.currentTaskId) return;
+                    
+                    try {
+                        const response = await fetch(`/api/v1/status/${this.currentTaskId}`, {
+                            credentials: 'same-origin'
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Status check failed: ${response.status}`);
+                        }
+                        
+                        const status = await response.json();
+                        
+                        // Update progress
+                        this.progressPercentage = status.progress_percentage || 0;
+                        this.sourceLogs = status.source_logs || [];
+                        
+                        // Update steps
+                        if (status.steps) {
+                            status.steps.forEach((step, index) => {
+                                if (this.progressSteps[index]) {
+                                    this.progressSteps[index].status = step.status;
+                                    this.progressSteps[index].message = step.message;
+                                    this.progressSteps[index].duration = step.duration_ms ? `${step.duration_ms}ms` : '';
+                                }
+                            });
+                        }
+                        
+                        // Check if completed
+                        if (status.status === 'completed') {
+                            await this.fetchResults();
+                            this.isScreening = false;
+                        } else if (status.status === 'failed') {
+                            this.showError(status.error_message || 'Screening failed');
+                            this.isScreening = false;
+                        } else {
+                            // Continue polling
+                            setTimeout(() => this.pollProgress(), 1500);
+                        }
+                        
+                    } catch (error) {
+                        console.error('Progress polling failed:', error);
+                        // Try one more time, then stop
+                        setTimeout(() => {
+                            if (this.isScreening) {
+                                this.pollProgress();
+                            }
+                        }, 3000);
+                    }
+                },
+                
+                async fetchResults() {
+                    if (!this.currentTaskId) return;
+                    
+                    try {
+                        const response = await fetch(`/api/v1/report/${this.currentTaskId}`, {
+                            credentials: 'same-origin'
+                        });
+                        
+                        if (response.ok) {
+                            this.results = await response.json();
+                            this.hasResults = true;
+                        } else {
+                            console.warn('Could not fetch results, but screening completed');
+                            this.hasResults = false;
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch results:', error);
+                        this.hasResults = false;
                     }
                 },
                 
