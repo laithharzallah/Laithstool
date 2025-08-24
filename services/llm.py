@@ -124,67 +124,82 @@ class GPT5Client:
             return primary_analysis
 
     def _build_primary_knowledge_prompt(self, company: str, country: str) -> str:
-        """Build comprehensive knowledge-based analysis prompt"""
+        """Build comprehensive internet search-enabled analysis prompt"""
         return f"""
-You are conducting a comprehensive due diligence analysis of {company} from {country} using your extensive knowledge base.
+You are conducting a comprehensive due diligence analysis of {company} from {country}. 
+
+CRITICAL: You have internet access and web search capabilities. Use them extensively to gather REAL-TIME information.
 
 COMPANY: {company}
 COUNTRY: {country}
 
+SEARCH INSTRUCTIONS:
+1. Search the web for current information about this company
+2. Look up the company's official website and recent news
+3. Search for current executives, leadership team, and board members
+4. Find recent controversies, legal issues, or adverse media
+5. Check for sanctions lists and regulatory actions
+6. Look for political connections and business relationships
+
 ANALYSIS REQUIREMENTS:
-Use your comprehensive knowledge to provide detailed intelligence on:
+Use your WEB SEARCH capabilities to provide current, detailed intelligence on:
 
 1. OFFICIAL WEBSITE & COMPANY PROFILE:
-   - Official website URL (if known from your training data)
-   - Legal company name, industry sector, business description
-   - Key business activities, subsidiaries, market position
+   - SEARCH for the company's official website URL
+   - Find current legal company name, industry sector, business description
+   - Research key business activities, subsidiaries, market position
+   - Look up company size, revenue, headquarters location
 
-2. SANCTIONS & COMPLIANCE:
-   - Any OFAC, EU, UN, or other sanctions list appearances
-   - Historical regulatory violations or enforcement actions
-   - Compliance issues or legal settlements
+2. CURRENT EXECUTIVES & LEADERSHIP:
+   - SEARCH for current CEO, CFO, Chairman, and C-level executives 
+   - Find Board of Directors members and their backgrounds
+   - Look up founders, major shareholders, key stakeholders
+   - Research recent executive changes, appointments, or resignations
+   - Find LinkedIn profiles and professional backgrounds
 
-3. ADVERSE MEDIA & CONTROVERSIES:
-   - Major scandals, investigations, or controversies
-   - Legal disputes, lawsuits, or regulatory actions
-   - Negative media coverage from your knowledge base
+3. SANCTIONS & COMPLIANCE:
+   - SEARCH OFAC, EU, UN sanctions lists for company and executives
+   - Look up regulatory violations, enforcement actions, fines
+   - Check for compliance issues, legal settlements, court cases
+   - Research any debarment or exclusion listings
 
-4. KEY EXECUTIVES & PEOPLE:
-   - Current CEO, CFO, Chairman, and other C-level executives
-   - Board of Directors members (if known from your training)
-   - Founders, major shareholders, or key stakeholders
-   - Any executive changes, resignations, or appointments
-   - Educational background, previous roles of key executives
+4. ADVERSE MEDIA & CONTROVERSIES:
+   - SEARCH recent news for scandals, investigations, controversies
+   - Find legal disputes, lawsuits, regulatory actions
+   - Look for negative media coverage, criticism, or allegations
+   - Research any ongoing investigations or regulatory scrutiny
 
 5. BRIBERY & CORRUPTION:
-   - Any bribery or corruption allegations or convictions
-   - FCPA violations or anti-corruption enforcement
-   - Ethics violations or misconduct cases
+   - SEARCH for bribery, corruption allegations or convictions
+   - Look up FCPA violations, anti-corruption enforcement actions
+   - Find ethics violations, misconduct cases, integrity issues
+   - Research any plea deals, settlements, or ongoing cases
 
 6. POLITICAL EXPOSURE:
-   - Government ownership or state enterprise status
-   - Political connections of leadership
-   - Politically Exposed Persons (PEP) associations
+   - SEARCH for government ownership or state enterprise status
+   - Research political connections of executives and board members
+   - Look up Politically Exposed Persons (PEP) associations
+   - Find government contracts, political donations, lobbying activities
 
-7. RISK FACTORS & DISADVANTAGES:
-   - Ownership opacity or beneficial ownership issues
-   - Operational risks or financial difficulties
-   - Reputational risks or market concerns
-   - Regulatory or environmental issues
+7. FINANCIAL & WEBSITE FOOTPRINT:
+   - SEARCH for the company's main website and digital presence
+   - Find financial reports, SEC filings, annual reports
+   - Look up stock exchange listings, market data
+   - Research subsidiary companies and corporate structure
 
-8. EXECUTIVE SUMMARY:
-   - Overall risk assessment and key findings
-   - Critical issues that require attention
-   - Recommended due diligence focus areas
+8. RISK ASSESSMENT & SUMMARY:
+   - Synthesize all web search findings into risk assessment
+   - Identify critical issues requiring attention
+   - Provide overall risk score and recommendations
 
-IMPORTANT INSTRUCTIONS:
-- Draw from your VAST TRAINING KNOWLEDGE about this company and its executives
-- For well-known companies, provide REAL executives, subsidiaries, and controversies from your training data
-- Include specific names, dates, amounts, and details where you know them from training
-- Be comprehensive and detailed - use your full knowledge base
-- For executives: provide actual names and positions you know from your training
-- For controversies: include real scandals, lawsuits, or issues you're aware of
-- Only mark as "unknown" if you genuinely have no training data about that aspect
+CRITICAL SEARCH REQUIREMENTS:
+- USE WEB SEARCH for ALL information - don't rely only on training data
+- SEARCH multiple sources: news sites, company websites, regulatory databases
+- FIND REAL, CURRENT executives with actual names and positions
+- LOOK UP recent news, press releases, and media coverage
+- VERIFY information across multiple web sources
+- SEARCH for: "[company name] executives", "[company name] CEO", "[company name] controversy", "[company name] sanctions"
+- Include URLs and sources for verification
 
 Return ONLY valid JSON matching this exact schema:
 {{
@@ -193,16 +208,41 @@ Return ONLY valid JSON matching this exact schema:
     "company_profile": {{
         "legal_name": "Full legal name from knowledge",
         "country": "{country}",
-        "industry": "Industry sector from knowledge",
-        "description": "Detailed business description"
+        "industry": "Industry sector from web search",
+        "description": "Detailed business description from web search"
+    }},
+    "people": {{
+        "executives": [
+            {{
+                "name": "Full name from web search",
+                "position": "Current title/role from web search",
+                "company": "{company}",
+                "background": "Education/previous roles from web search",
+                "tenure": "Start date or length of service",
+                "source_url": "Web source URL where found"
+            }}
+        ],
+        "board_members": [
+            {{
+                "name": "Full name from web search", 
+                "position": "Board role from web search",
+                "background": "Professional background from web search",
+                "source_url": "Web source URL where found"
+            }}
+        ]
+    }},
+    "website": {{
+        "official_url": "Main company website from web search",
+        "description": "Website content analysis",
+        "last_verified": "Current date"
     }},
     "sanctions": [
         {{
-            "entity_name": "Name on sanctions list",
-            "list_name": "OFAC/EU/UN etc",
+            "entity_name": "Name found on sanctions list via web search",
+            "list_name": "OFAC/EU/UN/UK HMT etc",
             "match_type": "exact/partial/alias", 
             "confidence": "high/medium/low",
-            "citation_url": "knowledge_base"
+            "source_url": "URL where sanctions info was found"
         }}
     ],
     "adverse_media": [
