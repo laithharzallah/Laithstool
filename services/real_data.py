@@ -668,54 +668,57 @@ class RealDataCollector:
             print(f"❌ Executive extraction failed: {e}")
             return []
     
-    async def _ai_extract_executives(self, content: str, company_name: str, source_url: str) -> List[Dict]:
-        """Use OpenAI to extract executive information from content"""
+        async def _ai_extract_executives(self, content: str, company_name: str, source_url: str) -> List[Dict]:
+        """Use OpenAI to extract executive information from content with regex fallback"""
         try:
-            if not self.openai_client:
-                return []
+            # Try AI first if available
+            if self.openai_client:
+                try:
+                    prompt = f"""
+                    Extract executive/leadership information from this content about {company_name}:
+                    
+                    {content}
+                    
+                    Return JSON array of executives found:
+                    [
+                        {{
+                            "name": "Full Name",
+                            "role": "Position/Title",
+                            "background": "Brief background if available",
+                            "confidence": "high/medium/low"
+                        }}
+                    ]
+                    
+                    Only include clear, unambiguous executive information. Don't make assumptions.
+                    """
+                    
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are a data extraction specialist. Extract only factual executive information."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=500
+                    )
+                    
+                    result = response.choices[0].message.content
+                    
+                    try:
+                        executives = json.loads(result)
+                        if isinstance(executives, list):
+                            # Add source information
+                            for exec in executives:
+                                exec['source_url'] = source_url
+                                exec['linkedin_url'] = source_url if 'linkedin.com' in source_url else None
+                            return executives
+                    except:
+                        pass
+                except Exception as e:
+                    print(f"⚠️ AI extraction failed, using regex fallback: {e}")
             
-            prompt = f"""
-            Extract executive/leadership information from this content about {company_name}:
-            
-            {content}
-            
-            Return JSON array of executives found:
-            [
-                {{
-                    "name": "Full Name",
-                    "role": "Position/Title",
-                    "background": "Brief background if available",
-                    "confidence": "high/medium/low"
-                }}
-            ]
-            
-            Only include clear, unambiguous executive information. Don't make assumptions.
-            """
-            
-            response = self.openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a data extraction specialist. Extract only factual executive information."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,
-                max_tokens=500
-            )
-            
-            result = response.choices[0].message.content
-            
-            try:
-                executives = json.loads(result)
-                if isinstance(executives, list):
-                    # Add source information
-                    for exec in executives:
-                        exec['source_url'] = source_url
-                        exec['linkedin_url'] = source_url if 'linkedin.com' in source_url else None
-                    return executives
-            except:
-                pass
-            
-            return []
+            # Fallback: Use regex patterns to extract executives
+            return self._regex_extract_executives(content, company_name, source_url)
             
         except Exception as e:
             print(f"❌ AI executive extraction failed: {e}")
