@@ -49,10 +49,10 @@ class GPT5Client:
             # Call GPT-5 for primary knowledge-based analysis
             response = self.client.chat.completions.create(
                 model="gpt-4o",  # Using latest available model
-                messages=[
+                                messages=[
                     {
-                        "role": "system", 
-                        "content": "You are a world-class corporate intelligence analyst with access to comprehensive global business databases. You have extensive knowledge of companies, their operations, leadership, controversies, and regulatory issues worldwide. Provide detailed, accurate analysis based on your training knowledge."
+                        "role": "system",
+                        "content": "You are a professional due diligence analyst with internet access and web search capabilities. You can search the web in real-time to find current information about companies, executives, news, and regulatory data. Use your web search functions extensively to gather comprehensive, up-to-date intelligence. Always search the internet for the most current information rather than relying solely on training data."
                     },
                     {
                         "role": "user",
@@ -126,23 +126,55 @@ class GPT5Client:
     def _build_primary_knowledge_prompt(self, company: str, country: str) -> str:
         """Build comprehensive internet search-enabled analysis prompt"""
         return f"""
-You are conducting a comprehensive due diligence analysis of {company} from {country}. 
+You are a professional due diligence analyst with internet access. I need you to search the web and provide comprehensive screening information for {company} from {country}.
 
-CRITICAL: You have internet access and web search capabilities. Use them extensively to gather REAL-TIME information.
-
-COMPANY: {company}
+TARGET COMPANY: {company}
 COUNTRY: {country}
 
-SEARCH INSTRUCTIONS:
-1. Search the web for current information about this company
-2. Look up the company's official website and recent news
-3. Search for current executives, leadership team, and board members
-4. Find recent controversies, legal issues, or adverse media
-5. Check for sanctions lists and regulatory actions
-6. Look for political connections and business relationships
+🔍 MANDATORY WEB SEARCHES TO PERFORM:
+Please search the internet for the following and fill ALL sections with real data:
 
-ANALYSIS REQUIREMENTS:
-Use your WEB SEARCH capabilities to provide current, detailed intelligence on:
+1. COMPANY WEBSITE & PROFILE SEARCH:
+   - Search: "{company} official website" 
+   - Search: "{company} company profile LinkedIn"
+   - Search: "{company} about us company information"
+   - Find: Official website, company description, industry, business activities
+
+2. CURRENT EXECUTIVES SEARCH:
+   - Search: "{company} CEO current" 
+   - Search: "{company} management team executives"
+   - Search: "{company} board of directors"
+   - Search: "{company} leadership team 2024"
+   - Find: Real names, positions, backgrounds of current executives
+
+3. SANCTIONS & COMPLIANCE SEARCH:
+   - Search: "{company} OFAC sanctions list"
+   - Search: "{company} EU sanctions"
+   - Search: "{company} regulatory violations"
+   - Search: "{company} compliance issues"
+   - Find: Any sanctions, violations, regulatory actions
+
+4. ADVERSE MEDIA SEARCH:
+   - Search: "{company} controversy news"
+   - Search: "{company} lawsuit legal issues"
+   - Search: "{company} investigation scandal"
+   - Search: "{company} negative news 2024"
+   - Find: Recent controversies, legal issues, negative coverage
+
+5. CORRUPTION & BRIBERY SEARCH:
+   - Search: "{company} bribery corruption"
+   - Search: "{company} FCPA violation"
+   - Search: "{company} ethics violations"
+   - Find: Any corruption allegations or cases
+
+6. POLITICAL EXPOSURE SEARCH:
+   - Search: "{company} government contracts"
+   - Search: "{company} political connections"
+   - Search: "{company} state owned"
+   - Find: Government relationships, political exposure
+
+🎯 YOUR MISSION:
+Use your web search capabilities to find REAL, CURRENT information and fill ALL 8 sections of our due diligence tool:
 
 1. OFFICIAL WEBSITE & COMPANY PROFILE:
    - SEARCH for the company's official website URL
@@ -192,16 +224,21 @@ Use your WEB SEARCH capabilities to provide current, detailed intelligence on:
    - Identify critical issues requiring attention
    - Provide overall risk score and recommendations
 
-CRITICAL SEARCH REQUIREMENTS:
-- USE WEB SEARCH for ALL information - don't rely only on training data
-- SEARCH multiple sources: news sites, company websites, regulatory databases
-- FIND REAL, CURRENT executives with actual names and positions
-- LOOK UP recent news, press releases, and media coverage
-- VERIFY information across multiple web sources
-- SEARCH for: "[company name] executives", "[company name] CEO", "[company name] controversy", "[company name] sanctions"
-- Include URLs and sources for verification
+🚨 CRITICAL SUCCESS CRITERIA:
+- I need you to actually SEARCH THE WEB for all this information
+- Don't just use your training data - actively search the internet
+- Find REAL executives with actual names (not generic examples)
+- Find REAL websites, news articles, and sources
+- Include actual URLs from your web searches
+- Fill ALL 8 sections with real data from web searches
+- If a company like Siemens AG exists, you should find their real CEO, real website, real recent news
 
-Return ONLY valid JSON matching this exact schema:
+⚡ SEARCH EXAMPLES:
+- For Siemens AG: Find real CEO (like Roland Busch), real website (siemens.com), real recent news
+- For any company: Get current executives, official website, recent controversies
+- Use specific search queries and return actual web results
+
+Return ONLY valid JSON with REAL DATA from your web searches:
 {{
     "executive_summary": "Comprehensive overview based on knowledge",
     "official_website": "https://example.com or unknown",
@@ -281,12 +318,14 @@ Return ONLY valid JSON matching this exact schema:
             "citation_url": "knowledge_base"
         }}
     ],
-    "citations": ["knowledge_base"],
-    "analysis_method": "gpt5_primary_knowledge",
-    "confidence_level": "high/medium/low based on knowledge depth"
+    "citations": ["List of actual URLs from web searches"],
+    "analysis_method": "gpt5_web_search",
+    "confidence_level": "high/medium/low based on web search results",
+    "search_timestamp": "Current date/time when searches were performed"
 }}
 
-Provide the most comprehensive analysis possible based on your training knowledge of {company}.
+🎯 FINAL INSTRUCTION: 
+I need you to literally search the web right now for {company} and fill every section with real, current data. This is for a professional due diligence tool that needs actual executives, actual websites, actual news - not hypothetical examples.
 """
 
     def _build_enhancement_prompt(self, primary_analysis: Dict, snippet_text: str) -> str:
