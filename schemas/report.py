@@ -142,24 +142,63 @@ class WebFootprint(BaseModel):
 
 
 class CompanyProfile(BaseModel):
-    """Core company profile information"""
-    legal_name: Optional[str] = Field(None, description="Official legal name")
-    trade_names: List[str] = Field(default_factory=list, description="Trading names/aliases")
-    incorporation_jurisdiction: Optional[str] = Field(None, description="Jurisdiction of incorporation")
-    registration_number: Optional[str] = Field(None, description="Company registration number")
-    tax_id: Optional[str] = Field(None, description="Tax identification number")
-    industry_codes: List[str] = Field(default_factory=list, description="Industry classification codes")
-    primary_industry: Optional[str] = Field(None, description="Primary business sector")
-    business_description: Optional[str] = Field(None, description="What the company does")
-    founded_year: Optional[int] = Field(None, description="Year founded")
-    headquarters: Optional[Address] = None
-    other_addresses: List[Address] = Field(default_factory=list)
-    employee_count_band: Optional[str] = Field(None, description="Employee size band")
-    annual_revenue_band: Optional[str] = Field(None, description="Revenue size band")
-    ownership_structure: Optional[str] = Field(None, description="Public/private/subsidiary status")
-    parent_company: Optional[str] = Field(None, description="Parent company if applicable")
-    subsidiaries: List[str] = Field(default_factory=list, description="Known subsidiaries")
-    confidence: ConfidenceLevel = Field(default=ConfidenceLevel.MEDIUM)
+    """Company profile information"""
+    legal_name: str = Field(..., description="Legal company name")
+    country: str = Field(..., description="Country of operation")
+    industry: str = Field(..., description="Industry sector")
+    description: str = Field(..., description="Company description")
+
+class SanctionMatch(BaseModel):
+    """Sanctions list match"""
+    entity_name: str = Field(..., description="Name found on sanctions list")
+    list_name: str = Field(..., description="Sanctions list name (OFAC, EU, UN, etc.)")
+    match_type: str = Field(..., description="Match type: exact/partial/alias")
+    confidence: str = Field(..., description="Confidence level: high/medium/low")
+    citation_url: str = Field(..., description="URL where this was found")
+
+class AdverseMediaItem(BaseModel):
+    """Adverse media coverage item"""
+    headline: str = Field(..., description="News headline")
+    date: str = Field(..., description="Publication date YYYY-MM-DD or unknown")
+    source: str = Field(..., description="News outlet name")
+    category: str = Field(..., description="Category: Legal/Financial/Regulatory/Operational")
+    severity: str = Field(..., description="Severity: high/medium/low")
+    summary: str = Field(..., description="Brief summary")
+    citation_url: str = Field(..., description="URL where this was found")
+
+class BriberyCorruptionItem(BaseModel):
+    """Bribery and corruption allegation"""
+    allegation: str = Field(..., description="Specific allegation")
+    date: str = Field(..., description="Date YYYY-MM-DD or unknown")
+    source: str = Field(..., description="News outlet or authority")
+    status: str = Field(..., description="Status: alleged/charged/convicted/settled")
+    citation_url: str = Field(..., description="URL where this was found")
+
+class PoliticalExposureItem(BaseModel):
+    """Political exposure item"""
+    type: str = Field(..., description="Type: PEP/Government Ownership/Political Connections")
+    description: str = Field(..., description="Details from evidence")
+    confidence: str = Field(..., description="Confidence: high/medium/low")
+    citation_url: str = Field(..., description="URL where this was found")
+
+class DisadvantageItem(BaseModel):
+    """Risk or disadvantage item"""
+    risk_type: str = Field(..., description="Risk type: Ownership Opacity/Regulatory Action/Lawsuit/Controversy")
+    description: str = Field(..., description="Risk description")
+    severity: str = Field(..., description="Severity: high/medium/low")
+    citation_url: str = Field(..., description="URL where this was found")
+
+class ReportSchema(BaseModel):
+    """Complete structured due diligence report schema for GPT-5 output"""
+    executive_summary: str = Field(..., description="Brief overview of key findings")
+    official_website: str = Field(..., description="Official website URL or 'unknown'")
+    company_profile: CompanyProfile = Field(..., description="Company profile information")
+    sanctions: List[SanctionMatch] = Field(default=[], description="Sanctions list matches")
+    adverse_media: List[AdverseMediaItem] = Field(default=[], description="Adverse media coverage")
+    bribery_corruption: List[BriberyCorruptionItem] = Field(default=[], description="Bribery and corruption allegations")
+    political_exposure: List[PoliticalExposureItem] = Field(default=[], description="Political exposure items")
+    disadvantages: List[DisadvantageItem] = Field(default=[], description="Risk and disadvantage items")
+    citations: List[str] = Field(default=[], description="All URLs used as citations")
 
 
 class RiskFlag(BaseModel):
