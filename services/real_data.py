@@ -506,13 +506,21 @@ class RealDataCollector:
             title = search_result['title']
             snippet = search_result['snippet']
             
-            # Quick relevance check
-            adverse_keywords = ['fraud', 'corruption', 'lawsuit', 'investigation', 'penalty', 'scandal', 'violation', 'fine', 'settlement']
+            # Enhanced adverse keyword detection
+            adverse_keywords = [
+                'fraud', 'corruption', 'lawsuit', 'investigation', 'penalty', 'scandal', 
+                'violation', 'fine', 'settlement', 'charges', 'accused', 'guilty', 
+                'convicted', 'illegal', 'breach', 'misconduct', 'embezzlement', 
+                'bribery', 'sanctions', 'banned', 'suspended', 'crisis', 'controversy'
+            ]
             
             text_to_check = (title + " " + snippet).lower()
             adverse_count = sum(1 for keyword in adverse_keywords if keyword in text_to_check)
             
-            if adverse_count == 0:
+            # More lenient threshold and company name relevance check
+            company_mentioned = company_name.lower() in text_to_check
+            
+            if adverse_count == 0 or not company_mentioned:
                 return None
             
             # Try to extract full article content
@@ -525,8 +533,12 @@ class RealDataCollector:
             except:
                 pass  # Use original snippet if extraction fails
             
-            # Use OpenAI to analyze sentiment and extract key details
-            analysis = await self._ai_analyze_article(title, snippet, company_name)
+            # Use OpenAI to analyze sentiment and extract key details, with fallback
+            try:
+                analysis = await self._ai_analyze_article(title, snippet, company_name)
+            except Exception as e:
+                print(f"⚠️ AI article analysis failed, using keyword fallback: {e}")
+                analysis = self._basic_analyze_article(title + " " + snippet, adverse_keywords)
             
             return {
                 'title': title,
@@ -596,6 +608,57 @@ class RealDataCollector:
         except Exception as e:
             print(f"❌ AI article analysis failed: {e}")
             return {'sentiment': 'negative', 'category': 'General', 'severity': 'medium'}
+    
+    def _basic_analyze_article(self, text: str, adverse_keywords: List[str]) -> Dict:
+        """Basic keyword-based article analysis when AI is not available"""
+        try:
+            text_lower = text.lower()
+            
+            # Severity based on keyword intensity
+            high_severity_keywords = ['fraud', 'criminal', 'convicted', 'guilty', 'illegal', 'embezzlement']
+            medium_severity_keywords = ['lawsuit', 'investigation', 'penalty', 'fine', 'violation']
+            
+            high_count = sum(1 for k in high_severity_keywords if k in text_lower)
+            medium_count = sum(1 for k in medium_severity_keywords if k in text_lower)
+            
+            if high_count > 0:
+                severity = 'high'
+            elif medium_count > 0:
+                severity = 'medium'
+            else:
+                severity = 'low'
+            
+            # Category based on keywords
+            if any(k in text_lower for k in ['lawsuit', 'court', 'legal', 'settlement']):
+                category = 'Legal'
+            elif any(k in text_lower for k in ['financial', 'accounting', 'audit', 'SEC']):
+                category = 'Financial'
+            elif any(k in text_lower for k in ['regulatory', 'compliance', 'violation']):
+                category = 'Regulatory'
+            else:
+                category = 'General'
+            
+            # Extract found keywords as allegations
+            found_keywords = [k for k in adverse_keywords if k in text_lower]
+            
+            return {
+                'sentiment': 'negative',
+                'category': category,
+                'severity': severity,
+                'key_allegations': found_keywords[:3],  # Top 3 keywords
+                'relevance_boost': min(len(found_keywords), 2),
+                'analysis_method': 'keyword_based'
+            }
+            
+        except Exception as e:
+            print(f"❌ Basic article analysis failed: {e}")
+            return {
+                'sentiment': 'negative',
+                'category': 'General',
+                'severity': 'medium',
+                'key_allegations': [],
+                'relevance_boost': 0
+            }
     
     def _deduplicate_articles(self, articles: List[Dict]) -> List[Dict]:
         """Remove duplicate articles based on URL and title similarity"""
@@ -668,7 +731,7 @@ class RealDataCollector:
             print(f"❌ Executive extraction failed: {e}")
             return []
     
-        async def _ai_extract_executives(self, content: str, company_name: str, source_url: str) -> List[Dict]:
+    async def _ai_extract_executives(self, content: str, company_name: str, source_url: str) -> List[Dict]:
         """Use OpenAI to extract executive information from content with regex fallback"""
         try:
             # Try AI first if available
@@ -722,6 +785,55 @@ class RealDataCollector:
             
         except Exception as e:
             print(f"❌ AI executive extraction failed: {e}")
+            return []
+    
+    def _regex_extract_executives(self, content: str, company_name: str, source_url: str) -> List[Dict]:
+        """Extract executives using regex patterns when AI is not available"""
+        try:
+            import re
+            executives = []
+            
+            # Common executive titles and patterns
+            executive_patterns = [
+                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Chief Executive Officer|CEO)',
+                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Chief Technology Officer|CTO)',
+                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Chief Financial Officer|CFO)',
+                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Chief Operating Officer|COO)',
+                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>President)',
+                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Chairman)',
+                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Managing Director)',
+                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Executive Director)',
+                r'(?i)(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:,\s*)?(?:is\s+)?(?P<title>Vice President)',
+                # Reverse pattern: Title then name
+                r'(?i)(?P<title>CEO|Chief Executive Officer)\s+(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+                r'(?i)(?P<title>CTO|Chief Technology Officer)\s+(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+                r'(?i)(?P<title>CFO|Chief Financial Officer)\s+(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+                r'(?i)(?P<title>President)\s+(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+                r'(?i)(?P<title>Chairman)\s+(?P<name>[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            ]
+            
+            for pattern in executive_patterns:
+                matches = re.finditer(pattern, content)
+                for match in matches:
+                    name = match.group('name').strip()
+                    title = match.group('title').strip()
+                    
+                    # Basic validation
+                    if len(name.split()) >= 2 and len(name) > 3:
+                        executives.append({
+                            'name': name,
+                            'title': title,
+                            'role': title,
+                            'confidence': 'medium',
+                            'source_url': source_url,
+                            'linkedin_url': source_url if 'linkedin.com' in source_url else None,
+                            'extraction_method': 'regex'
+                        })
+            
+            return executives[:5]  # Limit to top 5
+            
+        except Exception as e:
+            print(f"❌ Regex executive extraction failed: {e}")
             return []
     
     def _deduplicate_executives(self, executives: List[Dict]) -> List[Dict]:
