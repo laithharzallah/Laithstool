@@ -673,16 +673,17 @@ if __name__ == '__main__':
     # Load environment variables
     load_dotenv()
     
-    # Render deployment configuration
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    
-    print(f"🚀 Starting Laith's Tool on 0.0.0.0:{port}")
-    
-    # Production-ready configuration
-    app.run(
-        host='0.0.0.0',
-        port=port,
-        debug=debug,
-        threaded=True  # Enable threading for better performance
-    )
+    # For local development only
+    if os.environ.get('FLASK_ENV') == 'development':
+        port = int(os.environ.get('PORT', 5000))
+        print(f"🚀 Starting Laith's Tool locally on 0.0.0.0:{port}")
+        
+        app.run(
+            host='0.0.0.0',
+            port=port,
+            debug=True,
+            threaded=True
+        )
+    else:
+        # Production mode - let Gunicorn handle this
+        print("🚀 Laith's Tool ready for production (Gunicorn)")
