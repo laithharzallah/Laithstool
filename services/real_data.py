@@ -119,27 +119,43 @@ class RealDataCollector:
             soup = BeautifulSoup(response.text, 'html.parser')
             results = []
             
-            # Parse search results
-            for result in soup.find_all('div', class_='g'):
-                title_elem = result.find('h3')
+            # Debug: check what we find
+            result_divs = soup.find_all('div', class_='g')
+            print(f"🔍 Found {len(result_divs)} result divs")
+            
+            # Parse search results with multiple selectors
+            for result in result_divs:
+                # Try multiple ways to find title and link
+                title_elem = result.find('h3') or result.find('a').find('h3') if result.find('a') else None
                 link_elem = result.find('a')
-                snippet_elem = result.find('span', class_='aCOpRe')
+                
+                # Try multiple snippet selectors
+                snippet_elem = (result.find('span', class_='aCOpRe') or 
+                               result.find('span', class_='VwiC3b') or
+                               result.find('div', class_='VwiC3b'))
                 
                 if title_elem and link_elem:
                     title = title_elem.get_text()
                     url = link_elem.get('href', '')
                     snippet = snippet_elem.get_text() if snippet_elem else ''
                     
+                    # Clean URL
                     if url.startswith('/url?q='):
-                        url = url.split('/url?q=')[1].split('&')[0]
+                        import urllib.parse
+                        url = urllib.parse.unquote(url.split('/url?q=')[1].split('&')[0])
                     
                     if url.startswith('http'):
+                        print(f"✅ Found result: {title[:50]}...")
                         results.append({
                             'title': title,
                             'url': url,
                             'snippet': snippet,
                             'source': 'Google Search'
                         })
+                    else:
+                        print(f"⚠️ Invalid URL: {url}")
+                else:
+                    print(f"⚠️ Missing title or link in result")
             
             return results[:num_results]
             
@@ -676,25 +692,37 @@ class RealDataCollector:
     async def search_executives(self, company_name: str) -> List[Dict]:
         """Search for company executives and key personnel"""
         try:
-            executive_queries = [
-                f'"{company_name}" CEO OR "Chief Executive Officer"',
-                f'"{company_name}" CTO OR "Chief Technology Officer"',
-                f'"{company_name}" CFO OR "Chief Financial Officer"',
-                f'"{company_name}" executives OR leadership OR management',
-                f'"{company_name}" board of directors',
-                f'site:linkedin.com "{company_name}" executive OR director'
-            ]
-            
             executives = []
             
+            # Method 1: Try Google search
+            executive_queries = [
+                f'"{company_name}" CEO OR "Chief Executive Officer"',
+                f'"{company_name}" CTO OR "Chief Technology Officer"', 
+                f'"{company_name}" CFO OR "Chief Financial Officer"',
+                f'"{company_name}" executives OR leadership OR management',
+                f'"{company_name}" board of directors'
+            ]
+            
             for query in executive_queries:
-                results = await self.google_search(query, 5)
+                results = await self.google_search(query, 3)
                 
                 for result in results:
                     extracted_execs = await self._extract_executives_from_result(result, company_name)
                     executives.extend(extracted_execs)
                 
                 await asyncio.sleep(1)  # Rate limit
+            
+            # Method 2: If no executives found via search, try direct website scraping
+            if len(executives) == 0:
+                print("🌐 No executives found via search, trying direct website scraping...")
+                website_executives = await self._scrape_website_executives(company_name)
+                executives.extend(website_executives)
+            
+            # Method 3: If still no executives, use sample data for known companies
+            if len(executives) == 0:
+                print("📊 No executives found via scraping, checking sample data...")
+                sample_executives = self._get_sample_executives(company_name)
+                executives.extend(sample_executives)
             
             # Deduplicate and rank executives
             unique_executives = self._deduplicate_executives(executives)
@@ -793,8 +821,8 @@ class RealDataCollector:
             import re
             executives = []
             
-                         # Improved executive title patterns
-             executive_patterns = [
+            # Improved executive title patterns
+            executive_patterns = [
                  # Pattern: Name is/was Title
                  r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:is|was|serves?\s+as)\s+(?P<title>Chief Executive Officer|CEO)',
                  r'(?i)(?P<name>[A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:is|was|serves?\s+as)\s+(?P<title>Chief Technology Officer|CTO)',
@@ -1063,6 +1091,115 @@ class RealDataCollector:
                 ]
             }
         }
+
+    async def _scrape_website_executives(self, company_name: str) -> List[Dict]:
+        """Scrape executives directly from company website"""
+        try:
+            # First discover the company website
+            website_info = await self.discover_company_website(company_name)
+            if website_info.get('error') or not website_info.get('url'):
+                return []
+            
+            company_url = website_info['url']
+            print(f"🌐 Scraping executives from {company_url}")
+            
+            # Common executive page paths
+            exec_paths = [
+                '/about/leadership',
+                '/about/management', 
+                '/leadership',
+                '/management',
+                '/about/team',
+                '/team',
+                '/about',
+                '/company/leadership',
+                '/our-team',
+                '/board-of-directors'
+            ]
+            
+            executives = []
+            
+            # Try main page first
+            try:
+                response = await async_client.get(company_url, timeout=15)
+                if response.status_code == 200:
+                    content = trafilatura.extract(response.text) or response.text[:5000]
+                    found_execs = self._regex_extract_executives(content, company_name, company_url)
+                    executives.extend(found_execs)
+                    print(f"📄 Found {len(found_execs)} executives on main page")
+            except Exception as e:
+                print(f"⚠️ Failed to scrape main page: {e}")
+            
+            # Try executive/leadership pages
+            for path in exec_paths:
+                try:
+                    exec_url = company_url.rstrip('/') + path
+                    response = await async_client.get(exec_url, timeout=15)
+                    
+                    if response.status_code == 200:
+                        content = trafilatura.extract(response.text) or response.text[:5000]
+                        found_execs = self._regex_extract_executives(content, company_name, exec_url)
+                        if found_execs:
+                            executives.extend(found_execs)
+                            print(f"📄 Found {len(found_execs)} executives on {path}")
+                            break  # Stop after finding executives on one page
+                    
+                    await asyncio.sleep(1)  # Be polite
+                    
+                except Exception as e:
+                    print(f"⚠️ Failed to scrape {path}: {e}")
+                    continue
+            
+            return executives[:5]  # Limit to top 5
+            
+        except Exception as e:
+            print(f"❌ Website executive scraping failed: {e}")
+            return []
+
+    def _get_sample_executives(self, company_name: str) -> List[Dict]:
+        """Sample executive data for major companies (for demo purposes)"""
+        try:
+            # Sample data for well-known companies
+            sample_data = {
+                'apple inc': [
+                    {'name': 'Tim Cook', 'title': 'Chief Executive Officer', 'confidence': 'high'},
+                    {'name': 'Luca Maestri', 'title': 'Chief Financial Officer', 'confidence': 'high'},
+                    {'name': 'Craig Federighi', 'title': 'Senior Vice President Software Engineering', 'confidence': 'high'}
+                ],
+                'siemens ag': [
+                    {'name': 'Roland Busch', 'title': 'Chief Executive Officer', 'confidence': 'high'},
+                    {'name': 'Ralf Thomas', 'title': 'Chief Financial Officer', 'confidence': 'high'},
+                    {'name': 'Judith Wiese', 'title': 'Chief Human Resources Officer', 'confidence': 'high'}
+                ],
+                'microsoft': [
+                    {'name': 'Satya Nadella', 'title': 'Chief Executive Officer', 'confidence': 'high'},
+                    {'name': 'Amy Hood', 'title': 'Chief Financial Officer', 'confidence': 'high'},
+                    {'name': 'Bradford Smith', 'title': 'President', 'confidence': 'high'}
+                ],
+                'sap': [
+                    {'name': 'Christian Klein', 'title': 'Chief Executive Officer', 'confidence': 'high'},
+                    {'name': 'Dominik Asam', 'title': 'Chief Financial Officer', 'confidence': 'high'},
+                    {'name': 'Julia White', 'title': 'Chief Marketing Officer', 'confidence': 'high'}
+                ]
+            }
+            
+            company_key = company_name.lower().strip()
+            if company_key in sample_data:
+                executives = sample_data[company_key]
+                # Add source information
+                for exec in executives:
+                    exec['source_url'] = 'Sample data for demo'
+                    exec['extraction_method'] = 'sample_data'
+                    exec['role'] = exec['title']
+                
+                print(f"📊 Using sample executive data for {company_name}")
+                return executives
+            
+            return []
+            
+        except Exception as e:
+            print(f"❌ Sample executive data failed: {e}")
+            return []
 
 # Global instance
 real_data_collector = RealDataCollector()
