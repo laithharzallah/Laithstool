@@ -12,7 +12,7 @@ from services.gpt5_web_search import gpt5_search_service
 app = Flask(__name__)
 
 @app.route('/api/screen', methods=['GET'])
-async def screen_company():
+def screen_company():
     """
     Screen a company using GPT-5 web search
     
@@ -35,8 +35,8 @@ async def screen_company():
                 "message": "Missing required parameter: company"
             }), 400
         
-        # Perform screening
-        result = await gpt5_search_service.screen_company(company, country)
+        # Perform screening (run async function in sync context)
+        result = asyncio.run(gpt5_search_service.screen_company(company, country))
         
         # Return results
         return jsonify(result)
