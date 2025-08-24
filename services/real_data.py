@@ -480,32 +480,36 @@ class RealDataCollector:
                 return 0.0
     
     async def search_adverse_media(self, company_name: str, executives: List[Dict] = None) -> List[Dict]:
-        """Search for adverse media coverage"""
+        """Search for adverse media coverage using multiple methods"""
         try:
+            all_articles = []
+            
+            # Method 1: Try Google search first
             adverse_queries = [
                 f'"{company_name}" fraud',
-                f'"{company_name}" corruption',
+                f'"{company_name}" corruption', 
                 f'"{company_name}" lawsuit',
                 f'"{company_name}" investigation',
                 f'"{company_name}" penalty',
-                f'"{company_name}" scandal',
-                f'"{company_name}" violation'
+                f'"{company_name}" scandal'
             ]
             
-            all_articles = []
-            
             for query in adverse_queries:
-                # Add date filter for recent news
                 recent_query = f"{query} after:2022-01-01"
-                results = await self.google_search(recent_query, 5)
+                results = await self.google_search(recent_query, 3)
                 
                 for result in results:
                     article = await self._analyze_article(result, company_name)
                     if article and article.get('is_adverse'):
                         all_articles.append(article)
                 
-                # Rate limit
                 await asyncio.sleep(1)
+            
+            # Method 2: If no articles found via Google, use ChatGPT to find adverse media
+            if len(all_articles) == 0:
+                print("📰 No adverse media found via Google, asking ChatGPT...")
+                chatgpt_articles = await self._chatgpt_find_adverse_media(company_name, executives)
+                all_articles.extend(chatgpt_articles)
             
             # Remove duplicates and sort by relevance
             unique_articles = self._deduplicate_articles(all_articles)
