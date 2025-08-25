@@ -7,6 +7,7 @@ Tests real data collection capabilities
 import asyncio
 import json
 import os
+import pytest
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -15,14 +16,24 @@ load_dotenv()
 # Import our service
 from services.gpt5_web_search import gpt5_search_service
 
-async def test_company_screening(company: str, country: str = ""):
+@pytest.mark.parametrize(
+    "company,country",
+    [
+        ("Apple Inc", "United States"),
+        ("Siemens AG", "Germany"),
+        ("Tesla Inc", "United States"),
+        ("Rawabi Holding", "Saudi Arabia"),
+    ],
+)
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
+def test_company_screening(company: str, country: str):
     """Test comprehensive company screening"""
     print(f"\n🔍 TESTING: {company} ({country})")
     print("=" * 60)
     
     try:
         # Perform screening
-        result = await gpt5_search_service.screen_company(company, country)
+        result = asyncio.run(gpt5_search_service.screen_company(company, country))
         
         # Check if it's an error response
         if result.get('error'):
@@ -99,12 +110,11 @@ async def test_company_screening(company: str, country: str = ""):
         # Success criteria
         success = quality_score >= 3 and has_citations
         print(f"\n🎯 TEST RESULT: {'✅ PASS' if success else '❌ FAIL'}")
-        
-        return success
+        assert success, "Quality criteria not met"
         
     except Exception as e:
         print(f"❌ Test failed with exception: {e}")
-        return False
+        assert False, f"Exception during screening: {e}"
 
 async def main():
     """Run comprehensive tests"""
