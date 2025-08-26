@@ -694,7 +694,7 @@ def company_screening():
     # if 'logged_in' not in session:
     #     return redirect(url_for('login'))
     try:
-        return render_template("company_screening.html")
+        return render_template("company.html", env_name=ENV_NAME, version=VERSION)
     except Exception as e:
         print(f"❌ Template rendering error: {e}")
         return f"Template error: {str(e)}", 500
@@ -710,7 +710,7 @@ def individual_screening():
     """Individual screening page"""
     if 'logged_in' not in session:
         return redirect(url_for('login'))
-    return render_template("individual_screening.html")
+    return render_template("individual.html", env_name=ENV_NAME, version=VERSION)
 
 @app.route("/api/enhanced-screen", methods=["POST"])
 def enhanced_company_screening():
