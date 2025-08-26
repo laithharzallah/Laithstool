@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="corporate">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laith's Tool - Professional Company Screener</title>
+    
+    <!-- TailwindCSS with DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    
+    <!-- Alpine.js for interactivity -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- HTMX for live updates -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#f7c32e',
+                        'primary-content': '#1f2937',
+                        'secondary': '#9ca3af',
+                        'accent': '#e6ac00',
+                        'neutral': '#374151',
+                        'base-100': '#2d3748',
+                        'base-200': '#1a202c',
+                        'base-300': '#4a5568',
+                        'dark-bg': '#0B0F19',
+                        'dark-surface': '#1a1f2e',
+                        'dark-border': '#2d3748',
+                    }
+                }
+            },
+            daisyui: {
+                themes: [
+                    {
+                        corporate: {
+                            "primary": "#f7c32e",
+                            "primary-content": "#1f2937",
+                            "secondary": "#9ca3af",
+                            "accent": "#e6ac00",
+                            "neutral": "#374151",
+                            "base-100": "#2d3748",
+                            "base-200": "#1a202c",
+                            "base-300": "#4a5568",
+                            "base-content": "#f1f5f9",
+                            "info": "#3b82f6",
+                            "success": "#10b981",
+                            "warning": "#f59e0b",
+                            "error": "#ef4444",
+                        },
+                        dark: {
+                            "primary": "#f7c32e",
+                            "primary-content": "#0a0a0a",
+                            "secondary": "#64748b",
+                            "accent": "#e6ac00",
+                            "neutral": "#1e293b",
+                            "base-100": "#0B0F19",
+                            "base-200": "#0f172a",
+                            "base-300": "#1e293b",
+                            "base-content": "#f1f5f9",
+                            "info": "#3b82f6",
+                            "success": "#10b981",
+                            "warning": "#f59e0b",
+                            "error": "#ef4444",
+                        }
+                    }
+                ]
+            }
+        }
+    </script>
+    
+    <style>
+        /* Professional dark background */
+        .dark-gradient-bg {
+            background: linear-gradient(135deg, #0B0F19 0%, #1a202c 50%, #2d3748 100%);
+            min-height: 100vh;
+        }
+        
+        /* Enterprise glass cards */
+        .enterprise-card {
+            backdrop-filter: blur(20px);
+            background: rgba(45, 55, 72, 0.95);
+            border: 1px solid rgba(74, 85, 104, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+        }
+        
+        /* Professional navigation */
+        .nav-enterprise {
+            background: rgba(26, 32, 44, 0.98);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(74, 85, 104, 0.2);
+        }
+        
+        /* Step indicators */
+        .step-active {
+            @apply bg-primary text-primary-content shadow-lg;
+            box-shadow: 0 0 20px rgba(247, 195, 46, 0.4);
+        }
+        
+        .step-completed {
+            @apply bg-success text-white shadow-md;
+        }
+        
+        .step-pending {
+            @apply bg-base-300 text-base-content border border-base-content border-opacity-20;
+        }
+        
+        .step-failed {
+            @apply bg-error text-white shadow-md;
+        }
+        
+        /* Professional inputs */
+        .input-enterprise {
+            background: rgba(26, 32, 44, 0.8);
+            border: 1px solid rgba(74, 85, 104, 0.4);
+            color: #f1f5f9;
+        }
+        
+        .input-enterprise:focus {
+            border-color: #f7c32e;
+            box-shadow: 0 0 0 3px rgba(247, 195, 46, 0.1);
+        }
+        
+        /* Professional buttons */
+        .btn-enterprise {
+            background: linear-gradient(135deg, #f7c32e 0%, #e6ac00 100%);
+            border: none;
+            color: #1f2937;
+            font-weight: 600;
+            text-transform: none;
+            letter-spacing: 0.025em;
+            transition: all 200ms ease;
+        }
+        
+        .btn-enterprise:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(247, 195, 46, 0.3);
+        }
+        
+        /* Tab styling */
+        .tab-enterprise {
+            border-bottom: 2px solid transparent;
+            color: #9ca3af;
+            padding: 12px 16px;
+            font-weight: 500;
+            transition: all 200ms ease;
+        }
+        
+        .tab-enterprise.tab-active {
+            color: #f7c32e;
+            border-bottom-color: #f7c32e;
+        }
+        
+        /* Professional badges */
+        .badge-enterprise {
+            background: rgba(247, 195, 46, 0.1);
+            color: #f7c32e;
+            border: 1px solid rgba(247, 195, 46, 0.3);
+            font-weight: 500;
+        }
+        
+        /* Risk indicators */
+        .risk-low { 
+            @apply bg-success bg-opacity-20 text-success border border-success border-opacity-30; 
+        }
+        .risk-medium { 
+            @apply bg-warning bg-opacity-20 text-warning border border-warning border-opacity-30; 
+        }
+        .risk-high { 
+            @apply bg-error bg-opacity-20 text-error border border-error border-opacity-30; 
+        }
+        
+        /* Micro-animations */
+        .fade-in {
+            animation: fadeIn 200ms ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .pulse-enterprise {
+            animation: pulseEnterprise 2s infinite;
+        }
+        
+        @keyframes pulseEnterprise {
+            0%, 100% { 
+                box-shadow: 0 0 10px rgba(247, 195, 46, 0.3);
+            }
+            50% { 
+                box-shadow: 0 0 30px rgba(247, 195, 46, 0.6);
+            }
+        }
+        
+        /* Content spacing rhythm (8px base) */
+        .spacing-rhythm > * + * {
+            margin-top: 8px;
+        }
+        
+        /* Professional scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(26, 32, 44, 0.5);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(74, 85, 104, 0.7);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(74, 85, 104, 0.9);
+        }
+        
+        /* Source log styling */
+        .source-log {
+            background: rgba(26, 32, 44, 0.6);
+            border-left: 3px solid #f7c32e;
+            padding: 8px 12px;
+            border-radius: 0 6px 6px 0;
+        }
+        
+        /* Professional tooltips */
+        .tooltip-enterprise {
+            position: relative;
+        }
+        
+        .tooltip-enterprise:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(26, 32, 44, 0.95);
+            color: #f1f5f9;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 1000;
+            border: 1px solid rgba(74, 85, 104, 0.3);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen dark-gradient-bg" x-data="companyScreener()">
+    <!-- Navigation Header -->
+    <div class="navbar nav-enterprise shadow-2xl">
+        <div class="navbar-start">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-bolt text-2xl text-primary"></i>
+                <h1 class="text-xl font-bold text-neutral">Laith's Tool</h1>
+                <div class="badge badge-primary badge-sm">Pro</div>
+            </div>
+        </div>
+        
+        <div class="navbar-center">
+            <span class="text-sm font-medium text-base-content opacity-80">Professional Third-Party Risk Management Platform</span>
+        </div>
+        
+        <div class="navbar-end space-x-2">
+            <!-- Theme Toggle -->
+            <label class="swap swap-rotate">
+                <input type="checkbox" class="theme-controller" value="dark" x-model="darkMode" @change="toggleTheme()"/>
+                <i class="fas fa-sun swap-off text-xl"></i>
+                <i class="fas fa-moon swap-on text-xl"></i>
+            </label>
+            
+            <!-- Help -->
+            <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-ghost btn-circle">
+                    <i class="fas fa-question-circle text-xl"></i>
+                </div>
+                <div tabindex="0" class="dropdown-content z-[1] card card-compact w-80 p-4 shadow bg-base-100">
+                    <div class="card-body">
+                        <h3 class="card-title text-sm">Quick Help</h3>
+                        <p class="text-xs">Enter a company name to perform comprehensive due diligence research using AI and real-time web data.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Logout -->
+            <a href="/logout" class="btn btn-ghost btn-sm">
+                <i class="fas fa-sign-out-alt"></i>
+                Logout
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="container mx-auto p-4 gap-4 grid grid-cols-1 lg:grid-cols-12 min-h-[calc(100vh-5rem)]">
+        
+        <!-- Left Panel - Input Card -->
+        <div class="lg:col-span-3">
+            <div class="card enterprise-card shadow-2xl h-fit">
+                <div class="card-body">
+                    <h2 class="card-title text-lg flex items-center">
+                        <i class="fas fa-search text-primary"></i>
+                        Company Screening
+                    </h2>
+                    
+                    <form @submit.prevent="startScreening()" class="space-y-4">
+                        <!-- Company Name -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Company Name *</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                placeholder="e.g., Apple Inc., Tesla, Siemens AG"
+                                class="input input-enterprise" 
+                                x-model="formData.company"
+                                required>
+                        </div>
+                        
+                        <!-- Domain (Optional) -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Domain (Optional)</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                placeholder="e.g., apple.com"
+                                class="input input-enterprise" 
+                                x-model="formData.domain">
+                        </div>
+                        
+                        <!-- Country -->
+                        <div class="form-control" x-data="countrySelector()">
+                            <label class="label">
+                                <span class="label-text font-medium">Country</span>
+                            </label>
+                            <div class="relative">
+                                <!-- Search Input -->
+                                <input 
+                                    type="text" 
+                                    placeholder="Type to search countries... (or select from dropdown)"
+                                    class="input input-enterprise pr-10" 
+                                    x-model="searchTerm"
+                                    @input="filterCountries()"
+                                    @focus="showDropdown = true"
+                                    @blur="setTimeout(() => showDropdown = false, 200)">
+                                
+                                <!-- Dropdown Arrow -->
+                                <button 
+                                    type="button"
+                                    class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-yellow-500"
+                                    @click="showDropdown = !showDropdown">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                                
+                                <!-- Dropdown List -->
+                                <div x-show="showDropdown" 
+                                     x-transition:enter="transition ease-out duration-100"
+                                     x-transition:enter-start="opacity-0 scale-95"
+                                     x-transition:enter-end="opacity-100 scale-100"
+                                     x-transition:leave="transition ease-in duration-75"
+                                     x-transition:leave-start="opacity-100 scale-100"
+                                     x-transition:leave-end="opacity-0 scale-95"
+                                     class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                    
+                                    <!-- Clear Selection Option -->
+                                    <button type="button" 
+                                            class="w-full px-4 py-2 text-left hover:bg-yellow-50 border-b border-gray-100 text-gray-500 italic"
+                                            @click="selectCountry('', 'Any Country')">
+                                        Any Country
+                                    </button>
+                                    
+                                    <!-- Filtered Countries -->
+                                    <template x-for="country in filteredCountries" :key="country.code">
+                                        <button type="button" 
+                                                class="w-full px-4 py-2 text-left hover:bg-yellow-50 border-b border-gray-50 flex items-center justify-between group"
+                                                @click="selectCountry(country.name, country.name)"
+                                                :class="formData.country === country.name ? 'bg-yellow-100 text-yellow-800' : 'text-gray-700'">
+                                            <span x-text="country.name"></span>
+                                            <span x-text="country.flag" class="text-lg group-hover:scale-110 transition-transform"></span>
+                                        </button>
+                                    </template>
+                                    
+                                    <!-- No Results -->
+                                    <div x-show="filteredCountries.length === 0" class="px-4 py-3 text-gray-500 text-center italic">
+                                        No countries found matching "<span x-text="searchTerm"></span>"
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Hidden input for form submission -->
+                            <input type="hidden" x-model="formData.country">
+                        </div>
+                        
+                        <!-- Registry Numbers -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Registry Numbers</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                placeholder="Registration/Tax ID (Optional)"
+                                class="input input-enterprise" 
+                                x-model="formData.registryNumbers">
+                        </div>
+                        
+                        <!-- Divider -->
+                        <div class="divider text-xs">Screening Options</div>
+                        
+                        <!-- Options -->
+                        <div class="space-y-2">
+                            <label class="label cursor-pointer">
+                                <span class="label-text">Deep Web Crawl</span>
+                                <input type="checkbox" class="toggle toggle-primary" x-model="formData.options.deep_crawl">
+                            </label>
+                            
+                            <label class="label cursor-pointer">
+                                <span class="label-text">Include Social Media</span>
+                                <input type="checkbox" class="toggle toggle-primary" x-model="formData.options.include_social">
+                            </label>
+                            
+                            <label class="label cursor-pointer">
+                                <span class="label-text">Sanctions Check</span>
+                                <input type="checkbox" class="toggle toggle-primary" x-model="formData.options.include_sanctions">
+                            </label>
+                            
+                            <label class="label cursor-pointer">
+                                <span class="label-text">Financial Data</span>
+                                <input type="checkbox" class="toggle toggle-primary" x-model="formData.options.include_financials">
+                            </label>
+                            
+                            <label class="label cursor-pointer">
+                                <span class="label-text">Adverse Media</span>
+                                <input type="checkbox" class="toggle toggle-primary" x-model="formData.options.include_adverse_media">
+                            </label>
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <button 
+                            type="submit" 
+                            class="btn btn-enterprise w-full"
+                            :class="{ 'loading': isScreening }"
+                            :disabled="isScreening || !formData.company">
+                            <i class="fas fa-shield-alt" x-show="!isScreening"></i>
+                            <span x-text="isScreening ? 'Due Diligence in Progress...' : 'Start Risk Assessment'"></span>
+                        </button>
+                    </form>
+                    
+                    <!-- API Key Warning -->
+                    <div x-show="!apiKeysAvailable" class="alert alert-warning mt-4">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div>
+                            <div class="font-bold">Limited Functionality</div>
+                            <div class="text-xs">Web search disabled: add search API keys to enable full internet research.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Center Panel - Progress & Logs -->
+        <div class="lg:col-span-4">
+            <div class="space-y-4">
+                <!-- Progress Timeline -->
+                <div class="card enterprise-card shadow-2xl">
+                    <div class="card-body">
+                        <h3 class="card-title text-lg flex items-center">
+                            <i class="fas fa-tasks text-primary"></i>
+                            Progress Timeline
+                        </h3>
+                        
+                        <div class="space-y-3">
+                            <template x-for="(step, index) in progressSteps" :key="index">
+                                <div class="flex items-center space-x-3">
+                                    <div 
+                                        class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200"
+                                        :class="{
+                                            'step-completed': step.status === 'completed',
+                                            'step-active pulse-enterprise': step.status === 'in_progress',
+                                            'step-pending': step.status === 'pending',
+                                            'step-failed': step.status === 'failed'
+                                        }">
+                                        <i class="fas fa-check" x-show="step.status === 'completed'"></i>
+                                        <i class="fas fa-spinner fa-spin" x-show="step.status === 'in_progress'"></i>
+                                        <span x-show="step.status === 'pending'" x-text="index + 1"></span>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium" x-text="step.name"></div>
+                                        <div class="text-xs opacity-70" x-text="step.message" x-show="step.message"></div>
+                                    </div>
+                                    <div class="text-xs opacity-50" x-show="step.duration">
+                                        <span x-text="step.duration"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        
+                        <!-- Progress Bar -->
+                        <div class="mt-4" x-show="isScreening">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span>Overall Progress</span>
+                                <span x-text="progressPercentage + '%'"></span>
+                            </div>
+                            <progress class="progress progress-primary w-full" :value="progressPercentage" max="100"></progress>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Source Logs -->
+                <div class="card enterprise-card shadow-2xl">
+                    <div class="card-body">
+                        <h3 class="card-title text-lg flex items-center">
+                            <i class="fas fa-list-alt text-primary"></i>
+                            Source Logs
+                        </h3>
+                        
+                        <div class="space-y-2 max-h-64 overflow-y-auto spacing-rhythm">
+                            <template x-for="(log, index) in sourceLogs" :key="index">
+                                <div class="source-log text-xs flex items-center space-x-2 fade-in">
+                                    <i class="fas fa-globe text-primary"></i>
+                                    <span class="flex-1" x-text="log.message"></span>
+                                    <span class="opacity-50" x-text="log.timestamp"></span>
+                                </div>
+                            </template>
+                            
+                            <div x-show="sourceLogs.length === 0" class="text-center text-xs opacity-50 py-8">
+                                Source queries will appear here during screening
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel - Results -->
+        <div class="lg:col-span-5">
+            <div class="card enterprise-card shadow-2xl h-full">
+                <div class="card-body">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="card-title text-lg flex items-center">
+                            <i class="fas fa-chart-line text-primary"></i>
+                            Screening Results
+                        </h3>
+                        
+                        <div class="flex space-x-2" x-show="hasResults">
+                            <button class="btn btn-outline btn-sm" @click="exportPDF()">
+                                <i class="fas fa-file-pdf"></i>
+                                PDF
+                            </button>
+                            <button class="btn btn-outline btn-sm" @click="exportJSON()">
+                                <i class="fas fa-download"></i>
+                                JSON
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Results Tabs -->
+                    <div x-show="hasResults">
+                        <div class="flex border-b border-base-300 mb-4">
+                            <template x-for="tab in resultTabs" :key="tab.id">
+                                <a 
+                                    class="tab-enterprise"
+                                    :class="{ 'tab-active': activeTab === tab.id }"
+                                    @click="activeTab = tab.id"
+                                    x-text="tab.name">
+                                </a>
+                            </template>
+                        </div>
+                        
+                        <!-- Tab Contents -->
+                        <div class="max-h-[600px] overflow-y-auto">
+                            <!-- Overview Tab -->
+                            <div x-show="activeTab === 'overview'" class="space-y-4">
+                                <div class="card bg-base-200">
+                                    <div class="card-body p-4">
+                                        <h4 class="font-bold text-sm">Executive Summary</h4>
+                                        <p class="text-sm" x-text="results?.executive_summary?.overview || 'No summary available'"></p>
+                                        
+                                        <div class="mt-2" x-show="results?.executive_summary?.key_points">
+                                            <div class="text-xs font-medium mb-1">Key Points:</div>
+                                            <ul class="text-xs space-y-1">
+                                                <template x-for="point in results?.executive_summary?.key_points" :key="point">
+                                                    <li class="flex items-start space-x-1">
+                                                        <span class="text-primary">•</span>
+                                                        <span x-text="point"></span>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Risk Flags -->
+                                <div x-show="results?.risk_flags?.length > 0">
+                                    <h4 class="font-bold text-sm mb-2 border-b border-base-300 pb-2">Risk Assessment</h4>
+                                    <template x-for="flag in results.risk_flags" :key="flag.description">
+                                        <div class="mb-3 p-3 rounded-lg border-l-4" :class="{
+                                            'risk-high border-l-error': flag.severity === 'high' || flag.severity === 'critical',
+                                            'risk-medium border-l-warning': flag.severity === 'medium',
+                                            'risk-low border-l-success': flag.severity === 'low'
+                                        }">
+                                            <div class="flex items-start space-x-2">
+                                                <i class="fas fa-exclamation-triangle mt-1" :class="{
+                                                    'text-error': flag.severity === 'high' || flag.severity === 'critical',
+                                                    'text-warning': flag.severity === 'medium',
+                                                    'text-success': flag.severity === 'low'
+                                                }"></i>
+                                                <div class="flex-1">
+                                                    <div class="font-bold text-xs mb-1" x-text="flag.category"></div>
+                                                    <div class="text-xs opacity-80" x-text="flag.description"></div>
+                                                    <div class="badge-enterprise text-xs mt-1" x-text="flag.severity + ' risk'"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            
+                            <!-- Company Profile Tab -->
+                            <div x-show="activeTab === 'profile'" class="space-y-4">
+                                <!-- Implementation for company profile -->
+                                <div class="card bg-base-200">
+                                    <div class="card-body p-4">
+                                        <h4 class="font-bold text-sm">Company Information</h4>
+                                        <div class="grid grid-cols-1 gap-2 text-xs">
+                                            <div><strong>Legal Name:</strong> <span x-text="results?.company_profile?.legal_name || 'Not available'"></span></div>
+                                            <div><strong>Industry:</strong> <span x-text="results?.company_profile?.primary_industry || 'Not available'"></span></div>
+                                            <div><strong>Founded:</strong> <span x-text="results?.company_profile?.founded_year || 'Not available'"></span></div>
+                                            <div><strong>Employees:</strong> <span x-text="results?.company_profile?.employee_count_band || 'Not available'"></span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- People Tab -->
+                            <div x-show="activeTab === 'people'" class="space-y-2">
+                                <template x-for="person in results?.key_people || []" :key="person.name">
+                                    <div class="card bg-base-200">
+                                        <div class="card-body p-3">
+                                            <div class="flex items-start justify-between">
+                                                <div>
+                                                    <h5 class="font-bold text-sm" x-text="person.name"></h5>
+                                                    <p class="text-xs text-primary" x-text="person.role"></p>
+                                                    <p class="text-xs mt-1" x-text="person.background"></p>
+                                                </div>
+                                                <div class="badge badge-sm" x-text="person.confidence"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                                
+                                <div x-show="!results?.key_people?.length" class="text-center text-xs opacity-50 py-8">
+                                    No executive information found
+                                </div>
+                            </div>
+                            
+                            <!-- Web Footprint Tab -->
+                            <div x-show="activeTab === 'web'" class="space-y-4">
+                                <!-- Website info -->
+                                <div class="card bg-base-200" x-show="results?.web_footprint?.official_website">
+                                    <div class="card-body p-4">
+                                        <h4 class="font-bold text-sm">Official Website</h4>
+                                        <a :href="results?.web_footprint?.official_website" target="_blank" class="link link-primary text-xs">
+                                            <span x-text="results?.web_footprint?.official_website"></span>
+                                        </a>
+                                    </div>
+                                </div>
+                                
+                                <!-- Social Media -->
+                                <div x-show="Object.keys(results?.web_footprint?.social_media || {}).length > 0">
+                                    <h4 class="font-bold text-sm mb-2">Social Media</h4>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <template x-for="[platform, url] in Object.entries(results?.web_footprint?.social_media || {})" :key="platform">
+                                            <a :href="url" target="_blank" class="btn btn-outline btn-sm">
+                                                <i :class="'fab fa-' + platform"></i>
+                                                <span x-text="platform" class="capitalize"></span>
+                                            </a>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- News & Media Tab -->
+                            <div x-show="activeTab === 'news'" class="space-y-2">
+                                <template x-for="article in results?.news_and_media || []" :key="article.url">
+                                    <div class="card bg-base-200">
+                                        <div class="card-body p-3">
+                                            <h5 class="font-bold text-sm" x-text="article.title"></h5>
+                                            <p class="text-xs mb-2" x-text="article.summary"></p>
+                                            <div class="flex items-center justify-between text-xs">
+                                                <span x-text="article.source_name"></span>
+                                                <div class="flex items-center space-x-2">
+                                                    <div class="badge badge-sm" 
+                                                         :class="{
+                                                             'badge-error': article.sentiment === 'negative',
+                                                             'badge-warning': article.sentiment === 'mixed',
+                                                             'badge-success': article.sentiment === 'positive',
+                                                             'badge-neutral': article.sentiment === 'neutral'
+                                                         }"
+                                                         x-text="article.sentiment">
+                                                    </div>
+                                                    <span x-text="article.published_date"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                                
+                                <div x-show="!results?.news_and_media?.length" class="text-center text-xs opacity-50 py-8">
+                                    No recent news found
+                                </div>
+                            </div>
+                            
+                            <!-- Sanctions Tab -->
+                            <div x-show="activeTab === 'sanctions'" class="space-y-2">
+                                <template x-for="match in results?.sanctions_matches || []" :key="match.list_name">
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <div>
+                                            <div class="font-bold text-xs" x-text="match.list_name"></div>
+                                            <div class="text-xs" x-text="match.matched_name + ' (' + (match.match_score * 100).toFixed(1) + '% match)'"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                                
+                                <div x-show="!results?.sanctions_matches?.length" class="alert alert-success">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span class="text-xs">No sanctions matches found</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Compliance Tab -->
+                            <div x-show="activeTab === 'compliance'" class="space-y-4">
+                                <div class="card bg-base-200">
+                                    <div class="card-body p-4">
+                                        <h4 class="font-bold text-sm">Data Sources</h4>
+                                        <div class="text-xs space-y-1">
+                                            <template x-for="source in results?.compliance_notes?.data_sources_used || []" :key="source">
+                                                <div class="flex items-center space-x-2">
+                                                    <i class="fas fa-check text-success"></i>
+                                                    <span x-text="source"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="card bg-base-200">
+                                    <div class="card-body p-4">
+                                        <h4 class="font-bold text-sm">Methodology</h4>
+                                        <p class="text-xs" x-text="results?.compliance_notes?.methodology || 'Standard web-based due diligence screening'"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div x-show="!hasResults && !isScreening" class="text-center py-16">
+                        <i class="fas fa-search text-6xl text-base-300 mb-4"></i>
+                        <h3 class="text-lg font-bold text-base-content mb-2">Ready to Screen</h3>
+                        <p class="text-sm text-base-content opacity-70">Enter a company name and click "Run Screening" to begin comprehensive due diligence research.</p>
+                    </div>
+                    
+                    <!-- Loading State -->
+                    <div x-show="isScreening && !hasResults" class="text-center py-16">
+                        <div class="loading loading-spinner loading-lg text-primary mb-4"></div>
+                        <h3 class="text-lg font-bold text-base-content mb-2">Screening in Progress</h3>
+                        <p class="text-sm text-base-content opacity-70">Gathering intelligence from multiple sources...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Country selector component with comprehensive list
+        function countrySelector() {
+            return {
+                searchTerm: '',
+                showDropdown: false,
+                countries: [
+                    { name: 'Afghanistan', code: 'AF', flag: '🇦🇫' },
+                    { name: 'Albania', code: 'AL', flag: '🇦🇱' },
+                    { name: 'Algeria', code: 'DZ', flag: '🇩🇿' },
+                    { name: 'Andorra', code: 'AD', flag: '🇦🇩' },
+                    { name: 'Angola', code: 'AO', flag: '🇦🇴' },
+                    { name: 'Argentina', code: 'AR', flag: '🇦🇷' },
+                    { name: 'Armenia', code: 'AM', flag: '🇦🇲' },
+                    { name: 'Australia', code: 'AU', flag: '🇦🇺' },
+                    { name: 'Austria', code: 'AT', flag: '🇦🇹' },
+                    { name: 'Azerbaijan', code: 'AZ', flag: '🇦🇿' },
+                    { name: 'Bahamas', code: 'BS', flag: '🇧🇸' },
+                    { name: 'Bahrain', code: 'BH', flag: '🇧🇭' },
+                    { name: 'Bangladesh', code: 'BD', flag: '🇧🇩' },
+                    { name: 'Barbados', code: 'BB', flag: '🇧🇧' },
+                    { name: 'Belarus', code: 'BY', flag: '🇧🇾' },
+                    { name: 'Belgium', code: 'BE', flag: '🇧🇪' },
+                    { name: 'Belize', code: 'BZ', flag: '🇧🇿' },
+                    { name: 'Benin', code: 'BJ', flag: '🇧🇯' },
+                    { name: 'Bhutan', code: 'BT', flag: '🇧🇹' },
+                    { name: 'Bolivia', code: 'BO', flag: '🇧🇴' },
+                    { name: 'Bosnia and Herzegovina', code: 'BA', flag: '🇧🇦' },
+                    { name: 'Botswana', code: 'BW', flag: '🇧🇼' },
+                    { name: 'Brazil', code: 'BR', flag: '🇧🇷' },
+                    { name: 'Brunei', code: 'BN', flag: '🇧🇳' },
+                    { name: 'Bulgaria', code: 'BG', flag: '🇧🇬' },
+                    { name: 'Burkina Faso', code: 'BF', flag: '🇧🇫' },
+                    { name: 'Burundi', code: 'BI', flag: '🇧🇮' },
+                    { name: 'Cambodia', code: 'KH', flag: '🇰🇭' },
+                    { name: 'Cameroon', code: 'CM', flag: '🇨🇲' },
+                    { name: 'Canada', code: 'CA', flag: '🇨🇦' },
+                    { name: 'Cape Verde', code: 'CV', flag: '🇨🇻' },
+                    { name: 'Central African Republic', code: 'CF', flag: '🇨🇫' },
+                    { name: 'Chad', code: 'TD', flag: '🇹🇩' },
+                    { name: 'Chile', code: 'CL', flag: '🇨🇱' },
+                    { name: 'China', code: 'CN', flag: '🇨🇳' },
+                    { name: 'Colombia', code: 'CO', flag: '🇨🇴' },
+                    { name: 'Comoros', code: 'KM', flag: '🇰🇲' },
+                    { name: 'Congo', code: 'CG', flag: '🇨🇬' },
+                    { name: 'Costa Rica', code: 'CR', flag: '🇨🇷' },
+                    { name: 'Croatia', code: 'HR', flag: '🇭🇷' },
+                    { name: 'Cuba', code: 'CU', flag: '🇨🇺' },
+                    { name: 'Cyprus', code: 'CY', flag: '🇨🇾' },
+                    { name: 'Czech Republic', code: 'CZ', flag: '🇨🇿' },
+                    { name: 'Denmark', code: 'DK', flag: '🇩🇰' },
+                    { name: 'Djibouti', code: 'DJ', flag: '🇩🇯' },
+                    { name: 'Dominica', code: 'DM', flag: '🇩🇲' },
+                    { name: 'Dominican Republic', code: 'DO', flag: '🇩🇴' },
+                    { name: 'Ecuador', code: 'EC', flag: '🇪🇨' },
+                    { name: 'Egypt', code: 'EG', flag: '🇪🇬' },
+                    { name: 'El Salvador', code: 'SV', flag: '🇸🇻' },
+                    { name: 'Equatorial Guinea', code: 'GQ', flag: '🇬🇶' },
+                    { name: 'Eritrea', code: 'ER', flag: '🇪🇷' },
+                    { name: 'Estonia', code: 'EE', flag: '🇪🇪' },
+                    { name: 'Ethiopia', code: 'ET', flag: '🇪🇹' },
+                    { name: 'Fiji', code: 'FJ', flag: '🇫🇯' },
+                    { name: 'Finland', code: 'FI', flag: '🇫🇮' },
+                    { name: 'France', code: 'FR', flag: '🇫🇷' },
+                    { name: 'Gabon', code: 'GA', flag: '🇬🇦' },
+                    { name: 'Gambia', code: 'GM', flag: '🇬🇲' },
+                    { name: 'Georgia', code: 'GE', flag: '🇬🇪' },
+                    { name: 'Germany', code: 'DE', flag: '🇩🇪' },
+                    { name: 'Ghana', code: 'GH', flag: '🇬🇭' },
+                    { name: 'Greece', code: 'GR', flag: '🇬🇷' },
+                    { name: 'Grenada', code: 'GD', flag: '🇬🇩' },
+                    { name: 'Guatemala', code: 'GT', flag: '🇬🇹' },
+                    { name: 'Guinea', code: 'GN', flag: '🇬🇳' },
+                    { name: 'Guinea-Bissau', code: 'GW', flag: '🇬🇼' },
+                    { name: 'Guyana', code: 'GY', flag: '🇬🇾' },
+                    { name: 'Haiti', code: 'HT', flag: '🇭🇹' },
+                    { name: 'Honduras', code: 'HN', flag: '🇭🇳' },
+                    { name: 'Hungary', code: 'HU', flag: '🇭🇺' },
+                    { name: 'Iceland', code: 'IS', flag: '🇮🇸' },
+                    { name: 'India', code: 'IN', flag: '🇮🇳' },
+                    { name: 'Indonesia', code: 'ID', flag: '🇮🇩' },
+                    { name: 'Iran', code: 'IR', flag: '🇮🇷' },
+                    { name: 'Iraq', code: 'IQ', flag: '🇮🇶' },
+                    { name: 'Ireland', code: 'IE', flag: '🇮🇪' },
+                    { name: 'Israel', code: 'IL', flag: '🇮🇱' },
+                    { name: 'Italy', code: 'IT', flag: '🇮🇹' },
+                    { name: 'Jamaica', code: 'JM', flag: '🇯🇲' },
+                    { name: 'Japan', code: 'JP', flag: '🇯🇵' },
+                    { name: 'Jordan', code: 'JO', flag: '🇯🇴' },
+                    { name: 'Kazakhstan', code: 'KZ', flag: '🇰🇿' },
+                    { name: 'Kenya', code: 'KE', flag: '🇰🇪' },
+                    { name: 'Kiribati', code: 'KI', flag: '🇰🇮' },
+                    { name: 'Kuwait', code: 'KW', flag: '🇰🇼' },
+                    { name: 'Kyrgyzstan', code: 'KG', flag: '🇰🇬' },
+                    { name: 'Laos', code: 'LA', flag: '🇱🇦' },
+                    { name: 'Latvia', code: 'LV', flag: '🇱🇻' },
+                    { name: 'Lebanon', code: 'LB', flag: '🇱🇧' },
+                    { name: 'Lesotho', code: 'LS', flag: '🇱🇸' },
+                    { name: 'Liberia', code: 'LR', flag: '🇱🇷' },
+                    { name: 'Libya', code: 'LY', flag: '🇱🇾' },
+                    { name: 'Liechtenstein', code: 'LI', flag: '🇱🇮' },
+                    { name: 'Lithuania', code: 'LT', flag: '🇱🇹' },
+                    { name: 'Luxembourg', code: 'LU', flag: '🇱🇺' },
+                    { name: 'Madagascar', code: 'MG', flag: '🇲🇬' },
+                    { name: 'Malawi', code: 'MW', flag: '🇲🇼' },
+                    { name: 'Malaysia', code: 'MY', flag: '🇲🇾' },
+                    { name: 'Maldives', code: 'MV', flag: '🇲🇻' },
+                    { name: 'Mali', code: 'ML', flag: '🇲🇱' },
+                    { name: 'Malta', code: 'MT', flag: '🇲🇹' },
+                    { name: 'Marshall Islands', code: 'MH', flag: '🇲🇭' },
+                    { name: 'Mauritania', code: 'MR', flag: '🇲🇷' },
+                    { name: 'Mauritius', code: 'MU', flag: '🇲🇺' },
+                    { name: 'Mexico', code: 'MX', flag: '🇲🇽' },
+                    { name: 'Micronesia', code: 'FM', flag: '🇫🇲' },
+                    { name: 'Moldova', code: 'MD', flag: '🇲🇩' },
+                    { name: 'Monaco', code: 'MC', flag: '🇲🇨' },
+                    { name: 'Mongolia', code: 'MN', flag: '🇲🇳' },
+                    { name: 'Montenegro', code: 'ME', flag: '🇲🇪' },
+                    { name: 'Morocco', code: 'MA', flag: '🇲🇦' },
+                    { name: 'Mozambique', code: 'MZ', flag: '🇲🇿' },
+                    { name: 'Myanmar', code: 'MM', flag: '🇲🇲' },
+                    { name: 'Namibia', code: 'NA', flag: '🇳🇦' },
+                    { name: 'Nauru', code: 'NR', flag: '🇳🇷' },
+                    { name: 'Nepal', code: 'NP', flag: '🇳🇵' },
+                    { name: 'Netherlands', code: 'NL', flag: '🇳🇱' },
+                    { name: 'New Zealand', code: 'NZ', flag: '🇳🇿' },
+                    { name: 'Nicaragua', code: 'NI', flag: '🇳🇮' },
+                    { name: 'Niger', code: 'NE', flag: '🇳🇪' },
+                    { name: 'Nigeria', code: 'NG', flag: '🇳🇬' },
+                    { name: 'North Korea', code: 'KP', flag: '🇰🇵' },
+                    { name: 'North Macedonia', code: 'MK', flag: '🇲🇰' },
+                    { name: 'Norway', code: 'NO', flag: '🇳🇴' },
+                    { name: 'Oman', code: 'OM', flag: '🇴🇲' },
+                    { name: 'Pakistan', code: 'PK', flag: '🇵🇰' },
+                    { name: 'Palau', code: 'PW', flag: '🇵🇼' },
+                    { name: 'Palestine', code: 'PS', flag: '🇵🇸' },
+                    { name: 'Panama', code: 'PA', flag: '🇵🇦' },
+                    { name: 'Papua New Guinea', code: 'PG', flag: '🇵🇬' },
+                    { name: 'Paraguay', code: 'PY', flag: '🇵🇾' },
+                    { name: 'Peru', code: 'PE', flag: '🇵🇪' },
+                    { name: 'Philippines', code: 'PH', flag: '🇵🇭' },
+                    { name: 'Poland', code: 'PL', flag: '🇵🇱' },
+                    { name: 'Portugal', code: 'PT', flag: '🇵🇹' },
+                    { name: 'Qatar', code: 'QA', flag: '🇶🇦' },
+                    { name: 'Romania', code: 'RO', flag: '🇷🇴' },
+                    { name: 'Russia', code: 'RU', flag: '🇷🇺' },
+                    { name: 'Rwanda', code: 'RW', flag: '🇷🇼' },
+                    { name: 'Saint Kitts and Nevis', code: 'KN', flag: '🇰🇳' },
+                    { name: 'Saint Lucia', code: 'LC', flag: '🇱🇨' },
+                    { name: 'Saint Vincent and the Grenadines', code: 'VC', flag: '🇻🇨' },
+                    { name: 'Samoa', code: 'WS', flag: '🇼🇸' },
+                    { name: 'San Marino', code: 'SM', flag: '🇸🇲' },
+                    { name: 'Sao Tome and Principe', code: 'ST', flag: '🇸🇹' },
+                    { name: 'Saudi Arabia', code: 'SA', flag: '🇸🇦' },
+                    { name: 'Senegal', code: 'SN', flag: '🇸🇳' },
+                    { name: 'Serbia', code: 'RS', flag: '🇷🇸' },
+                    { name: 'Seychelles', code: 'SC', flag: '🇸🇨' },
+                    { name: 'Sierra Leone', code: 'SL', flag: '🇸🇱' },
+                    { name: 'Singapore', code: 'SG', flag: '🇸🇬' },
+                    { name: 'Slovakia', code: 'SK', flag: '🇸🇰' },
+                    { name: 'Slovenia', code: 'SI', flag: '🇸🇮' },
+                    { name: 'Solomon Islands', code: 'SB', flag: '🇸🇧' },
+                    { name: 'Somalia', code: 'SO', flag: '🇸🇴' },
+                    { name: 'South Africa', code: 'ZA', flag: '🇿🇦' },
+                    { name: 'South Korea', code: 'KR', flag: '🇰🇷' },
+                    { name: 'South Sudan', code: 'SS', flag: '🇸🇸' },
+                    { name: 'Spain', code: 'ES', flag: '🇪🇸' },
+                    { name: 'Sri Lanka', code: 'LK', flag: '🇱🇰' },
+                    { name: 'Sudan', code: 'SD', flag: '🇸🇩' },
+                    { name: 'Suriname', code: 'SR', flag: '🇸🇷' },
+                    { name: 'Sweden', code: 'SE', flag: '🇸🇪' },
+                    { name: 'Switzerland', code: 'CH', flag: '🇨🇭' },
+                    { name: 'Syria', code: 'SY', flag: '🇸🇾' },
+                    { name: 'Taiwan', code: 'TW', flag: '🇹🇼' },
+                    { name: 'Tajikistan', code: 'TJ', flag: '🇹🇯' },
+                    { name: 'Tanzania', code: 'TZ', flag: '🇹🇿' },
+                    { name: 'Thailand', code: 'TH', flag: '🇹🇭' },
+                    { name: 'Timor-Leste', code: 'TL', flag: '🇹🇱' },
+                    { name: 'Togo', code: 'TG', flag: '🇹🇬' },
+                    { name: 'Tonga', code: 'TO', flag: '🇹🇴' },
+                    { name: 'Trinidad and Tobago', code: 'TT', flag: '🇹🇹' },
+                    { name: 'Tunisia', code: 'TN', flag: '🇹🇳' },
+                    { name: 'Turkey', code: 'TR', flag: '🇹🇷' },
+                    { name: 'Turkmenistan', code: 'TM', flag: '🇹🇲' },
+                    { name: 'Tuvalu', code: 'TV', flag: '🇹🇻' },
+                    { name: 'Uganda', code: 'UG', flag: '🇺🇬' },
+                    { name: 'Ukraine', code: 'UA', flag: '🇺🇦' },
+                    { name: 'United Arab Emirates', code: 'AE', flag: '🇦🇪' },
+                    { name: 'United Kingdom', code: 'GB', flag: '🇬🇧' },
+                    { name: 'United States', code: 'US', flag: '🇺🇸' },
+                    { name: 'Uruguay', code: 'UY', flag: '🇺🇾' },
+                    { name: 'Uzbekistan', code: 'UZ', flag: '🇺🇿' },
+                    { name: 'Vanuatu', code: 'VU', flag: '🇻🇺' },
+                    { name: 'Vatican City', code: 'VA', flag: '🇻🇦' },
+                    { name: 'Venezuela', code: 'VE', flag: '🇻🇪' },
+                    { name: 'Vietnam', code: 'VN', flag: '🇻🇳' },
+                    { name: 'Yemen', code: 'YE', flag: '🇾🇪' },
+                    { name: 'Zambia', code: 'ZM', flag: '🇿🇲' },
+                    { name: 'Zimbabwe', code: 'ZW', flag: '🇿🇼' }
+                ],
+                filteredCountries: [],
+
+                init() {
+                    this.filteredCountries = this.countries;
+                },
+
+                filterCountries() {
+                    if (!this.searchTerm) {
+                        this.filteredCountries = this.countries;
+                        return;
+                    }
+
+                    const term = this.searchTerm.toLowerCase();
+                    this.filteredCountries = this.countries.filter(country => 
+                        country.name.toLowerCase().includes(term) || 
+                        country.code.toLowerCase().includes(term)
+                    );
+                },
+
+                selectCountry(value, displayName) {
+                    this.$dispatch('country-selected', { value, displayName });
+                    // Update the parent form data
+                    if (window.Alpine && window.Alpine.store) {
+                        // Try to update parent component
+                        const parentEl = this.$el.closest('[x-data*="companyScreener"]');
+                        if (parentEl && parentEl._x_dataStack) {
+                            const parentData = parentEl._x_dataStack[0];
+                            if (parentData.formData) {
+                                parentData.formData.country = value;
+                            }
+                        }
+                    }
+                    this.searchTerm = displayName;
+                    this.showDropdown = false;
+                }
+            }
+        }
+
+        function companyScreener() {
+            return {
+                // Form data
+                formData: {
+                    company: '',
+                    domain: '',
+                    country: '',
+                    registryNumbers: '',
+                    options: {
+                        deep_crawl: true,
+                        include_social: true,
+                        include_sanctions: true,
+                        include_financials: true,
+                        include_adverse_media: true,
+                        include_tech_stack: false
+                    }
+                },
+                
+                // UI state
+                darkMode: localStorage.getItem('darkMode') === 'true',
+                isScreening: false,
+                hasResults: false,
+                activeTab: 'overview',
+                apiKeysAvailable: true,
+                currentTaskId: null,
+                
+                // Progress tracking
+                progressSteps: [
+                    { name: 'Query Expansion', status: 'pending', message: '', duration: '' },
+                    { name: 'Web Search', status: 'pending', message: '', duration: '' },
+                    { name: 'Content Crawling', status: 'pending', message: '', duration: '' },
+                    { name: 'Sanctions Check', status: 'pending', message: '', duration: '' },
+                    { name: 'Entity Resolution', status: 'pending', message: '', duration: '' },
+                    { name: 'AI Analysis', status: 'pending', message: '', duration: '' },
+                    { name: 'Report Generation', status: 'pending', message: '', duration: '' }
+                ],
+                progressPercentage: 0,
+                
+                // Results data
+                results: null,
+                sourceLogs: [],
+                
+                // Result tabs
+                resultTabs: [
+                    { id: 'overview', name: 'Overview' },
+                    { id: 'profile', name: 'Company Profile' },
+                    { id: 'people', name: 'People' },
+                    { id: 'web', name: 'Web Footprint' },
+                    { id: 'news', name: 'News & Media' },
+                    { id: 'sanctions', name: 'Sanctions' },
+                    { id: 'compliance', name: 'Compliance Notes' }
+                ],
+                
+                init() {
+                    // Initialize theme
+                    this.applyTheme();
+                    
+                    // Check API availability
+                    this.checkApiAvailability();
+                    
+                    // Session keepalive
+                    setInterval(this.keepSessionAlive, 5 * 60 * 1000);
+                },
+                
+                toggleTheme() {
+                    localStorage.setItem('darkMode', this.darkMode);
+                    this.applyTheme();
+                },
+                
+                applyTheme() {
+                    document.documentElement.setAttribute('data-theme', this.darkMode ? 'dark' : 'corporate');
+                },
+                
+                async checkApiAvailability() {
+                    try {
+                        const response = await fetch('/api/health');
+                        const health = await response.json();
+                        this.apiKeysAvailable = health.components?.environment?.variables?.SERPER_API_KEY === 'Present' ||
+                                              health.components?.environment?.variables?.BING_API_KEY === 'Present';
+                    } catch (error) {
+                        console.warn('Could not check API availability:', error);
+                    }
+                },
+                
+                async keepSessionAlive() {
+                    try {
+                        await fetch('/api/health', { credentials: 'same-origin' });
+                    } catch (error) {
+                        console.warn('Session keepalive failed:', error);
+                    }
+                },
+                
+                async startScreening() {
+                    if (!this.formData.company.trim()) return;
+                    
+                    this.isScreening = true;
+                    this.hasResults = false;
+                    this.results = null;
+                    this.sourceLogs = [];
+                    this.progressPercentage = 0;
+                    this.currentTaskId = null;
+                    
+                    // Reset progress steps
+                    this.progressSteps.forEach(step => {
+                        step.status = 'pending';
+                        step.message = '';
+                        step.duration = '';
+                    });
+                    
+                    try {
+                        // Start the screening task
+                        const response = await fetch('/api/v1/screen', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Cache-Control': 'no-cache'
+                            },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({
+                                company: this.formData.company,
+                                domain: this.formData.domain,
+                                country: this.formData.country,
+                                options: this.formData.options
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        
+                        const taskData = await response.json();
+                        this.currentTaskId = taskData.task_id;
+                        
+                        // Start polling for progress
+                        this.pollProgress();
+                        
+                    } catch (error) {
+                        console.error('Screening failed:', error);
+                        this.showError(error.message);
+                        this.isScreening = false;
+                    }
+                },
+                
+                async pollProgress() {
+                    if (!this.currentTaskId) return;
+                    
+                    try {
+                        const response = await fetch(`/api/v1/status/${this.currentTaskId}`, {
+                            credentials: 'same-origin'
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Status check failed: ${response.status}`);
+                        }
+                        
+                        const status = await response.json();
+                        
+                        // Update progress
+                        this.progressPercentage = status.progress_percentage || 0;
+                        this.sourceLogs = status.source_logs || [];
+                        
+                        // Update steps
+                        if (status.steps) {
+                            status.steps.forEach((step, index) => {
+                                if (this.progressSteps[index]) {
+                                    this.progressSteps[index].status = step.status;
+                                    this.progressSteps[index].message = step.message;
+                                    this.progressSteps[index].duration = step.duration_ms ? `${step.duration_ms}ms` : '';
+                                }
+                            });
+                        }
+                        
+                        // Check if completed
+                        if (status.status === 'completed') {
+                            await this.fetchResults();
+                            this.isScreening = false;
+                        } else if (status.status === 'failed') {
+                            this.showError(status.error_message || 'Screening failed');
+                            this.isScreening = false;
+                        } else {
+                            // Continue polling
+                            setTimeout(() => this.pollProgress(), 1500);
+                        }
+                        
+                    } catch (error) {
+                        console.error('Progress polling failed:', error);
+                        // Try one more time, then stop
+                        setTimeout(() => {
+                            if (this.isScreening) {
+                                this.pollProgress();
+                            }
+                        }, 3000);
+                    }
+                },
+                
+                async fetchResults() {
+                    if (!this.currentTaskId) return;
+                    
+                    try {
+                        const response = await fetch(`/api/v1/report/${this.currentTaskId}`, {
+                            credentials: 'same-origin'
+                        });
+                        
+                        if (response.ok) {
+                            this.results = await response.json();
+                            this.hasResults = true;
+                        } else {
+                            console.warn('Could not fetch results, but screening completed');
+                            this.hasResults = false;
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch results:', error);
+                        this.hasResults = false;
+                    }
+                },
+                
+                showError(message) {
+                    // TODO: Implement proper error toast
+                    alert('Screening failed: ' + message);
+                },
+                
+                async exportPDF() {
+                    try {
+                        const response = await fetch(`/api/v1/report/${this.results.task_id}/pdf`);
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${this.formData.company}-screening-report.pdf`;
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                    } catch (error) {
+                        console.error('PDF export failed:', error);
+                    }
+                },
+                
+                exportJSON() {
+                    const dataStr = JSON.stringify(this.results, null, 2);
+                    const blob = new Blob([dataStr], { type: 'application/json' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${this.formData.company}-screening-data.json`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

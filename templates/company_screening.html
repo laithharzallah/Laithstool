@@ -1,0 +1,1129 @@
+{% extends "intelligence_base.html" %}
+
+{% block content %}
+<div x-data="companyScreening()" class="space-y-6">
+    <!-- Page Header -->
+    <div class="glass-panel p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold tracking-wide text-white/90">Company Screening</h1>
+                <p class="text-white/60 mt-1">Comprehensive risk assessment and due diligence for corporate entities</p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button class="px-4 py-2 bg-accent-blue/20 text-accent-blue rounded-lg hover:bg-accent-blue/30 transition-colors">
+                    <i data-lucide="download" class="w-4 h-4 inline mr-2"></i>
+                    Export
+                </button>
+                <button class="px-4 py-2 bg-accent-mint/20 text-accent-mint rounded-lg hover:bg-accent-mint/30 transition-colors">
+                    <i data-lucide="plus" class="w-4 h-4 inline mr-2"></i>
+                    New Case
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screening Form -->
+    <div class="glass-panel p-6" x-show="!hasResults">
+        <h2 class="text-lg font-semibold mb-4">Screening Parameters</h2>
+        
+        <form @submit.prevent="startScreening" class="space-y-6">
+            <!-- Basic Information -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-white/80 mb-2">Company Name *</label>
+                    <input type="text" x-model="form.companyName" required
+                           class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent-blue/50"
+                           placeholder="Enter company name">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-white/80 mb-2">Country</label>
+                    <input type="text" x-model="form.country"
+                           class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent-blue/50"
+                           placeholder="e.g., Saudi Arabia">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-white/80 mb-2">Domain</label>
+                    <input type="text" x-model="form.domain"
+                           class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent-blue/50"
+                           placeholder="e.g., rawabiholding.com">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-white/80 mb-2">LEI / Reg ID</label>
+                    <input type="text" x-model="form.lei"
+                           class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent-blue/50"
+                           placeholder="Legal Entity Identifier">
+                </div>
+            </div>
+            
+            <!-- Advanced Controls -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-white/80 mb-2">Fuzzy Threshold</label>
+                    <div class="flex items-center space-x-3">
+                        <input type="range" x-model="form.fuzzyThreshold" min="0.6" max="0.95" step="0.05"
+                               class="flex-1 accent-accent-blue">
+                        <span class="text-sm text-white/60 w-12" x-text="form.fuzzyThreshold"></span>
+                    </div>
+                    <p class="text-xs text-white/50 mt-1">Lower = stricter matching</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-white/80 mb-2">Jurisdictions</label>
+                    <select x-model="form.jurisdictions" multiple
+                            class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-accent-blue/50">
+                        <option value="US">United States</option>
+                        <option value="EU">European Union</option>
+                        <option value="UN">United Nations</option>
+                        <option value="UK">United Kingdom</option>
+                        <option value="CA">Canada</option>
+                        <option value="AU">Australia</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-white/80 mb-2">Background Job</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" x-model="form.backgroundJob" id="backgroundJob"
+                               class="rounded accent-accent-blue">
+                        <label for="backgroundJob" class="text-sm text-white/60">Queue for processing</label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Notes -->
+            <div>
+                <label class="block text-sm font-medium text-white/80 mb-2">Notes</label>
+                <textarea x-model="form.notes" rows="3"
+                          class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent-blue/50"
+                          placeholder="Additional context or specific concerns..."></textarea>
+            </div>
+            
+            <!-- Submit Button -->
+            <div class="flex justify-end">
+                <button type="submit" 
+                        class="px-6 py-3 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/80 transition-colors font-medium"
+                        :disabled="isScreening">
+                    <span x-show="!isScreening">Start Screening</span>
+                    <span x-show="isScreening" class="flex items-center">
+                        <i data-lucide="loader-2" class="w-4 h-4 animate-spin mr-2"></i>
+                        Screening...
+                    </span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Progress Stepper -->
+    <div class="glass-panel p-6" x-show="isScreening">
+        <h3 class="text-lg font-semibold mb-4">Screening Progress</h3>
+        
+        <div class="space-y-4">
+            <template x-for="(step, index) in progressSteps" :key="index">
+                <div class="flex items-center space-x-4">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
+                             :class="{
+                                 'bg-white/20 text-white/60': step.status === 'todo',
+                                 'bg-accent-blue text-white': step.status === 'doing',
+                                 'bg-accent-mint text-white': step.status === 'done',
+                                 'bg-red-500 text-white': step.status === 'fail'
+                             }">
+                            <span x-show="step.status === 'todo'" x-text="index + 1"></span>
+                            <i x-show="step.status === 'doing'" data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                            <i x-show="step.status === 'done'" data-lucide="check" class="w-4 h-4"></i>
+                            <i x-show="step.status === 'fail'" data-lucide="x" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <span class="font-medium" x-text="step.name"></span>
+                            <span class="text-sm text-white/60" x-text="step.timestamp || ''"></span>
+                        </div>
+                        <div x-show="step.logs && step.logs.length > 0" class="mt-2 text-sm text-white/60">
+                            <div x-show="step.logs.length > 0" class="cursor-pointer" @click="step.expanded = !step.expanded">
+                                <span x-text="step.expanded ? 'Hide logs' : 'Show logs'"></span>
+                                <i data-lucide="chevron-down" class="w-4 h-4 inline ml-1" :class="{'rotate-180': step.expanded}"></i>
+                            </div>
+                            <div x-show="step.expanded" class="mt-2 space-y-1">
+                                <template x-for="log in step.logs" :key="log.id">
+                                    <div class="text-xs bg-white/5 p-2 rounded" x-text="log.message"></div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Results Display -->
+    <div x-show="hasResults" class="space-y-6">
+        <!-- Subject Summary -->
+        <div class="glass-panel p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">Subject Summary</h3>
+                <div class="flex items-center space-x-3">
+                    <button class="px-3 py-1 bg-white/10 text-white/80 rounded text-sm hover:bg-white/20 transition-colors">
+                        <i data-lucide="edit" class="w-4 h-4 inline mr-1"></i>
+                        Edit
+                    </button>
+                    <button class="px-3 py-1 bg-accent-blue/20 text-accent-blue rounded text-sm hover:bg-accent-blue/30 transition-colors">
+                        <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <h4 class="text-sm font-medium text-white/60 mb-2">Company</h4>
+                    <p class="text-lg font-semibold" x-text="results.company"></p>
+                    <p class="text-sm text-white/60" x-text="results.country"></p>
+                </div>
+                
+                <div>
+                    <h4 class="text-sm font-medium text-white/60 mb-2">Risk Assessment</h4>
+                    <div class="flex items-center space-x-3">
+                        <div class="px-3 py-1 rounded-full text-sm font-medium" :class="getRiskClass(results.risk_score)">
+                            <span x-text="results.risk_level || 'Low'"></span>
+                        </div>
+                        <span class="text-2xl font-bold" x-text="results.risk_score || 0"></span>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 class="text-sm font-medium text-white/60 mb-2">Provenance</h4>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="source in results.data_sources" :key="source">
+                            <span class="px-2 py-1 bg-white/10 text-white/80 rounded text-xs" x-text="source"></span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Tabs -->
+        <div class="glass-panel">
+            <div class="border-b border-white/10">
+                <nav class="flex space-x-8 px-6">
+                    <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'overview' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-white/60 hover:text-white/80'"
+                            @click="activeTab = 'overview'">
+                        Overview
+                    </button>
+                    <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'overall' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-white/60 hover:text-white/80'"
+                            @click="activeTab = 'overall'">
+                        Overall Results
+                    </button>
+                    <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'company' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-white/60 hover:text-white/80'"
+                            @click="activeTab = 'company'">
+                        Company Info
+                    </button>
+                    <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'executives' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-white/60 hover:text-white/80'"
+                            @click="activeTab = 'overview'">
+                        Executives
+                    </button>
+                    <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'sanctions' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-white/60 hover:text-white/80'"
+                            @click="activeTab = 'sanctions'">
+                        Sanctions
+                    </button>
+                    <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'pep' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-white/60 hover:text-white/80'"
+                            @click="activeTab = 'pep'">
+                        PEP
+                    </button>
+                    <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'adverse' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-white/60 hover:text-white/80'"
+                            @click="activeTab = 'adverse'">
+                        Adverse Media
+                    </button>
+                    <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'financials' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-white/60 hover:text-white/80'"
+                            @click="activeTab = 'financials'">
+                        Financials
+                    </button>
+                    <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'ownership' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-white/60 hover:text-white/80'"
+                            @click="activeTab = 'ownership'">
+                        Ownership
+                    </button>
+                </nav>
+            </div>
+            
+            <div class="p-6">
+                <!-- Overview Tab -->
+                <div x-show="activeTab === 'overview'">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Hit Clustering -->
+                        <div class="glass-panel p-4 hover-glow cursor-pointer">
+                            <h4 class="font-medium mb-3">Hit Clustering</h4>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-white/60">Sanctions</span>
+                                    <span class="text-lg font-semibold" x-text="results.dilisense?.sanctions?.total_hits || results.sanctions?.length || 0"></span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-white/60">PEP</span>
+                                    <span class="text-lg font-semibold" x-text="results.dilisense?.pep?.total_hits || 0"></span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-white/60">Adverse Media</span>
+                                    <span class="text-lg font-semibold" x-text="results.adverse_media?.length || 0"></span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-white/60">Executives</span>
+                                    <span class="text-lg font-semibold" x-text="results.executives?.length || 0"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Company Info -->
+                        <div class="glass-panel p-4 hover-glow cursor-pointer">
+                            <h4 class="font-medium mb-3">Company Information</h4>
+                            <div class="space-y-2">
+                                <div class="text-sm text-white/60">
+                                    <strong>Name:</strong> <span x-text="results.company"></span>
+                                </div>
+                                <div class="text-sm text-white/60">
+                                    <strong>Country:</strong> <span x-text="results.country"></span>
+                                </div>
+                                <div class="text-sm text-white/60">
+                                    <strong>Level:</strong> <span x-text="results.screening_level"></span>
+                                </div>
+                                <div class="text-sm text-white/60">
+                                    <strong>Total Results:</strong> <span x-text="results.total_results || 0"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Risk Assessment -->
+                        <div class="glass-panel p-4 hover-glow cursor-pointer">
+                            <h4 class="font-medium mb-3">Risk Assessment</h4>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-white/60">Risk Level</span>
+                                    <span class="text-lg font-semibold" x-text="results.risk_level || 'Low'"></span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-white/60">Risk Score</span>
+                                    <span class="text-lg font-semibold" x-text="results.risk_score || 0"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Search Results Summary -->
+                    <div class="mt-8">
+                        <h4 class="font-medium mb-4">Search Results Summary</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Company Profile Results -->
+                            <div class="glass-panel p-4">
+                                <h5 class="font-medium mb-2 text-accent-blue">Company Profile</h5>
+                                <div class="text-2xl font-bold" x-text="results.company_info?.length || 0"></div>
+                                <div class="text-sm text-white/60">Results found</div>
+                            </div>
+                            
+                            <!-- Executive Results -->
+                            <div class="glass-panel p-4">
+                                <h5 class="font-medium mb-2 text-accent-green">Executives</h5>
+                                <div class="text-2xl font-bold" x-text="results.executives?.length || 0"></div>
+                                <div class="text-sm text-white/60">Results found</div>
+                            </div>
+                            
+                            <!-- Adverse Media Results -->
+                            <div class="glass-panel p-4">
+                                <h5 class="font-medium mb-2 text-accent-red">Adverse Media</h5>
+                                <div class="text-2xl font-bold" x-text="results.adverse_media?.length || 0"></div>
+                                <div class="text-sm text-white/60">Results found</div>
+                            </div>
+                            
+                            <!-- Financial Results -->
+                            <div class="glass-panel p-4">
+                                <h5 class="font-medium mb-2 text-accent-yellow">Financials</h5>
+                                <div class="text-2xl font-bold" x-text="results.financials?.length || 0"></div>
+                                <div class="text-sm text-white/60">Results found</div>
+                            </div>
+                            
+                            <!-- Sanctions Results -->
+                            <div class="glass-panel p-4">
+                                <h5 class="font-medium mb-2 text-accent-orange">Sanctions</h5>
+                                <div class="text-2xl font-bold" x-text="results.sanctions?.length || 0"></div>
+                                <div class="text-sm text-white/60">Results found</div>
+                            </div>
+                            
+                            <!-- Ownership Results -->
+                            <div class="glass-panel p-4">
+                                <h5 class="font-medium mb-2 text-accent-purple">Ownership</h5>
+                                <div class="text-2xl font-bold" x-text="results.ownership?.length || 0"></div>
+                                <div class="text-sm text-white/60">Results found</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Overall Results Tab -->
+                <div x-show="activeTab === 'overall'">
+                    <div class="space-y-6">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-lg font-semibold">Comprehensive Screening Report</h3>
+                            <button @click="downloadOverallResults()" class="px-3 py-2 bg-accent-blue/20 text-accent-blue rounded text-sm hover:bg-accent-blue/30 transition-colors">
+                                <i data-lucide="download" class="w-4 h-4 inline mr-2"></i>
+                                Download Report
+                            </button>
+                        </div>
+                        
+                        <!-- Executive Summary -->
+                        <div class="glass-panel p-6 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20">
+                            <h4 class="font-medium mb-4 text-lg text-blue-300">📋 Executive Summary</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-blue-300" x-text="results.company || 'N/A'"></div>
+                                    <div class="text-sm text-white/60">Company Name</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-blue-300" x-text="results.country || 'N/A'"></div>
+                                    <div class="text-sm text-white/60">Country</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold" :class="getRiskClass(results.risk_score)">
+                                        <span x-text="results.risk_score || 0"></span>
+                                    </div>
+                                    <div class="text-sm text-white/60">Risk Score</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-accent-blue" x-text="results.overall_risk_level || 'Low'"></div>
+                                    <div class="text-sm text-white/60">Risk Level</div>
+                                </div>
+                            </div>
+                            <div class="mt-4 text-center">
+                                <div class="text-lg font-semibold text-blue-300">Screening Completed: <span x-text="results.timestamp || 'N/A'"></span></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Complete Report Section -->
+                        <div class="glass-panel p-6 bg-white/5 border border-white/20">
+                            <h4 class="font-medium mb-6 text-lg text-white">📄 Complete Screening Report</h4>
+                            
+                            <!-- Company Information -->
+                            <div class="mb-8">
+                                <h5 class="font-medium text-accent-blue mb-4 text-lg border-b border-accent-blue/30 pb-2">Company Information</h5>
+                                <div class="space-y-3">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><strong class="text-white/80">Company Name:</strong> <span class="text-white" x-text="results.company || 'N/A'"></span></div>
+                                        <div><strong class="text-white/80">Country:</strong> <span class="text-white" x-text="results.country || 'N/A'"></span></div>
+                                        <div><strong class="text-white/80">Risk Level:</strong> <span class="text-white" x-text="results.overall_risk_level || 'N/A'"></span></div>
+                                        <div><strong class="text-white/80">Risk Score:</strong> <span class="text-white" x-text="results.risk_score || 'N/A'"></span></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Dilisense Results -->
+                            <div class="mb-8">
+                                <h5 class="font-medium text-green-400 mb-4 text-lg border-b border-green-400/30 pb-2">Dilisense Compliance Results</h5>
+                                <div class="space-y-3">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><strong class="text-white/80">Sanctions Found:</strong> <span class="text-white" x-text="results.dilisense?.sanctions?.total_hits || 0"></span></div>
+                                        <div><strong class="text-white/80">PEP Found:</strong> <span class="text-white" x-text="results.dilisense?.pep?.total_hits || 0"></span></div>
+                                        <div><strong class="text-white/80">Criminal Records:</strong> <span class="text-white" x-text="results.dilisense?.criminal?.total_hits || 0"></span></div>
+                                        <div><strong class="text-white/80">Overall Risk:</strong> <span class="text-white" x-text="results.dilisense?.overall_risk_level || 'N/A'"></span></div>
+                                    </div>
+                                    <div x-show="results.dilisense?.summary?.recommendations">
+                                        <strong class="text-white/80">Recommendations:</strong>
+                                        <ul class="list-disc list-inside mt-2 text-white">
+                                            <template x-for="rec in results.dilisense.summary.recommendations" :key="rec">
+                                                <li x-text="rec"></li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Web Search Results -->
+                            <div class="mb-8">
+                                <h5 class="font-medium text-yellow-400 mb-4 text-lg border-b border-yellow-400/30 pb-2">Web Search Results</h5>
+                                <div class="space-y-3">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div><strong class="text-white/80">Total Results:</strong> <span class="text-white" x-text="results.total_results || 0"></span></div>
+                                        <div><strong class="text-white/80">Company Info Sources:</strong> <span class="text-white" x-text="results.company_info?.length || 0"></span></div>
+                                        <div><strong class="text-white/80">Executive Sources:</strong> <span class="text-white" x-text="results.executives?.length || 0"></span></div>
+                                        <div><strong class="text-white/80">Adverse Media:</strong> <span class="text-white" x-text="results.adverse_media?.length || 0"></span></div>
+                                    </div>
+                                    
+                                    <!-- Company Information Details -->
+                                    <div x-show="results.company_info && results.company_info.length > 0">
+                                        <strong class="text-white/80">Company Information Sources:</strong>
+                                        <div class="mt-2 space-y-2">
+                                            <template x-for="(info, index) in results.company_info" :key="index">
+                                                <div class="bg-white/5 rounded p-3 border-l-4 border-accent-blue">
+                                                    <div class="text-sm text-white/90"><strong x-text="info.title || 'Company Info'"></strong></div>
+                                                    <div class="text-xs text-white/60 mt-1"><strong>Source:</strong> <span x-text="info.source || 'N/A'"></span></div>
+                                                    <div class="text-xs text-white/60"><strong>Date:</strong> <span x-text="info.date || 'N/A'"></span></div>
+                                                    <div class="text-sm text-white/80 mt-2" x-text="info.snippet || 'N/A'"></div>
+                                                    <div class="text-xs text-accent-blue mt-1"><a :href="info.url" target="_blank" x-text="info.url || 'N/A'"></a></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Executive Information Details -->
+                                    <div x-show="results.executives && results.executives.length > 0">
+                                        <strong class="text-white/80">Executive Information Sources:</strong>
+                                        <div class="mt-2 space-y-2">
+                                            <template x-for="(exec, index) in results.executives" :key="index">
+                                                <div class="bg-white/5 rounded p-3 border-l-4 border-purple-400">
+                                                    <div class="text-sm text-white/90"><strong x-text="exec.title || 'Executive Info'"></strong></div>
+                                                    <div class="text-xs text-white/60 mt-1"><strong>Source:</strong> <span x-text="exec.source || 'N/A'"></span></div>
+                                                    <div class="text-xs text-white/60"><strong>Date:</strong> <span x-text="exec.date || 'N/A'"></span></div>
+                                                    <div class="text-sm text-white/80 mt-2" x-text="exec.snippet || 'N/A'"></div>
+                                                    <div class="text-xs text-accent-blue mt-1"><a :href="exec.url" target="_blank" x-text="exec.url || 'N/A'"></a></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Financial Information Details -->
+                                    <div x-show="results.financials && results.financials.length > 0">
+                                        <strong class="text-white/80">Financial Information Sources:</strong>
+                                        <div class="mt-2 space-y-2">
+                                            <template x-for="(financial, index) in results.financials" :key="index">
+                                                <div class="bg-white/5 rounded p-3 border-l-4 border-yellow-400">
+                                                    <div class="text-sm text-white/90"><strong x-text="financial.title || 'Financial Info'"></strong></div>
+                                                    <div class="text-xs text-white/60 mt-1"><strong>Source:</strong> <span x-text="financial.source || 'N/A'"></span></div>
+                                                    <div class="text-xs text-white/60"><strong>Date:</strong> <span x-text="financial.date || 'N/A'"></span></div>
+                                                    <div class="text-sm text-white/80 mt-2" x-text="financial.snippet || 'N/A'"></div>
+                                                    <div class="text-xs text-accent-blue mt-1"><a :href="financial.url" target="_blank" x-text="financial.url || 'N/A'"></a></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Adverse Media Details -->
+                                    <div x-show="results.adverse_media && results.adverse_media.length > 0">
+                                        <strong class="text-white/80">Adverse Media Sources:</strong>
+                                        <div class="mt-2 space-y-2">
+                                            <template x-for="(media, index) in results.adverse_media" :key="index">
+                                                <div class="bg-white/5 rounded p-3 border-l-4 border-red-400">
+                                                    <div class="text-sm text-white/90"><strong x-text="media.title || 'Adverse Media'"></strong></div>
+                                                    <div class="text-xs text-white/60 mt-1"><strong>Source:</strong> <span x-text="media.source || 'N/A'"></span></div>
+                                                    <div class="text-xs text-white/60"><strong>Date:</strong> <span x-text="media.date || 'N/A'"></span></div>
+                                                    <div class="text-sm text-white/80 mt-2" x-text="media.snippet || 'N/A'"></div>
+                                                    <div class="text-xs text-accent-blue mt-1"><a :href="media.url" target="_blank" x-text="media.url || 'N/A'"></a></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Ownership Information Details -->
+                                    <div x-show="results.ownership && results.ownership.length > 0">
+                                        <strong class="text-white/80">Ownership Information Sources:</strong>
+                                        <div class="mt-2 space-y-2">
+                                            <template x-for="(ownership, index) in results.ownership" :key="index">
+                                                <div class="bg-white/5 rounded p-3 border-l-4 border-indigo-400">
+                                                    <div class="text-sm text-white/90"><strong x-text="ownership.title || 'Ownership Info'"></strong></div>
+                                                    <div class="text-xs text-white/60 mt-1"><strong>Source:</strong> <span x-text="ownership.source || 'N/A'"></span></div>
+                                                    <div class="text-xs text-white/60"><strong>Date:</strong> <span x-text="ownership.date || 'N/A'"></span></div>
+                                                    <div class="text-sm text-white/80 mt-2" x-text="ownership.snippet || 'N/A'"></div>
+                                                    <div class="text-xs text-accent-blue mt-1"><a :href="ownership.url" target="_blank" x-text="ownership.url || 'N/A'"></a></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Data Sources -->
+                            <div class="mb-8">
+                                <h5 class="font-medium text-gray-400 mb-4 text-lg border-b border-gray-400/30 pb-2">Data Sources & Methodology</h5>
+                                <div class="space-y-3">
+                                    <div><strong class="text-white/80">Data Sources Used:</strong></div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <template x-for="source in results.data_sources" :key="source">
+                                            <span class="px-3 py-1 bg-accent-blue/20 text-accent-blue rounded-full text-sm" x-text="source"></span>
+                                        </template>
+                                    </div>
+                                    <div class="mt-4">
+                                        <strong class="text-white/80">Search Summary:</strong>
+                                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+                                            <div class="text-center p-3 bg-white/10 rounded">
+                                                <div class="text-lg font-bold text-white" x-text="results.total_results || 0"></div>
+                                                <div class="text-xs text-white/60">Total Results</div>
+                                            </div>
+                                            <div class="text-center p-1 bg-white/10 rounded">
+                                                <div class="text-lg font-bold text-white" x-text="results.company_info?.length || 0"></div>
+                                                <div class="text-xs text-white/60">Company Info</div>
+                                            </div>
+                                            <div class="text-center p-3 bg-white/10 rounded">
+                                                <div class="text-lg font-bold text-white" x-text="results.executives?.length || 0"></div>
+                                                <div class="text-xs text-white/60">Executives</div>
+                                            </div>
+                                            <div class="text-center p-3 bg-white/10 rounded">
+                                                <div class="text-lg font-bold text-white" x-text="results.adverse_media?.length || 0"></div>
+                                                <div class="text-xs text-white/60">Adverse Media</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Company Info Tab -->
+                <div x-show="activeTab === 'company'">
+                    <div class="space-y-4">
+                        <template x-if="results.company_info && results.company_info.length > 0">
+                            <div class="glass-panel p-4 hover-glow cursor-pointer" @click="selectHit(results.company_info[0])">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h4 class="font-medium" x-text="results.company_info[0].name || results.company_info[0].title"></h4>
+                                        <p class="text-sm text-white/60" x-text="results.company_info[0].source_id"></p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-lg font-semibold" x-text="results.company_info[0].source_type"></div>
+                                        <div class="text-xs text-white/40" x-text="results.company_info[0].source_country || 'Unknown'"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!results.company_info || results.company_info.length === 0">
+                            <div class="text-center py-8 text-white/60">
+                                <p>No company information found</p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Executives Tab -->
+                <div x-show="activeTab === 'executives'">
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-lg font-medium">Executive Leadership</h4>
+                            <span class="text-sm text-white/60" x-text="`${results.executives?.length || 0} executives found`"></span>
+                        </div>
+                        
+                        <!-- Executive Results -->
+                        <div x-show="results.executives && results.executives.length > 0" class="space-y-4">
+                            <template x-for="(exec, index) in results.executives" :key="index">
+                                <div class="glass-panel p-4">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <h5 class="font-medium text-lg" x-text="exec.name || 'Unknown Executive'"></h5>
+                                            <p class="text-white/60 text-sm" x-text="exec.position || 'Leadership position'"></p>
+                                            <div class="mt-2 text-sm text-white/80" x-text="exec.snippet || 'No additional information available'"></div>
+                                            <div class="mt-2 flex items-center space-x-4 text-xs text-white/60">
+                                                <span x-text="`Source: ${exec.source || 'Unknown'}`"></span>
+                                                <span x-show="exec.url" x-text="`URL: ${exec.url}`"></span>
+                                            </div>
+                                        </div>
+                                        <div class="ml-4">
+                                            <button class="px-3 py-1 bg-accent-blue/20 text-accent-blue rounded text-sm hover:bg-accent-blue/30 transition-colors">
+                                                View Details
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        
+                        <!-- No Executives Found -->
+                        <div x-show="!results.executives || results.executives.length === 0" class="text-center py-8">
+                            <div class="text-white/40 text-lg">No executive information found</div>
+                            <div class="text-white/20 text-sm mt-2">Try adjusting your search parameters</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sanctions Tab -->
+                <div x-show="activeTab === 'sanctions'">
+                    <div class="space-y-4">
+                        <template x-if="results.dilisense?.sanctions?.found_records">
+                            <template x-for="hit in results.dilisense.sanctions.found_records" :key="hit.id">
+                                <div class="glass-panel p-4 hover-glow cursor-pointer" @click="selectHit(hit)">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <h4 class="font-medium" x-text="hit.name"></h4>
+                                            <p class="text-sm text-white/60" x-text="hit.source_id"></p>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-lg font-semibold" x-text="hit.source_type"></div>
+                                            <div class="text-xs text-white/40" x-text="hit.source_country || 'Unknown'"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </template>
+                        <template x-if="!results.dilisense?.sanctions?.found_records || results.dilisense.sanctions.found_records.length === 0">
+                            <div class="text-center py-8 text-white/60">
+                                <p>No sanctions found</p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- PEP Tab -->
+                <div x-show="activeTab === 'pep'">
+                    <div class="space-y-4">
+                        <template x-if="results.dilisense?.pep?.found_records">
+                            <template x-for="hit in results.dilisense.pep.found_records" :key="hit.id">
+                                <div class="glass-panel p-4 hover-glow cursor-pointer" @click="selectHit(hit)">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <h4 class="font-medium" x-text="hit.name"></h4>
+                                            <p class="text-sm text-white/60" x-text="hit.pep_type || 'PEP'"></p>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-lg font-semibold" x-text="hit.source_id"></div>
+                                            <div class="text-xs text-white/40" x-text="hit.source_country || 'Unknown'"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </template>
+                        <template x-if="!results.dilisense?.pep?.found_records || results.dilisense.pep.found_records.length === 0">
+                            <div class="text-center py-8 text-white/60">
+                                <p>No PEP records found</p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Adverse Media Tab -->
+                <div x-show="activeTab === 'adverse'">
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-lg font-medium">Adverse Media & Controversies</h4>
+                            <span class="text-sm text-white/60" x-text="`${results.adverse_media?.length || 0} items found`"></span>
+                        </div>
+                        
+                        <!-- Adverse Media Results -->
+                        <div x-show="results.adverse_media && results.adverse_media.length > 0" class="space-y-4">
+                            <template x-for="(item, index) in results.adverse_media" :key="index">
+                                <div class="glass-panel p-4">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <h5 class="font-medium text-lg" x-text="item.title || item.headline || 'Adverse Media Item'"></h5>
+                                            <div class="mt-2 text-sm text-white/80" x-text="item.snippet || item.summary || 'No summary available'"></div>
+                                            <div class="mt-3 flex items-center space-x-4 text-xs text-white/60">
+                                                <span x-show="item.category" x-text="`Category: ${item.category}`"></span>
+                                                <span x-show="item.severity" x-text="`Severity: ${item.severity}`"></span>
+                                                <span x-show="item.date" x-text="`Date: ${item.date}`"></span>
+                                                <span x-text="`Source: ${item.source || 'Unknown'}`"></span>
+                                            </div>
+                                            <div class="mt-2" x-show="item.url">
+                                                <a :href="item.url" target="_blank" class="text-accent-blue hover:text-accent-blue/80 text-sm">
+                                                    View Source →
+                                                </a>
+                                            </div>
+                                        </div>
+                                        <div class="ml-4">
+                                            <button class="px-3 py-1 bg-accent-red/20 text-accent-red rounded text-sm hover:bg-accent-red/30 transition-colors">
+                                                View Details
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        
+                        <!-- No Adverse Media Found -->
+                        <div x-show="!results.adverse_media || results.adverse_media.length === 0" class="text-center py-8">
+                            <div class="text-white/40 text-lg">No adverse media found</div>
+                            <div class="text-white/20 text-sm mt-2">This could indicate a clean record or limited public information</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Financials Tab -->
+                <div x-show="activeTab === 'financials'">
+                    <div class="space-y-4">
+                        <template x-if="results.financials && results.financials.length > 0">
+                            <div class="glass-panel p-4 hover-glow cursor-pointer" @click="selectHit(results.financials[0])">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h4 class="font-medium" x-text="results.financials[0].name || results.financials[0].title"></h4>
+                                        <p class="text-sm text-white/60" x-text="results.financials[0].source_id"></p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-lg font-semibold" x-text="results.financials[0].source_type"></div>
+                                        <div class="text-xs text-white/40" x-text="results.financials[0].source_country || 'Unknown'"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!results.financials || results.financials.length === 0">
+                            <div class="text-center py-8 text-white/60">
+                                <p>No financial information found</p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Ownership Tab -->
+                <div x-show="activeTab === 'ownership'">
+                    <div class="space-y-4">
+                        <template x-if="results.ownership && results.ownership.length > 0">
+                            <div class="glass-panel p-4 hover-glow cursor-pointer" @click="selectHit(results.ownership[0])">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h4 class="font-medium" x-text="results.ownership[0].name || results.ownership[0].title"></h4>
+                                        <p class="text-sm text-white/60" x-text="results.ownership[0].source_id"></p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-lg font-semibold" x-text="results.ownership[0].source_type"></div>
+                                        <div class="text-xs text-white/40" x-text="results.ownership[0].source_country || 'Unknown'"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!results.ownership || results.ownership.length === 0">
+                            <div class="text-center py-8 text-white/60">
+                                <p>No ownership information found</p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Evidence Drawer -->
+    <div x-show="selectedHit" class="fixed inset-0 bg-black/50 z-50 flex items-end justify-end">
+        <div class="w-96 h-full glass-panel overflow-y-auto">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">Evidence Details</h3>
+                    <button @click="selectedHit = null" class="text-white/60 hover:text-white">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <div x-show="selectedHit" class="space-y-4">
+                    <div>
+                        <h4 class="font-medium mb-2" x-text="selectedHit.name || selectedHit.headline"></h4>
+                        <div class="text-sm text-white/60 space-y-2">
+                            <div x-show="selectedHit.dataset">
+                                <strong>Dataset:</strong> <span x-text="selectedHit.dataset"></span>
+                            </div>
+                            <div x-show="selectedHit.matchScore">
+                                <strong>Match Score:</strong> <span x-text="selectedHit.matchScore + '%'"></span>
+                            </div>
+                            <div x-show="selectedHit.source">
+                                <strong>Source:</strong> <span x-text="selectedHit.source"></span>
+                            </div>
+                            <div x-show="selectedHit.date">
+                                <strong>Date:</strong> <span x-text="selectedHit.date"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-4 border-t border-white/10">
+                        <div class="flex space-x-2">
+                            <button class="px-3 py-2 bg-accent-blue/20 text-accent-blue rounded text-sm hover:bg-accent-blue/30 transition-colors">
+                                Assign to Case
+                            </button>
+                            <button class="px-3 py-2 bg-white/10 text-white/80 rounded text-sm hover:bg-white/20 transition-colors">
+                                Copy Record
+                            </button>
+                            <button class="px-3 py-2 bg-white/10 text-white/80 rounded text-sm hover:bg-white/20 transition-colors">
+                                Export PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function companyScreening() {
+    return {
+        form: {
+            companyName: '',
+            country: '',
+            domain: '',
+            lei: '',
+            fuzzyThreshold: 0.8,
+            jurisdictions: [],
+            backgroundJob: false,
+            notes: ''
+        },
+        isScreening: false,
+        hasResults: false,
+        activeTab: 'overview',
+        selectedHit: null,
+        progressSteps: [
+            { name: 'Query Expansion', status: 'todo', timestamp: '', logs: [], expanded: false },
+            { name: 'Web / DB Search', status: 'todo', timestamp: '', logs: [], expanded: false },
+            { name: 'Content Extraction', status: 'todo', timestamp: '', logs: [], expanded: false },
+            { name: 'Sanctions Check', status: 'todo', timestamp: '', logs: [], expanded: false },
+            { name: 'Entity Resolution', status: 'todo', timestamp: '', logs: [], expanded: false },
+            { name: 'AI Analysis', status: 'todo', timestamp: '', logs: [], expanded: false },
+            { name: 'Report Generation', status: 'todo', timestamp: '', logs: [], expanded: false }
+        ],
+        results: {},
+        
+        async startScreening() {
+            this.isScreening = true;
+            this.hasResults = false;
+            
+            // Reset progress
+            this.progressSteps.forEach(step => {
+                step.status = 'todo';
+                step.timestamp = '';
+                step.logs = [];
+            });
+            
+            try {
+                // Start the screening process
+                const response = await fetch('/api/enhanced-screen', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        company_name: this.form.companyName,
+                        country: this.form.country,
+                        screening_level: 'advanced'
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Screening failed');
+                }
+                
+                const data = await response.json();
+                
+                // Process results
+                this.processResults(data);
+                this.hasResults = true;
+                
+            } catch (error) {
+                console.error('Screening error:', error);
+                alert('Screening failed: ' + error.message);
+            } finally {
+                this.isScreening = false;
+            }
+        },
+        
+        processResults(data) {
+            console.log('Processing results:', data);
+            
+            // Process real API response data with correct structure
+            this.results = {
+                company: data.company || '',
+                country: data.country || '',
+                timestamp: data.timestamp || new Date().toISOString(),
+                data_sources: data.data_sources || [],
+                
+                // Extract web search results from the correct structure
+                web_search: data.web_search || {},
+                categorized_results: data.web_search?.categorized_results || {},
+                total_results: data.web_search?.total_results || 0,
+                
+                // Extract company information from categorized_results
+                company_info: data.web_search?.categorized_results?.company_info || [],
+                executives: data.web_search?.categorized_results?.executives || [],
+                adverse_media: data.web_search?.categorized_results?.adverse_media || [],
+                financials: data.web_search?.categorized_results?.financials || [],
+                sanctions: data.web_search?.categorized_results?.sanctions || [],
+                ownership: data.web_search?.categorized_results?.ownership || [],
+                
+                // Extract Dilisense results
+                dilisense: data.dilisense || {},
+                executive_screening: data.executive_screening || [],
+                
+                // Risk assessment
+                overall_risk_level: data.overall_risk_level || 'Low',
+                risk_score: data.risk_score || 0,
+                risk_factors: data.risk_factors || []
+            };
+            
+            // Log the results for debugging
+            console.log('Processed results:', this.results);
+            console.log('Web search:', this.results.web_search);
+            console.log('Dilisense:', this.results.dilisense);
+            console.log('Categorized results:', this.results.categorized_results);
+            console.log('Company info count:', this.results.company_info.length);
+            console.log('Executives count:', this.results.executives.length);
+            console.log('Total results:', this.results.total_results);
+            
+            // Calculate risk score based on findings
+            this.calculateRiskScore();
+            
+            // Update progress steps with real data
+            this.updateProgressSteps(data);
+        },
+        
+        calculateRiskScore() {
+            let riskScore = 0;
+            let riskLevel = 'Low';
+            
+            // Check company sanctions
+            if (this.results.dilisense?.sanctions?.total_hits > 0) {
+                riskScore += 60;
+            }
+            
+            // Check company PEP status
+            if (this.results.dilisense?.pep?.total_hits > 0) {
+                riskScore += 25;
+            }
+            
+            // Check company adverse media
+            if (this.results.dilisense?.adverse_media?.total_hits > 0) {
+                riskScore += 15;
+            }
+            
+            // Check executives
+            if (this.results.executive_screening?.length > 0) {
+                this.results.executive_screening.forEach(exec => {
+                    if (exec.compliance_check?.sanctions?.total_hits > 0) riskScore += 10;
+                    if (exec.compliance_check?.pep?.total_hits > 0) riskScore += 5;
+                    if (exec.compliance_check?.adverse_media?.total_hits > 0) riskScore += 5;
+                });
+            }
+            
+            // Cap at 100
+            riskScore = Math.min(riskScore, 100);
+            
+            // Determine risk level
+            if (riskScore >= 70) riskLevel = 'High';
+            else if (riskScore >= 40) riskLevel = 'Medium';
+            else riskLevel = 'Low';
+            
+            this.results.risk_score = riskScore;
+            this.results.risk_level = riskLevel;
+        },
+        
+        updateProgressSteps(data) {
+            // Update progress based on real data
+            if (data.web_search) {
+                this.progressSteps[0].status = 'completed';
+                this.progressSteps[0].timestamp = new Date().toLocaleTimeString();
+                this.progressSteps[0].logs = ['Query expansion completed'];
+                
+                this.progressSteps[1].status = 'completed';
+                this.progressSteps[1].timestamp = new Date().toLocaleTimeString();
+                this.progressSteps[1].logs = [`Found ${data.web_search.company_profile ? 'company info' : 'no company info'}`];
+                
+                this.progressSteps[2].status = 'completed';
+                this.progressSteps[2].timestamp = new Date().toLocaleTimeString();
+                this.progressSteps[2].logs = [`Extracted ${this.results.executives.length} executives`];
+            }
+            
+            if (data.dilisense) {
+                this.progressSteps[3].status = 'completed';
+                this.progressSteps[3].timestamp = new Date().toLocaleTimeString();
+                this.progressSteps[3].logs = ['Sanctions check completed'];
+                
+                this.progressSteps[4].status = 'completed';
+                this.progressSteps[4].timestamp = new Date().toLocaleTimeString();
+                this.progressSteps[4].logs = ['Entity resolution completed'];
+            }
+            
+            if (data.gpt5_analysis) {
+                this.progressSteps[5].status = 'completed';
+                this.progressSteps[5].timestamp = new Date().toLocaleTimeString();
+                this.progressSteps[5].logs = ['AI analysis completed'];
+                
+                this.progressSteps[6].status = 'completed';
+                this.progressSteps[6].timestamp = new Date().toLocaleTimeString();
+                this.progressSteps[6].logs = ['Report generation completed'];
+            }
+        },
+        
+        extractSanctions(data) {
+            if (data.dilisense && !data.dilisense.error && data.dilisense.sanctions) {
+                return data.dilisense.sanctions.found_records || [];
+            }
+            return [];
+        },
+        
+        extractPEP(data) {
+            if (data.dilisense && !data.dilisense.error && data.dilisense.pep) {
+                return data.dilisense.pep.found_records || [];
+            }
+            return [];
+        },
+        
+        extractAdverseMedia(data) {
+            if (data.dilisense && !data.dilisense.error && data.dilisense.adverse_media) {
+                return data.dilisense.adverse_media.found_records || [];
+            }
+            return [];
+        },
+        
+        extractExecutives(data) {
+            if (data.web_search && data.web_search.executives) {
+                return data.web_search.executives.map(name => ({
+                    name: name,
+                    position: 'Executive'
+                }));
+            }
+            return [];
+        },
+        
+        getRiskClass(score) {
+            if (score >= 70) return 'text-red-400';
+            if (score >= 40) return 'text-yellow-400';
+            return 'text-green-400';
+        },
+        
+        getRiskLevel(score) {
+            if (score >= 70) return 'HIGH';
+            if (score >= 40) return 'MEDIUM';
+            return 'LOW';
+        },
+        
+        selectHit(hit) {
+            this.selectedHit = hit;
+        },
+        
+        selectExecutive(exec) {
+            // Navigate to individual screening for this executive
+            window.location.href = `/individual?name=${encodeURIComponent(exec.name)}`;
+        },
+
+        downloadResults() {
+            const dataStr = JSON.stringify(this.results, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `company_screening_results_${this.results.company}_${this.results.timestamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        },
+        
+        downloadOverallResults() {
+            const dataStr = JSON.stringify(this.results, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `company_screening_results_${this.results.company}_${this.results.timestamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        },
+        
+        getRiskClass(score) {
+            if (score >= 70) return 'text-red-400';
+            if (score >= 40) return 'text-yellow-400';
+            return 'text-green-400';
+        }
+    };
+}
+</script>
+{% endblock %}
