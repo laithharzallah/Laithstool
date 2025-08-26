@@ -14,21 +14,35 @@ try:
 except Exception as e:
     print(f"⚠️ .env file not found, using system environment variables: {e}")
 
+# Load API keys from environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+DILISENSE_API_KEY = os.getenv("DILISENSE_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "5000"))
 
-# Initialize OpenAI client
-try:
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    print(f"✅ OpenAI client initialized successfully")
-    print(f"🔑 API Key present: {'Yes' if OPENAI_API_KEY else 'No'}")
-    print(f"🔑 API Key length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
-    print(f"🤖 Model: {OPENAI_MODEL}")
-except Exception as e:
-    print(f"❌ Failed to initialize OpenAI client: {str(e)}")
+# Initialize OpenAI client only if key is available
+if OPENAI_API_KEY:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        print(f"✅ OpenAI client initialized successfully")
+        print(f"🔑 API Key present: Yes")
+        print(f"🔑 API Key length: {len(OPENAI_API_KEY)}")
+        print(f"🤖 Model: {OPENAI_MODEL}")
+    except Exception as e:
+        print(f"❌ Failed to initialize OpenAI client: {str(e)}")
+        client = None
+else:
+    print("⚠️ OPENAI_API_KEY not found - some features will be limited")
+    print("📝 Add OPENAI_API_KEY to Render environment variables")
     client = None
+
+# Check Dilisense API key
+if DILISENSE_API_KEY:
+    print(f"✅ Dilisense API key loaded")
+else:
+    print("⚠️ DILISENSE_API_KEY not found - company screening will not work")
+    print("📝 Add DILISENSE_API_KEY to Render environment variables")
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production-2024'
