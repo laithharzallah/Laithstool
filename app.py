@@ -763,9 +763,17 @@ def enhanced_company_screening():
             "timestamp": datetime.utcnow().isoformat(),
             "data_sources": ["Dilisense Company Screening", "Real-time Web Search"],
             "dilisense": dilisense_results,
-            "web_search": web_search_results,
-            "categorized_results": web_search_results.get("categorized_results", {}),
-            "total_results": web_search_results.get("total_results", 0),
+            "web_search": {
+                "categorized_results": {
+                    "company_info": web_search_results.get("company_profile", {}).get("results", []),
+                    "executives": web_search_results.get("executives", {}).get("results", []),
+                    "adverse_media": web_search_results.get("adverse_media", {}).get("results", []),
+                    "financials": web_search_results.get("financials", {}).get("results", []),
+                    "sanctions": web_search_results.get("sanctions", {}).get("results", []),
+                    "ownership": web_search_results.get("ownership", {}).get("results", [])
+                },
+                "total_results": web_search_results.get("total_results", 0)
+            },
             "overall_risk_level": dilisense_results.get("overall_risk_level", "Low"),
             "risk_score": dilisense_results.get("risk_score", 0),
             "risk_factors": dilisense_results.get("risk_factors", [])
