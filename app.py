@@ -747,6 +747,10 @@ def enhanced_company_screening():
                 )
             )
             print(f"✅ Web search completed: {type(web_search_results)}")
+            print(f"🔍 Web search results keys: {list(web_search_results.keys()) if isinstance(web_search_results, dict) else 'Not a dict'}")
+            print(f"🔍 Company profile: {web_search_results.get('company_profile', 'Not found')}")
+            print(f"🔍 Executives: {web_search_results.get('executives', 'Not found')}")
+            print(f"🔍 Total results: {web_search_results.get('total_results', 'Not found')}")
         except Exception as service_error:
             print(f"❌ Service call failed: {service_error}")
             raise service_error
@@ -765,12 +769,12 @@ def enhanced_company_screening():
             "dilisense": dilisense_results,
             "web_search": {
                 "categorized_results": {
-                    "company_info": web_search_results.get("company_profile", {}).get("results", []),
-                    "executives": web_search_results.get("executives", {}).get("results", []),
-                    "adverse_media": web_search_results.get("adverse_media", {}).get("results", []),
-                    "financials": web_search_results.get("financials", {}).get("results", []),
-                    "sanctions": web_search_results.get("sanctions", {}).get("results", []),
-                    "ownership": web_search_results.get("ownership", {}).get("results", [])
+                    "company_info": web_search_results.get("company_profile", {}).get("results", []) if web_search_results.get("company_profile") else [],
+                    "executives": web_search_results.get("executives", {}).get("results", []) if web_search_results.get("executives") else [],
+                    "adverse_media": web_search_results.get("adverse_media", {}).get("results", []) if web_search_results.get("adverse_media") else [],
+                    "financials": web_search_results.get("financials", {}).get("results", []) if web_search_results.get("financials") else [],
+                    "sanctions": web_search_results.get("sanctions", {}).get("results", []) if web_search_results.get("sanctions") else [],
+                    "ownership": web_search_results.get("ownership", {}).get("results", []) if web_search_results.get("ownership") else []
                 },
                 "total_results": web_search_results.get("total_results", 0)
             },
@@ -781,6 +785,11 @@ def enhanced_company_screening():
         
         print(f"✅ Enhanced screening completed for {company_name}")
         print(f"📊 Final results structure: {list(combined_results.keys())}")
+        print(f"🔍 Web search structure: {list(combined_results['web_search'].keys())}")
+        print(f"🔍 Categorized results: {list(combined_results['web_search']['categorized_results'].keys())}")
+        print(f"🔍 Company info count: {len(combined_results['web_search']['categorized_results']['company_info'])}")
+        print(f"🔍 Executives count: {len(combined_results['web_search']['categorized_results']['executives'])}")
+        print(f"🔍 Total results: {combined_results['web_search']['total_results']}")
         return jsonify(combined_results)
         
     except Exception as e:
