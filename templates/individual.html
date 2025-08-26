@@ -1,0 +1,92 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<section class="grid gap-6">
+    <!-- Individual Screening Form -->
+    <div class="surface p-6">
+        <div class="text-lg font-semibold mb-4">Individual Screening</div>
+        <form id="indForm" class="grid md:grid-cols-2 gap-4">
+            <!-- Personal Information -->
+            <div>
+                <label class="text-sm text-[var(--text-1)]">Full Name *</label>
+                <input name="fullName" class="input w-full" required placeholder="e.g., John Doe">
+            </div>
+            <div>
+                <label class="text-sm text-[var(--text-1)]">Date of Birth</label>
+                <input name="dob" type="date" class="input w-full">
+            </div>
+            <div>
+                <label class="text-sm text-[var(--text-1)]">Nationality</label>
+                <input name="nationality" class="input w-full" placeholder="e.g., Saudi">
+            </div>
+            <div>
+                <label class="text-sm text-[var(--text-1)]">ID Number</label>
+                <input name="idNumber" class="input w-full" placeholder="Passport, National ID, etc.">
+            </div>
+            
+            <!-- Additional Fields -->
+            <div>
+                <label class="text-sm text-[var(--text-1)]">Occupation</label>
+                <input name="occupation" class="input w-full" placeholder="e.g., Business Executive">
+            </div>
+            <div>
+                <label class="text-sm text-[var(--text-1)]">Company</label>
+                <input name="company" class="input w-full" placeholder="Current employer">
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="md:col-span-2 flex gap-3 mt-2">
+                <button class="btn" type="submit">
+                    <span class="mr-2">🔍</span>Run Screening
+                </button>
+                <button type="button" class="btn-ghost" id="btnExport">
+                    <span class="mr-2">📥</span>Export Results
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Results Section -->
+    <div class="surface p-6">
+        {% include "partials/_results.html" %}
+    </div>
+</section>
+
+<script>
+const form = document.getElementById('indForm');
+
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const payload = Object.fromEntries(new FormData(form).entries());
+    
+    showSkeleton(true);
+    
+    try {
+        const res = await fetch('/api/screening/individual', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            toast('Error: ' + (data.error || 'request failed'), 'error');
+            return;
+        }
+        
+        renderIndividualResults(data);
+        toast('Individual screening completed successfully', 'success');
+        
+    } catch (error) {
+        toast('Network error: ' + error.message, 'error');
+    } finally {
+        showSkeleton(false);
+    }
+});
+
+// Export handler
+document.getElementById('btnExport').addEventListener('click', exportReport);
+</script>
+{% endblock %}

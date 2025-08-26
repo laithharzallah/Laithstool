@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en" x-data="{ theme: localStorage.theme || 'dark' }" 
+      x-init="document.documentElement.classList.toggle('dark', theme==='dark'); 
+               $watch('theme', v => { localStorage.theme=v; document.documentElement.classList.toggle('dark', v==='dark')})">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Risklytics • {{ env_name }}</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link href="{{ url_for('static', filename='css/tokens.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'mono': ['JetBrains Mono', 'monospace'],
+                        'sans': ['Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- ECharts for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+
+<body class="bg-[var(--bg-0)] text-[var(--text-0)] min-h-screen">
+    <!-- Global Top Bar -->
+    <header class="sticky top-0 z-40 backdrop-blur bg-black/20 border-b border-white/10">
+        <div class="mx-auto max-w-[1440px] px-6 h-16 flex items-center justify-between">
+            <!-- Left: Brand and Environment -->
+            <div class="flex items-center gap-4">
+                <div class="font-bold text-lg tracking-wide">
+                    <span class="text-[var(--brand-500)]">Risk</span>lytics
+                </div>
+                <span class="chip hidden md:inline">Env: {{ env_name }}</span>
+                <span class="chip hidden md:inline">v{{ version }}</span>
+            </div>
+            
+            <!-- Right: Search and Theme -->
+            <div class="flex items-center gap-3">
+                <!-- Global Search -->
+                <div class="hidden md:flex items-center bg-[var(--bg-2)] border border-white/10 rounded-xl px-3 py-2 w-96">
+                    <input id="globalSearch" 
+                           class="bg-transparent outline-none w-full text-sm" 
+                           placeholder="Search entities, cases, datasets (⌘/Ctrl+K)">
+                </div>
+                
+                <!-- Theme Toggle -->
+                <button class="btn-ghost" @click="theme = theme==='dark' ? 'light' : 'dark'">
+                    <span x-show="theme==='dark'">☀️</span>
+                    <span x-show="theme==='light'">🌙</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="mx-auto max-w-[1440px] px-6 grid grid-cols-12 gap-6 mt-6">
+        <!-- Left Sidebar Navigation -->
+        <aside class="col-span-12 lg:col-span-2">
+            <nav class="space-y-1">
+                <a href="{{ url_for('company_screening') }}" 
+                   class="surface block px-4 py-3 hover:opacity-90 transition-opacity">
+                    🏢 Company Screening
+                </a>
+                <a href="{{ url_for('individual_screening') }}" 
+                   class="surface block px-4 py-3 hover:opacity-90 transition-opacity">
+                    👤 Individual Screening
+                </a>
+                <div class="surface px-4 py-3 opacity-60">📁 Cases</div>
+                <div class="surface px-4 py-3 opacity-60">📊 Datasets</div>
+                <div class="surface px-4 py-3 opacity-60">📋 Reports</div>
+                <div class="surface px-4 py-3 opacity-60">🛡️ Risk Management (soon)</div>
+                <div class="surface px-4 py-3 opacity-60">🤖 Risk AI (soon)</div>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="col-span-12 lg:col-span-10">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+    
+    <!-- Global Search Keyboard Shortcut -->
+    <script>
+        document.addEventListener('keydown', function(e) {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                document.getElementById('globalSearch').focus();
+            }
+        });
+    </script>
+</body>
+</html>

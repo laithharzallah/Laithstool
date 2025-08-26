@@ -1,0 +1,146 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<section class="grid gap-6">
+    <!-- KPI Dashboard -->
+    <div class="grid md:grid-cols-4 gap-4">
+        <div class="kpi-tile">
+            <div class="text-sm text-[var(--text-1)]">Overall Risk</div>
+            <div class="text-2xl font-bold font-mono" id="kpi-overall">—</div>
+        </div>
+        <div class="kpi-tile">
+            <div class="text-sm text-[var(--text-1)]">Sanctions</div>
+            <div class="text-xl font-mono" id="kpi-sanc">—</div>
+        </div>
+        <div class="kpi-tile">
+            <div class="text-sm text-[var(--text-1)]">PEP</div>
+            <div class="text-xl font-mono" id="kpi-pep">—</div>
+        </div>
+        <div class="kpi-tile">
+            <div class="text-sm text-[var(--text-1)]">Adverse Media</div>
+            <div class="text-xl font-mono" id="kpi-adv">—</div>
+        </div>
+    </div>
+
+    <!-- Company Screening Form -->
+    <div class="surface p-6">
+        <div class="text-lg font-semibold mb-4">Company Screening</div>
+        <form id="companyForm" class="grid md:grid-cols-2 gap-4">
+            <!-- Company Information -->
+            <div>
+                <label class="text-sm text-[var(--text-1)]">Company Name *</label>
+                <input name="companyName" class="input w-full" placeholder="e.g., Rawabi Holding" required>
+            </div>
+            <div>
+                <label class="text-sm text-[var(--text-1)]">Country</label>
+                <input name="country" class="input w-full" placeholder="e.g., Saudi Arabia">
+            </div>
+            <div>
+                <label class="text-sm text-[var(--text-1)]">Domain</label>
+                <input name="domain" class="input w-full" placeholder="e.g., rawabiholding.com">
+            </div>
+            <div>
+                <label class="text-sm text-[var(--text-1)]">LEI / Reg ID</label>
+                <input name="lei" class="input w-full" placeholder="Legal Entity Identifier">
+            </div>
+            
+            <!-- Jurisdiction Selection -->
+            <div class="md:col-span-2">
+                <label class="text-sm text-[var(--text-1)] mb-2 block">Jurisdictions</label>
+                <div class="flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="jurisdiction-chip" data-jurisdiction="US">🇺🇸 United States</button>
+                    <button type="button" class="jurisdiction-chip" data-jurisdiction="EU">🇪🇺 European Union</button>
+                    <button type="button" class="jurisdiction-chip" data-jurisdiction="UN">🇺🇳 United Nations</button>
+                    <button type="button" class="jurisdiction-chip" data-jurisdiction="UK">🇬🇧 United Kingdom</button>
+                    <button type="button" class="jurisdiction-chip" data-jurisdiction="CA">🇨🇦 Canada</button>
+                    <button type="button" class="jurisdiction-chip" data-jurisdiction="GCC">🏴 Gulf Cooperation Council</button>
+                </div>
+                <input name="jurisdictions" class="input w-full" placeholder="Selected jurisdictions will appear here" readonly>
+            </div>
+            
+            <!-- Fuzzy Threshold -->
+            <div>
+                <label class="text-sm text-[var(--text-1)]">Fuzzy Threshold (0.0–1.0)</label>
+                <input name="fuzzy" type="number" min="0" max="1" step="0.05" value="0.8" class="input w-full">
+                <div class="text-xs text-[var(--text-1)] mt-1">Higher values = more exact matches</div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="md:col-span-2 flex flex-wrap gap-3 mt-2">
+                <button type="submit" class="btn">
+                    <span class="mr-2">🔍</span>Run Screening
+                </button>
+                <button type="button" class="btn-ghost" id="btnQueue">
+                    <span class="mr-2">⏳</span>Queue Job
+                </button>
+                <button type="button" class="btn-ghost" id="btnExport">
+                    <span class="mr-2">📥</span>Export
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Results Section -->
+    <div class="surface p-6">
+        {% include "partials/_results.html" %}
+    </div>
+</section>
+
+<script>
+// Jurisdiction chip selection
+document.querySelectorAll('.jurisdiction-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+        this.classList.toggle('selected');
+        updateJurisdictions();
+    });
+});
+
+function updateJurisdictions() {
+    const selected = Array.from(document.querySelectorAll('.jurisdiction-chip.selected'))
+        .map(chip => chip.textContent.trim());
+    document.querySelector('input[name="jurisdictions"]').value = selected.join(', ');
+}
+
+// Form submission
+const form = document.getElementById('companyForm');
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const payload = Object.fromEntries(new FormData(form).entries());
+    payload.jurisdictions = (payload.jurisdictions || '').split(',').map(s => s.trim()).filter(Boolean);
+    payload.fuzzy = parseFloat(payload.fuzzy || '0.8');
+    
+    showSkeleton(true);
+    
+    try {
+        const res = await fetch('/api/screening/company', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            toast('Error: ' + (data.error || 'request failed'), 'error');
+            return;
+        }
+        
+        renderCompanyResults(data);
+        toast('Screening completed successfully', 'success');
+        
+    } catch (error) {
+        toast('Network error: ' + error.message, 'error');
+    } finally {
+        showSkeleton(false);
+    }
+});
+
+// Button handlers
+document.getElementById('btnQueue').addEventListener('click', () => {
+    toast('Queued for processing (demo)', 'info');
+});
+
+document.getElementById('btnExport').addEventListener('click', exportReport);
+</script>
+{% endblock %}
