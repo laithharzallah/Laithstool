@@ -820,6 +820,8 @@ def enhanced_company_screening():
         print(f"🔍 Error details: {error_details}")
         return jsonify(error_details), 500
 
+
+
 @app.route("/api/individual-screen", methods=["POST"])
 def individual_screening_api():
     """Individual screening with Dilisense"""
