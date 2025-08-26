@@ -14,6 +14,10 @@ if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.
 else:
     print("🌍 Production mode: using system environment variables")
 
+# Version and configuration
+VERSION = "2.3.0"
+ENV_NAME = os.environ.get("FLASK_ENV", "development").capitalize()
+
 # Load API keys from environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 DILISENSE_API_KEY = os.getenv("DILISENSE_API_KEY", "")
