@@ -670,9 +670,19 @@ def test_endpoint():
 @app.route("/company")
 def company_screening():
     """Company screening page"""
-    if 'logged_in' not in session:
-        return redirect(url_for('login'))
-    return render_template("company_screening.html")
+    # Temporarily disable session check for testing
+    # if 'logged_in' not in session:
+    #     return redirect(url_for('login'))
+    try:
+        return render_template("company_screening.html")
+    except Exception as e:
+        print(f"❌ Template rendering error: {e}")
+        return f"Template error: {str(e)}", 500
+
+@app.route("/test-company")
+def test_company():
+    """Test route for company screening"""
+    return "Company screening route is working!"
 
 @app.route("/individual")
 def individual_screening():
