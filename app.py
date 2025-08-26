@@ -7,12 +7,12 @@ from typing import List, Optional, Literal
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# Load environment variables (works for both local .env and Render environment variables)
-try:
+# Load environment variables only in development or if .env exists locally
+if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
     load_dotenv()
     print("✅ Environment variables loaded from .env file")
-except Exception as e:
-    print(f"⚠️ .env file not found, using system environment variables: {e}")
+else:
+    print("🌍 Production mode: using system environment variables")
 
 # Load API keys from environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -42,7 +42,12 @@ if DILISENSE_API_KEY:
     print(f"✅ Dilisense API key loaded")
 else:
     print("⚠️ DILISENSE_API_KEY not found - company screening will not work")
-    print("📝 Add DILISENSE_API_KEY to Render environment variables")
+    print("📝 Add DILISENSE_API_KEY in Render → Environment")
+
+# Check OpenAI API key
+if not os.environ.get('OPENAI_API_KEY'):
+    print("⚠️ OPENAI_API_KEY missing; features limited")
+    print("📝 Add OPENAI_API_KEY in Render → Environment")
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production-2024'
