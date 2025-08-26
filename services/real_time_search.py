@@ -12,6 +12,10 @@ import logging
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 import re
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +46,16 @@ class RealTimeSearchService:
         """Initialize available search providers"""
         providers = []
         
-        # Serper API (Google search)
+        # ChatGPT-5 Web Search (Primary)
+        if self.openai_client:
+            providers.append({
+                "name": "chatgpt5_web_search",
+                "type": "ai_web_search",
+                "api_key": os.getenv("OPENAI_API_KEY"),
+                "base_url": None
+            })
+        
+        # Serper API (Google search - Fallback)
         serper_key = os.getenv("SERPER_API_KEY")
         if serper_key:
             providers.append({
