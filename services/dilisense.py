@@ -270,13 +270,23 @@ class DilisenseService:
         
         # Update risk assessment
         base_result['overall_risk_level'] = self._calculate_individual_risk_level(base_result)
+        # Compute risk factors inline (avoid missing helper issues)
+        factors = []
+        if base_result['sanctions']['total_hits'] > 0:
+            factors.append("Sanctions listed")
+        if base_result['pep']['total_hits'] > 0:
+            factors.append("PEP status")
+        if base_result['criminal']['total_hits'] > 0:
+            factors.append("Criminal records")
+        if base_result['other']['total_hits'] > 0:
+            factors.append("Other adverse records")
+        base_result['risk_factors'] = factors
         # Add risk score for downstream UIs
         base_result['risk_score'] = self._score_from_buckets(
             base_result['sanctions']['total_hits'],
             base_result['pep']['total_hits'],
             base_result['criminal']['total_hits']
         )
-        base_result['risk_factors'] = self._identify_individual_risk_factors(base_result)
         
         # Add metadata about variations tried
         base_result['name_variations_tried'] = [r['variation'] for r in all_results]

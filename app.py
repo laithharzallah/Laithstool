@@ -128,7 +128,7 @@ async def _screen_company(company: str, country: str = "", domain: str = "") -> 
         "risk_score": risk_score,
         "overall_risk_level": overall,
         "risk_factors": (dilisense_results or {}).get("risk_factors", []),
-        "data_sources": ["Dilisense API", "OpenAI GPT-4o live search"]
+        "data_sources": ["Dilisense API", "Serper + GPT-4o"]
     }
 
 def _run_company_task(task_id, data):
@@ -1029,7 +1029,7 @@ def enhanced_company_screening():
             "company": company_name.upper(),
             "country": country.upper() if country else "N/A",
             "timestamp": datetime.utcnow().isoformat(),
-            "data_sources": ["Dilisense API", "OpenAI Live Search (gpt-4o)"],
+            "data_sources": ["Dilisense API", "Serper + GPT-4o"],
             "dilisense": dilisense_results,
             "web_search": web_search_results,
             "overall_risk_level": overall,
@@ -1133,7 +1133,7 @@ def individual_screening_api():
             "overall_risk_level": overall,
             "risk_score": risk_score,
             "risk_factors": screening_results.get("risk_factors", []),
-            "data_sources": ["Dilisense API", "OpenAI Live Search (gpt-4o)"]
+            "data_sources": ["Dilisense API", "Serper + GPT-4o"]
         }
         
         print(f"✅ Individual screening completed for {name}")

@@ -6,6 +6,7 @@ import os
 import json
 import asyncio
 from typing import Dict, List, Optional, Any
+import httpx
 from datetime import datetime, timedelta
 import logging
 from openai import OpenAI
@@ -150,12 +151,20 @@ class RealTimeSearchService:
         return force_json(raw, schema_example)
 
     def _initialize_search_providers(self) -> List[Dict]:
-        """LLM-only provider configuration"""
-        return [{
+        """Configure providers: LLM and Serper if available."""
+        providers: List[Dict[str, Any]] = [{
             "name": "chatgpt4o_live",
             "type": "llm",
             "model": self.openai_model,
         }]
+        if os.getenv("SERPER_API_KEY"):
+            providers.append({
+                "name": "serper",
+                "type": "google_search",
+                "base_url": "https://google.serper.dev/search",
+                "api_key": os.getenv("SERPER_API_KEY")
+            })
+        return providers
 
     async def comprehensive_search(self, company: str, country: str) -> Dict[str, Any]:
         """Comprehensive LLM-only extraction across intents, schema-first."""
@@ -247,37 +256,44 @@ class RealTimeSearchService:
             }
 
     async def _search_intent(self, company: str, country: str, intent: str) -> Dict[str, Any]:
-        """Search for a specific intent using strict LLM extraction, with Serper and scraping enrichment."""
+        """Serper-first search; then LLM structures into schema and returns total_found."""
         try:
             country_filter = f" {country}" if country else ""
-
-            # STRICT schema-first extraction with optional URL enrichment; returns early
             schema = self.INTENT_SCHEMAS.get(intent, {})
-            prompt = self._intent_prompt(intent, company, country)
+
+            real_search_results: List[Dict[str, Any]] = []
+            # Run Serper first if available
+            for provider in self.search_providers:
+                if provider.get("type") == "google_search":
+                    try:
+                        q = f"{company}{country_filter} {intent}"
+                        serper_results = await self._serper_search(provider, q)
+                        if serper_results:
+                            real_search_results.extend(serper_results)
+                            print(f"✅ Serper search results received: {len(serper_results)} items")
+                    except Exception as e:
+                        print(f"⚠️ Serper search failed for {intent}: {e}")
+
+            # Build a strict prompt that includes the schema-by-example and the search context
+            base_prompt = self._intent_prompt(intent, company, country)
+            context_blob = json.dumps(real_search_results[:10], ensure_ascii=False)
+            struct_prompt = (
+                base_prompt +
+                "\nUse ONLY the allowed keys and set null if unknown.\n" +
+                "Context search results (JSON array of {title,url,snippet,source}):\n" +
+                context_blob
+            )
+
+            # Call LLM to structure according to schema
             try:
-                extracted = self._llm_json(prompt, schema) if self.openai_client else schema
+                extracted = self._llm_json(struct_prompt, schema) if self.openai_client else schema
+                print("✅ GPT-4o structured response parsed")
             except Exception as e:
-                print(f"⚠️ LLM extraction failed for {intent}: {e}")
+                print(f"⚠️ LLM structuring failed for {intent}: {e}")
                 extracted = schema
 
-            # Final prune and return (LLM-only mode)
             clean = prune_to_schema(extracted, schema)
-            # Compute count consistently per intent
-            if intent == "executives":
-                total_found = len(clean.get("executives", [])) if isinstance(clean.get("executives"), list) else 0
-            elif intent == "adverse_media":
-                total_found = len(clean.get("adverse_media", [])) if isinstance(clean.get("adverse_media"), list) else 0
-            elif intent == "company_profile":
-                total_found = 1 if clean.get("company_info") else 0
-            elif intent == "financials":
-                total_found = 1 if clean.get("financial_data") else 0
-            elif intent == "sanctions":
-                total_found = 1 if clean.get("sanctions_status") else 0
-            elif intent == "ownership":
-                total_found = 1 if clean.get("ownership_structure") else 0
-            else:
-                total_found = 0
-
+            total_found = self._count_for_intent(intent, clean)
             return {"intent": intent, "results": clean, "total_found": total_found}
 
             # Create ChatGPT-5 search prompt for this intent
@@ -970,8 +986,32 @@ Focus on extracting factual information from the real search results provided.""
             return {"error": f"Intent search failed: {str(e)}"}
 
     async def _serper_search(self, provider: Dict, query: str) -> List[Dict]:
-        """No-op: Serper disabled in LLM-only mode"""
-        return []
+        """Query Serper (Google Search API) for results."""
+        try:
+            headers = {"X-API-KEY": provider.get("api_key", ""), "Content-Type": "application/json"}
+            payload = {"q": query, "num": 10}
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+                resp = await client.post(provider.get("base_url", "https://google.serper.dev/search"), headers=headers, json=payload)
+                if resp.status_code != 200:
+                    raise RuntimeError(f"Serper status {resp.status_code}")
+                data = resp.json()
+                organic = data.get("organic", []) or []
+                out: List[Dict[str, Any]] = []
+                for it in organic:
+                    link = it.get("link")
+                    if not link:
+                        continue
+                    out.append({
+                        "title": it.get("title", ""),
+                        "url": link,
+                        "snippet": it.get("snippet", ""),
+                        "source": "Google Search (Serper)",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                return out
+        except Exception as e:
+            print(f"❌ Serper search error: {e}")
+            return []
 
 
 
