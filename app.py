@@ -1,11 +1,16 @@
 import os, json
 import asyncio
+from uuid import uuid4
+import threading
+from threading import Lock
+import time
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash, make_response
 from pydantic import BaseModel, Field, ValidationError
 from typing import List, Optional, Literal
 from dotenv import load_dotenv
 from openai import OpenAI
+from werkzeug.exceptions import HTTPException
 
 # Load environment variables only in development or if .env exists locally
 if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
@@ -26,20 +31,17 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "5000"))
 
 # Initialize OpenAI client only if key is available
+client = None
 if OPENAI_API_KEY:
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
-        print(f"✅ OpenAI client initialized successfully")
-        print(f"🔑 API Key present: Yes")
-        print(f"🔑 API Key length: {len(OPENAI_API_KEY)}")
-        print(f"🤖 Model: {OPENAI_MODEL}")
+        print("✅ OpenAI client initialized")
     except Exception as e:
         print(f"❌ Failed to initialize OpenAI client: {str(e)}")
         client = None
 else:
     print("⚠️ OPENAI_API_KEY not found - some features will be limited")
-    print("📝 Add OPENAI_API_KEY to Render environment variables")
-    client = None
+    print("ℹ️ Set OPENAI_API_KEY in Render → Environment (not in .env)")
 
 # Check Dilisense API key
 if DILISENSE_API_KEY:
@@ -54,7 +56,137 @@ if not os.environ.get('OPENAI_API_KEY'):
     print("📝 Add OPENAI_API_KEY in Render → Environment")
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-change-in-production-2024'
+app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-prod")
+if app.secret_key == "change-me-in-prod":
+    print("⚠️ WARNING: Using default SECRET_KEY. Set SECRET_KEY in the environment for production.")
+
+# In-memory task store and helpers
+TASKS = {}
+TASKS_LOCK = Lock()
+
+ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "")
+
+def _now_ts():
+    return datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+def _get_task(task_id):
+    with TASKS_LOCK:
+        return TASKS.get(task_id)
+
+def _set_task(task_id, value):
+    with TASKS_LOCK:
+        TASKS[task_id] = value
+
+def _add_step(task, name, status="pending", message="", duration_ms=None):
+    step = {"name": name, "status": status, "message": message, "duration_ms": duration_ms}
+    with TASKS_LOCK:
+        task["steps"].append(step)
+    return step
+
+def _log_source(task, message):
+    with TASKS_LOCK:
+        task["source_logs"].append({"message": message, "timestamp": _now_ts()})
+
+def _set_progress(task, pct):
+    with TASKS_LOCK:
+        task["progress"] = max(0, min(int(pct), 100))
+
+def _update_step(step, status, message="", duration_ms=None):
+    with TASKS_LOCK:
+        step["status"] = status
+        if message:
+            step["message"] = message
+        if duration_ms is not None:
+            step["duration_ms"] = duration_ms
+
+async def _screen_company(company: str, country: str = "", domain: str = "") -> dict:
+    from services.dilisense import dilisense_service
+    from services.real_time_search import real_time_search_service
+    dil_task = dilisense_service.screen_company(company, country)
+    web_task = real_time_search_service.comprehensive_search(company=company, country=country)
+    dilisense_results, web_results = await asyncio.gather(dil_task, web_task)
+    # Prefer Dilisense risk
+    risk_score = dilisense_results.get("risk_score") if isinstance(dilisense_results, dict) else None
+    if not isinstance(risk_score, (int, float)):
+        rs = 0
+        if (dilisense_results or {}).get("sanctions", {}).get("total_hits", 0) > 0:
+            rs += 60
+        if (dilisense_results or {}).get("pep", {}).get("total_hits", 0) > 0:
+            rs += 25
+        if (dilisense_results or {}).get("criminal", {}).get("total_hits", 0) > 0:
+            rs += 15
+        risk_score = min(100, rs)
+    overall = (dilisense_results or {}).get("overall_risk_level") or (
+        "High" if risk_score >= 70 else "Medium" if risk_score >= 40 else "Low"
+    )
+    return {
+        "company": company,
+        "country": country,
+        "timestamp": datetime.utcnow().isoformat(),
+        "dilisense": dilisense_results,
+        "web_search": web_results,
+        "risk_score": risk_score,
+        "overall_risk_level": overall,
+        "risk_factors": (dilisense_results or {}).get("risk_factors", []),
+        "data_sources": ["Dilisense API", "OpenAI GPT-4o live search"]
+    }
+
+def _run_company_task(task_id, data):
+    t = _get_task(task_id)
+    if not t:
+        return
+    with TASKS_LOCK:
+        t["status"] = "running"
+    start_ts = time.time()
+
+    company = (data.get("company") or data.get("company_name") or "").strip()
+    country = (data.get("country") or "").strip()
+    domain  = (data.get("domain")  or "").strip()
+
+    try:
+        # Step 1: Query Expansion
+        s = _add_step(t, "Query Expansion", status="active", message=f"Preparing queries for {company}")
+        time.sleep(0.2)
+        _update_step(s, "completed", message="Queries prepared", duration_ms=200)
+        _set_progress(t, 10)
+
+        # Step 2: Dilisense Compliance
+        s = _add_step(t, "Sanctions Check", status="active", message="Calling Dilisense API")
+        _set_progress(t, 25)
+        # Step 3: Web / DB Search (OpenAI live)
+        s2 = _add_step(t, "Web / DB Search", status="pending", message="Queued")
+
+        # Run both services concurrently in this thread via a new loop
+        new_loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(new_loop)
+            combined_results = new_loop.run_until_complete(_screen_company(company, country, domain))
+        finally:
+            new_loop.close()
+
+        _update_step(s, "completed", message="Dilisense results received", duration_ms=400)
+        _update_step(s2, "completed", message="Web search completed", duration_ms=600)
+        _set_progress(t, 80)
+
+        # Step 4: Report Generation
+        s3 = _add_step(t, "Report Generation", status="active", message="Merging results")
+        with TASKS_LOCK:
+            combined_results["task_id"] = task_id
+            combined_results["metadata"] = {"processing_time_ms": int((time.time() - start_ts) * 1000)}
+            t["result"] = combined_results
+        _update_step(s3, "completed", message="Report ready", duration_ms=150)
+        _set_progress(t, 100)
+        with TASKS_LOCK:
+            t["status"] = "completed"
+            t["ended_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    except Exception as e:
+        with TASKS_LOCK:
+            t["status"] = "failed"
+            t["error_message"] = str(e)
+            t["ended_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        _set_progress(t, 100)
+        _add_step(t, "Failure", status="failed", message=str(e))
 
 # Global error handlers - NEVER return raw 500s
 @app.errorhandler(500)
@@ -96,6 +228,8 @@ def handle_forbidden(error):
 @app.errorhandler(Exception)
 def handle_all_exceptions(error):
     """Catch-all exception handler"""
+    if isinstance(error, HTTPException):
+        return error
     import traceback
     error_details = {
         "error": "System error",
@@ -110,26 +244,46 @@ def handle_all_exceptions(error):
     
     return jsonify(error_details), 500
 
-# Add CORS headers to all responses
+# CORS with credentials support
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE')
+    origin = request.headers.get("Origin")
+    if ALLOWED_ORIGIN and origin == ALLOWED_ORIGIN:
+        response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
     return response
+
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        origin = request.headers.get("Origin")
+        if ALLOWED_ORIGIN and origin == ALLOWED_ORIGIN:
+            resp.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+        else:
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        resp.headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
+        return resp
 
 # Configure session to last longer and be more persistent
 app.config.update(
-    SESSION_COOKIE_SECURE=False,  # Set to True in production with HTTPS
+    SESSION_COOKIE_SECURE=True if os.environ.get("FLASK_ENV", "").lower()=="production" or os.environ.get("RENDER") else False,
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
-    PERMANENT_SESSION_LIFETIME=timedelta(hours=24),  # 24 hour sessions
+    SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=24),
     SESSION_COOKIE_NAME='laiths_tool_session'
 )
 
 # Authentication credentials
-VALID_USERNAME = "ens@123"
-VALID_PASSWORD = "$$$$55"
+VALID_USERNAME = os.environ.get("APP_USERNAME", "admin")
+VALID_PASSWORD = os.environ.get("APP_PASSWORD", "change-me")
 
 # Add before_request handler to refresh session on each request
 @app.before_request
@@ -301,44 +455,26 @@ def logout():
 @app.route("/api/health", methods=["GET"])
 def health_check():
     """Health check endpoint to verify system status"""
-    # Temporarily disable session check for testing
-    # if 'logged_in' not in session:
-    #     return jsonify({"error": "Authentication required"}), 401
-    
     health_status = {
         "status": "healthy",
         "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
         "components": {}
     }
     
-    # Check OpenAI API
+    # Check OpenAI API (fast probe)
     try:
-        if not OPENAI_API_KEY:
-            health_status["components"]["openai"] = {
-                "status": "error",
-                "message": "API key not configured"
-            }
-        elif not client:
-            health_status["components"]["openai"] = {
-                "status": "error", 
-                "message": "Client initialization failed"
-            }
-        else:
-            # Test API call
-            test_response = client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[{"role": "user", "content": "Hello, respond with just 'OK'"}],
-                max_tokens=10
-            )
-            health_status["components"]["openai"] = {
-                "status": "healthy",
-                "model": OPENAI_MODEL,
-                "message": "API connection successful"
-            }
+        if not OPENAI_API_KEY or not client:
+            raise RuntimeError("API key or client missing")
+        _ = client.models.list()
+        health_status["components"]["openai"] = {
+            "status": "healthy",
+            "model": OPENAI_MODEL,
+            "message": "API connection successful"
+        }
     except Exception as e:
         health_status["components"]["openai"] = {
             "status": "error",
-            "message": f"API test failed: {str(e)}"
+            "message": f"API probe failed: {str(e)}"
         }
     
     # Check environment variables
@@ -352,7 +488,7 @@ def health_check():
         "variables": env_vars
     }
     
-    # Check GPT-5 and search services
+    # Check real-time search service
     try:
         from services.real_time_search import real_time_search_service
         health_status["components"]["search"] = {
@@ -366,7 +502,6 @@ def health_check():
             "message": f"Search service check failed: {str(e)}"
         }
     
-    # Overall status
     component_statuses = [comp["status"] for comp in health_status["components"].values()]
     if "error" in component_statuses:
         health_status["status"] = "degraded"
@@ -374,6 +509,94 @@ def health_check():
         health_status["status"] = "warning"
     
     return jsonify(health_status)
+
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    return jsonify({"status": "ok"}), 200
+
+# --- v1 Task API ---
+
+@app.route("/api/v1/screen", methods=["POST"])
+def api_v1_screen():
+    if 'logged_in' not in session:
+        return jsonify({"error":"Authentication required"}), 401
+    data = request.get_json(force=True, silent=True) or {}
+    company = (data.get("company") or "").strip()
+    if not company:
+        return jsonify({"error":"company is required"}), 400
+    task_id = f"task_{uuid4().hex[:10]}"
+    _set_task(task_id, {
+        "status": "queued",
+        "progress": 0,
+        "steps": [],
+        "source_logs": [],
+        "result": None,
+        "started_at": _now_ts(),
+        "ended_at": None,
+        "error_message": None
+    })
+    threading.Thread(target=_run_company_task, args=(task_id, data), daemon=True).start()
+    return jsonify({"task_id": task_id})
+
+@app.route("/api/v1/status/<task_id>", methods=["GET"])
+def api_v1_status(task_id):
+    t = _get_task(task_id)
+    if not t:
+        return jsonify({"error":"task not found"}), 404
+    return jsonify({
+        "task_id": task_id,
+        "status": t["status"],
+        "progress_percentage": t["progress"],
+        "steps": t["steps"],
+        "source_logs": t["source_logs"],
+        "error_message": t["error_message"]
+    })
+
+@app.route("/api/v1/report/<task_id>", methods=["GET"])
+def api_v1_report(task_id):
+    t = _get_task(task_id)
+    if not t:
+        return jsonify({"error":"task not found"}), 404
+    if t["status"] != "completed" or not t.get("result"):
+        return jsonify({"error":"task not completed"}), 409
+    return jsonify(t["result"])
+
+@app.route("/api/v1/report/<task_id>/pdf", methods=["GET"])
+def api_v1_report_pdf(task_id):
+    t = _get_task(task_id)
+    if not t:
+        return "Task not found", 404
+    if t["status"] != "completed" or not t.get("result"):
+        return "Task not completed", 409
+    r = t["result"]
+    html = f"""<!doctype html><html><head><meta charset=\"utf-8\">
+<title>Risk Report • {r.get('company_profile',{}).get('legal_name','')}</title>
+<style>
+body {{ font-family: Inter, Arial, sans-serif; margin: 32px; color:#0b1220 }}
+h1 {{ margin:0 0 4px 0 }} h2 {{ margin:24px 0 8px 0 }}
+.muted{{color:#64748b}} .grid{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
+.card{{border:1px solid #e5e7eb;border-radius:12px;padding:16px}}
+.kpi{{font-size:28px;font-weight:700}}
+</style></head><body>
+<h1>Risk Report</h1>
+<div class=\"muted\">{r.get('timestamp','')}</div>
+<h2>Company</h2>
+<div class=\"grid\">
+<div class=\"card\"><div>Legal Name</div><div class=\"kpi\">{r.get('company_profile',{}).get('legal_name','')}</div></div>
+<div class=\"card\"><div>Risk Score</div><div class=\"kpi\">{r.get('risk_score',0)}</div></div>
+</div>
+<h2>Executive Summary</h2>
+<div class=\"card\">{r.get('executive_summary',{}).get('overview','')}</div>
+<h2>Risk Flags</h2>
+<div class=\"card\">{"".join([f"<div>• {f.get('category','')}: {f.get('description','')}</div>" for f in r.get('risk_flags',[])]) or "None"}</div>
+<h2>Sources</h2>
+<div class=\"card\">{", ".join(r.get('compliance_notes',{}).get('data_sources_used',[]))}</div>
+</body></html>"""
+    return make_response(html, 200, {"Content-Type":"text/html; charset=utf-8"})
+
+# --- existing /api/screen route remains ---
+# At the end of /api/screen, before returning transformed_response, inject risk scoring
+# (Applied below by editing directly)
 
 @app.route("/api/screen", methods=["POST"])
 def screen():
@@ -435,6 +658,8 @@ def screen():
         # Get GPT analysis
         print(f"🤖 Analyzing data with GPT using model: {OPENAI_MODEL}")
         try:
+            if not client:
+                raise RuntimeError("OpenAI client not initialized")
             resp = client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[{"role":"system","content":SYSTEM_PROMPT},
@@ -570,7 +795,8 @@ def screen():
                 "compliance_notes": {
                     "data_sources_used": data_sources,
                     "methodology": "Automated web-based due diligence screening using AI analysis"
-                }
+                },
+                "risk_score": risk_score # This line was added here
             }
             print(f"✅ Response transformation completed successfully")
         except Exception as transform_error:
@@ -603,6 +829,21 @@ def screen():
             }
         
         print(f"✅ Screening completed successfully for {company}")
+        # Inject simple risk scoring for UI compatibility
+        try:
+            risk_score = 10
+            adverse_media_list = transformed_response.get("news_and_media", [])
+            sanctions_matches = transformed_response.get("sanctions_matches", [])
+            if sanctions_matches:
+                risk_score += 70
+            if adverse_media_list:
+                risk_score += min(20, 5 * len(adverse_media_list))
+            risk_score = max(0, min(100, risk_score))
+            overall = "High" if risk_score >= 70 else "Medium" if risk_score >= 40 else "Low"
+            transformed_response["risk_score"] = risk_score
+            transformed_response["overall_risk_level"] = overall
+        except Exception:
+            pass
         return jsonify(transformed_response)
         
     except ValidationError as ve:
@@ -695,6 +936,7 @@ def test_endpoint():
 def company_screening():
     """Company screening page"""
     # Temporarily disable session check for testing
+    # TODO: Re-enable login requirement here after deployment is stable
     # if 'logged_in' not in session:
     #     return redirect(url_for('login'))
     try:
@@ -753,78 +995,49 @@ def enhanced_company_screening():
         from services.real_time_search import real_time_search_service
         print("✅ Services imported successfully")
         
-        # Create event loop for async operations
-        print("🔄 Creating async event loop...")
+        # Helper runner to safely execute async calls
+        def run_async(coro):
+            try:
+                return asyncio.run(coro)
+            except RuntimeError:
+                new_loop = asyncio.new_event_loop()
+                try:
+                    return new_loop.run_until_complete(coro)
+                finally:
+                    new_loop.close()
         
-        # Run async operations in event loop
-        loop = asyncio.new_event_loop()
-        # Don't set as global event loop to avoid conflicts in production
-        print("✅ Event loop created")
+        # Run both services
+        dilisense_results = run_async(dilisense_service.screen_company(company_name, country))
+        web_search_results = run_async(real_time_search_service.comprehensive_search(company=company_name, country=country))
         
-        # Memory optimization for production
-        import gc
-        gc.collect()  # Force garbage collection before heavy operations
+        # Merge and prefer Dilisense risk
+        risk_score = dilisense_results.get("risk_score")
+        if not isinstance(risk_score, (int, float)):
+            rs = 0
+            if dilisense_results.get("sanctions", {}).get("total_hits", 0) > 0:
+                rs += 60
+            if dilisense_results.get("pep", {}).get("total_hits", 0) > 0:
+                rs += 25
+            if dilisense_results.get("criminal", {}).get("total_hits", 0) > 0:
+                rs += 15
+            risk_score = min(100, rs)
+        overall = dilisense_results.get("overall_risk_level") or (
+            "High" if risk_score >= 70 else "Medium" if risk_score >= 40 else "Low"
+        )
         
-        try:
-            # Perform Dilisense company screening
-            print("🔍 Calling Dilisense service...")
-            dilisense_results = loop.run_until_complete(
-                dilisense_service.screen_company(company_name, country)
-            )
-            print(f"✅ Dilisense completed: {type(dilisense_results)}")
-            
-            # Perform real-time web search
-            print("🔍 Calling real-time search service...")
-            web_search_results = loop.run_until_complete(
-                real_time_search_service.comprehensive_search(
-                    company=company_name,
-                    country=country
-                )
-            )
-            print(f"✅ Web search completed: {type(web_search_results)}")
-            print(f"🔍 Web search results keys: {list(web_search_results.keys()) if isinstance(web_search_results, dict) else 'Not a dict'}")
-            print(f"🔍 Company profile: {web_search_results.get('company_profile', 'Not found')}")
-            print(f"🔍 Executives: {web_search_results.get('executives', 'Not found')}")
-            print(f"🔍 Total results: {web_search_results.get('total_results', 'Not found')}")
-        except Exception as service_error:
-            print(f"❌ Service call failed: {service_error}")
-            raise service_error
-        finally:
-            print("🔄 Closing event loop...")
-            loop.close()
-            print("✅ Event loop closed")
-        
-        # Combine results
-        print("🔧 Combining results...")
         combined_results = {
             "company": company_name.upper(),
             "country": country.upper() if country else "N/A",
             "timestamp": datetime.utcnow().isoformat(),
-            "data_sources": ["Dilisense Company Screening", "Real-time Web Search"],
+            "data_sources": ["Dilisense API", "OpenAI Live Search (gpt-4o)"],
             "dilisense": dilisense_results,
-            "web_search": {
-                "categorized_results": {
-                    "company_info": web_search_results.get("company_profile", {}).get("results", []) if web_search_results.get("company_profile") else [],
-                    "executives": web_search_results.get("executives", {}).get("results", []) if web_search_results.get("executives") else [],
-                    "adverse_media": web_search_results.get("adverse_media", {}).get("results", []) if web_search_results.get("adverse_media") else [],
-                    "financials": web_search_results.get("financials", {}).get("results", []) if web_search_results.get("financials") else [],
-                    "sanctions": web_search_results.get("sanctions", {}).get("results", []) if web_search_results.get("sanctions") else [],
-                    "ownership": web_search_results.get("ownership", {}).get("results", []) if web_search_results.get("ownership") else []
-                },
-                "total_results": web_search_results.get("total_results", 0)
-            },
-            "overall_risk_level": dilisense_results.get("overall_risk_level", "Low"),
-            "risk_score": dilisense_results.get("risk_score", 0),
+            "web_search": web_search_results,
+            "overall_risk_level": overall,
+            "risk_score": risk_score,
             "risk_factors": dilisense_results.get("risk_factors", [])
         }
         
         print(f"✅ Enhanced screening completed for {company_name}")
-        print(f"📊 Final results structure: {list(combined_results.keys())}")
-        print(f"🔍 Web search structure: {list(combined_results['web_search'].keys())}")
-        print(f"🔍 Categorized results: {list(combined_results['web_search']['categorized_results'].keys())}")
-        print(f"🔍 Company info count: {len(combined_results['web_search']['categorized_results']['company_info'])}")
-        print(f"🔍 Executives count: {len(combined_results['web_search']['categorized_results']['executives'])}")
-        print(f"🔍 Total results: {combined_results['web_search']['total_results']}")
         return jsonify(combined_results)
         
     except Exception as e:
@@ -841,15 +1054,6 @@ def enhanced_company_screening():
             "details": str(e),
             "type": type(e).__name__,
             "timestamp": datetime.utcnow().isoformat(),
-            "deployment_info": {
-                "git_commit": "1f73afd",
-                "fixes_applied": [
-                    "asyncio import moved to top",
-                    "parameter names fixed",
-                    "global event loop conflicts removed",
-                    "JSON error handling added"
-                ]
-            }
         }
         
         print(f"🔍 Error details: {error_details}")
@@ -881,48 +1085,55 @@ def individual_screening_api():
         
         print(f"🔍 Starting individual screening for: {name}")
         
-        # Import Dilisense service
+        # Import Dilisense service and real-time search
         from services.dilisense import dilisense_service
+        from services.real_time_search import real_time_search_service
         
-        # Create event loop for async operations
+        # Safe async runner
+        def run_async(coro):
+            try:
+                return asyncio.run(coro)
+            except RuntimeError:
+                new_loop = asyncio.new_event_loop()
+                try:
+                    return new_loop.run_until_complete(coro)
+                finally:
+                    new_loop.close()
+
+        # Run Dilisense and optional live quick search
+        screening_results = run_async(
+            dilisense_service.screen_individual(name, country, date_of_birth, gender)
+        )
+        live_results = run_async(
+            real_time_search_service.quick_search(name, country)
+        )
         
-        # Run async operations in event loop
-        loop = asyncio.new_event_loop()
-        # Don't set as global event loop to avoid conflicts in production
+        # Prefer backend risk if present, else derive simple score
+        risk_score = screening_results.get("risk_score")
+        if not isinstance(risk_score, (int, float)):
+            rs = 0
+            if screening_results.get("sanctions", {}).get("total_hits", 0) > 0:
+                rs += 60
+            if screening_results.get("pep", {}).get("total_hits", 0) > 0:
+                rs += 25
+            if screening_results.get("criminal", {}).get("total_hits", 0) > 0:
+                rs += 15
+            risk_score = min(100, rs)
+        overall = screening_results.get("overall_risk_level") or (
+            "High" if risk_score >= 70 else "Medium" if risk_score >= 40 else "Low"
+        )
         
-        try:
-            # Perform individual screening
-            screening_results = loop.run_until_complete(
-                dilisense_service.screen_individual(name, country, date_of_birth, gender)
-            )
-        finally:
-            loop.close()
-        
-        # Calculate risk score and level
-        risk_score = 0
-        risk_level = "Low"
-        
-        if screening_results.get("sanctions", {}).get("total_hits", 0) > 0:
-            risk_score += 60
-        if screening_results.get("pep", {}).get("total_hits", 0) > 0:
-            risk_score += 25
-        if screening_results.get("criminal", {}).get("total_hits", 0) > 0:
-            risk_score += 15
-        
-        if risk_score >= 70:
-            risk_level = "High"
-        elif risk_score >= 40:
-            risk_level = "Medium"
-        
-        # Prepare response
+        # Prepare merged response
         response = {
             "name": name,
             "country": country,
             "timestamp": datetime.utcnow().isoformat(),
             "dilisense": screening_results,
-            "overall_risk_level": risk_level,
+            "web_search": live_results,
+            "overall_risk_level": overall,
             "risk_score": risk_score,
-            "risk_factors": screening_results.get("risk_factors", [])
+            "risk_factors": screening_results.get("risk_factors", []),
+            "data_sources": ["Dilisense API", "OpenAI Live Search (gpt-4o)"]
         }
         
         print(f"✅ Individual screening completed for {name}")

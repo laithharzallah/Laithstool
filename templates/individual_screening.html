@@ -1,13 +1,18 @@
 {% extends "intelligence_base.html" %}
 
 {% block content %}
-<div x-data="individualScreening()" class="space-y-6">
+<div x-data="individualScreening()" x-init="init()" class="space-y-6">
     <!-- Page Header -->
     <div class="glass-panel p-6">
         <div class="flex items-center justify-between">
             <div>
                 <h1 class="text-2xl font-bold tracking-wide text-white/90">Individual Screening</h1>
                 <p class="text-white/60 mt-1">Comprehensive risk assessment for individuals (PEP, sanctions, adverse media)</p>
+                <p class="text-white/60 mt-1" x-show="hasResults">
+                  PEP: <span x-text="results.dilisenseData?.pep?.total_hits || 0"></span> ·
+                  Sanctions: <span x-text="results.dilisenseData?.sanctions?.total_hits || 0"></span> ·
+                  Criminal: <span x-text="results.dilisenseData?.criminal?.total_hits || 0"></span>
+                </p>
             </div>
             <div class="flex items-center space-x-3">
                 <button class="px-4 py-2 bg-accent-blue/20 text-accent-blue rounded-lg hover:bg-accent-blue/30 transition-colors">
@@ -31,20 +36,30 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label class="block text-sm font-medium text-white/80 mb-2">Full Name *</label>
-                    <input type="text" x-model="form.fullName" required
+                    <input type="text" x-model="form.fullName" required :disabled="isScreening"
                            class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent-blue/50"
                            placeholder="Enter full name">
                 </div>
                 
                 <div>
                     <label class="block text-sm font-medium text-white/80 mb-2">Date of Birth</label>
-                    <input type="date" x-model="form.dateOfBirth"
+                    <input type="date" x-model="form.dateOfBirth" :disabled="isScreening"
                            class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-accent-blue/50">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-white/80 mb-2">Gender</label>
+                    <select x-model="form.gender"
+                            class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-accent-blue/50"
+                            :disabled="isScreening">
+                        <option value="">Prefer not to say</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                    </select>
                 </div>
                 
                 <div>
                     <label class="block text-sm font-medium text-white/80 mb-2">Countries</label>
-                    <select x-model="form.countries" multiple
+                    <select x-model="form.countries" multiple :disabled="isScreening"
                             class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-accent-blue/50">
                         <option value="SA">Saudi Arabia</option>
                         <option value="US">United States</option>
@@ -58,14 +73,14 @@
                 
                 <div>
                     <label class="block text-sm font-medium text-white/80 mb-2">Nationality</label>
-                    <input type="text" x-model="form.nationality"
+                    <input type="text" x-model="form.nationality" :disabled="isScreening"
                            class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent-blue/50"
                            placeholder="e.g., Saudi">
                 </div>
                 
                 <div>
                     <label class="block text-sm font-medium text-white/80 mb-2">ID Type</label>
-                    <select x-model="form.idType"
+                    <select x-model="form.idType" :disabled="isScreening"
                             class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-accent-blue/50">
                         <option value="">Select ID Type</option>
                         <option value="passport">Passport</option>
@@ -77,7 +92,7 @@
                 
                 <div>
                     <label class="block text-sm font-medium text-white/80 mb-2">ID Number</label>
-                    <input type="text" x-model="form.idNumber"
+                    <input type="text" x-model="form.idNumber" :disabled="isScreening"
                            class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent-blue/50"
                            placeholder="ID number if available">
                 </div>
@@ -88,19 +103,19 @@
                 <label class="block text-sm font-medium text-white/80 mb-3">Screening Scopes</label>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <label class="flex items-center space-x-3 cursor-pointer">
-                        <input type="checkbox" x-model="form.scopes" value="sanctions" checked
+                        <input type="checkbox" x-model="form.scopes" value="sanctions" checked :disabled="isScreening"
                                class="rounded accent-accent-blue">
                         <span class="text-sm">Sanctions</span>
                     </label>
                     
                     <label class="flex items-center space-x-3 cursor-pointer">
-                        <input type="checkbox" x-model="form.scopes" value="pep" checked
+                        <input type="checkbox" x-model="form.scopes" value="pep" checked :disabled="isScreening"
                                class="rounded accent-accent-blue">
                         <span class="text-sm">PEP (Politically Exposed Persons)</span>
                     </label>
                     
                     <label class="flex items-center space-x-3 cursor-pointer">
-                        <input type="checkbox" x-model="form.scopes" value="adverse_media" checked
+                        <input type="checkbox" x-model="form.scopes" value="adverse_media" checked :disabled="isScreening"
                                class="rounded accent-accent-blue">
                         <span class="text-sm">Adverse Media</span>
                     </label>
@@ -112,17 +127,17 @@
                 <div>
                     <label class="block text-sm font-medium text-white/80 mb-2">Fuzzy Threshold</label>
                     <div class="flex items-center space-x-3">
-                        <input type="range" x-model="form.fuzzyThreshold" min="0.6" max="0.95" step="0.05"
+                        <input type="range" x-model="form.fuzzyThreshold" min="0.6" max="0.95" step="0.05" :disabled="isScreening"
                                class="flex-1 accent-accent-blue">
                         <span class="text-sm text-white/60 w-12" x-text="form.fuzzyThreshold"></span>
                     </div>
-                    <p class="text-xs text-white/50 mt-1">Lower = stricter matching (default: 0.8)</p>
+                    <p class="text-xs text-white/50 mt-1">Higher = stricter matching (default: 0.8)</p>
                 </div>
                 
                 <div>
                     <label class="block text-sm font-medium text-white/80 mb-2">Background Job</label>
                     <div class="flex items-center space-x-2">
-                        <input type="checkbox" x-model="form.backgroundJob" id="backgroundJob"
+                        <input type="checkbox" x-model="form.backgroundJob" id="backgroundJob" :disabled="isScreening"
                                class="rounded accent-accent-blue">
                         <label for="backgroundJob" class="text-sm text-white/60">Queue for processing</label>
                     </div>
@@ -132,7 +147,7 @@
             <!-- Notes -->
             <div>
                 <label class="block text-sm font-medium text-white/80 mb-2">Notes</label>
-                <textarea x-model="form.notes" rows="3"
+                <textarea x-model="form.notes" rows="3" :disabled="isScreening"
                           class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent-blue/50"
                           placeholder="Additional context or specific concerns..."></textarea>
             </div>
@@ -224,10 +239,13 @@
                 <div>
                     <h4 class="text-sm font-medium text-white/60 mb-2">Risk Assessment</h4>
                     <div class="flex items-center space-x-3">
-                        <div class="px-3 py-1 rounded-full text-sm font-medium" :class="getRiskClass(results.riskScore)">
-                            <span x-text="getRiskLevel(results.riskScore)"></span>
+                        <div class="px-3 py-1 rounded-full text-sm font-medium" :class="results.backendRiskLevel ? getRiskClassFromLabel(results.backendRiskLevel) : getRiskClass(results.riskScore)">
+                            <span x-text="results.backendRiskLevel || getRiskLevel(results.riskScore)"></span>
                         </div>
                         <span class="text-2xl font-bold" x-text="results.riskScore"></span>
+                        <div class="text-xs text-white/60" x-show="results.backendRiskLevel">
+                          Backend: <span class="font-medium" x-text="results.backendRiskLevel"></span>
+                        </div>
                     </div>
                 </div>
                 
@@ -355,6 +373,10 @@
                                 <i data-lucide="download" class="w-4 h-4 inline mr-2"></i>
                                 Download JSON
                             </button>
+                            <button @click="navigator.clipboard.writeText(JSON.stringify(results.dilisenseData, null, 2))"
+                                    class="px-3 py-2 bg-white/10 text-white/80 rounded text-sm hover:bg-white/20 transition-colors">
+                              Copy JSON
+                            </button>
                         </div>
                         
                         <!-- Raw Dilisense Data Display -->
@@ -364,12 +386,15 @@
                             <!-- Sanctions Section -->
                             <div class="mb-6">
                                 <h5 class="font-medium mb-3 text-red-400">Sanctions Records (<span x-text="results.dilisenseData?.sanctions?.total_hits || 0"></span>)</h5>
-                                <div x-show="results.dilisenseData?.sanctions?.total_hits > 0" class="space-y-4">
-                                    <template x-for="(hit, index) in results.dilisenseData.sanctions.found_records" :key="index">
+                                <div x-show="results.dilisenseData?.sanctions?.total_hits > 0" class="space-y-4" x-data="{limit:50, records: results.dilisenseData?.sanctions?.found_records}">
+                                    <template x-for="(hit, index) in (Array.isArray(records) ? records.slice(0, limit) : [])" :key="index">
                                         <div class="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
                                             <pre class="text-sm text-white/80 whitespace-pre-wrap" x-text="JSON.stringify(hit, null, 2)"></pre>
                                         </div>
                                     </template>
+                                    <div x-show="Array.isArray(records) && records.length > limit">
+                                        <button @click="limit += 50" class="mt-2 px-3 py-1 bg-white/10 rounded text-sm">Load more</button>
+                                    </div>
                                 </div>
                                 <div x-show="!results.dilisenseData?.sanctions?.total_hits || results.dilisenseData.sanctions.total_hits === 0" class="text-center py-8 text-white/40">
                                     No sanctions records found
@@ -379,12 +404,15 @@
                             <!-- PEP Section -->
                             <div class="mb-6">
                                 <h5 class="font-medium mb-3 text-accent-blue">PEP Records (<span x-text="results.dilisenseData?.pep?.total_hits || 0"></span>)</h5>
-                                <div x-show="results.dilisenseData?.pep?.total_hits > 0" class="space-y-4">
-                                    <template x-for="(hit, index) in results.dilisenseData.pep.found_records" :key="index">
+                                <div x-show="results.dilisenseData?.pep?.total_hits > 0" class="space-y-4" x-data="{limit:50, records: results.dilisenseData?.pep?.found_records}">
+                                    <template x-for="(hit, index) in (Array.isArray(records) ? records.slice(0, limit) : [])" :key="index">
                                         <div class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
                                             <pre class="text-sm text-white/80 whitespace-pre-wrap" x-text="JSON.stringify(hit, null, 2)"></pre>
                                         </div>
                                     </template>
+                                    <div x-show="Array.isArray(records) && records.length > limit">
+                                        <button @click="limit += 50" class="mt-2 px-3 py-1 bg-white/10 rounded text-sm">Load more</button>
+                                    </div>
                                 </div>
                                 <div x-show="!results.dilisenseData?.pep?.total_hits || results.dilisenseData.pep.total_hits === 0" class="text-center py-8 text-white/40">
                                     No PEP records found
@@ -394,12 +422,15 @@
                             <!-- Criminal Section -->
                             <div class="mb-6">
                                 <h5 class="font-medium mb-3 text-orange-400">Criminal Records (<span x-text="results.dilisenseData?.criminal?.total_hits || 0"></span>)</h5>
-                                <div x-show="results.dilisenseData?.criminal?.total_hits > 0" class="space-y-4">
-                                    <template x-for="(hit, index) in results.dilisenseData.criminal.found_records" :key="index">
+                                <div x-show="results.dilisenseData?.criminal?.total_hits > 0" class="space-y-4" x-data="{limit:50, records: results.dilisenseData?.criminal?.found_records}">
+                                    <template x-for="(hit, index) in (Array.isArray(records) ? records.slice(0, limit) : [])" :key="index">
                                         <div class="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
                                             <pre class="text-sm text-white/80 whitespace-pre-wrap" x-text="JSON.stringify(hit, null, 2)"></pre>
                                         </div>
                                     </template>
+                                    <div x-show="Array.isArray(records) && records.length > limit">
+                                        <button @click="limit += 50" class="mt-2 px-3 py-1 bg-white/10 rounded text-sm">Load more</button>
+                                    </div>
                                 </div>
                                 <div x-show="!results.dilisenseData?.criminal?.total_hits || results.dilisenseData.criminal.total_hits === 0" class="text-center py-8 text-white/40">
                                     No criminal records found
@@ -409,12 +440,15 @@
                             <!-- Other Section -->
                             <div class="mb-6">
                                 <h5 class="font-medium mb-3 text-white/60">Other Records (<span x-text="results.dilisenseData?.other?.total_hits || 0"></span>)</h5>
-                                <div x-show="results.dilisenseData?.other?.total_hits > 0" class="space-y-4">
-                                    <template x-for="(hit, index) in results.dilisenseData.other.found_records" :key="index">
+                                <div x-show="results.dilisenseData?.other?.total_hits > 0" class="space-y-4" x-data="{limit:50, records: results.dilisenseData?.other?.found_records}">
+                                    <template x-for="(hit, index) in (Array.isArray(records) ? records.slice(0, limit) : [])" :key="index">
                                         <div class="bg-white/10 border border-white/20 rounded-lg p-4">
                                             <pre class="text-sm text-white/80 whitespace-pre-wrap" x-text="JSON.stringify(hit, null, 2)"></pre>
                                         </div>
                                     </template>
+                                    <div x-show="Array.isArray(records) && records.length > limit">
+                                        <button @click="limit += 50" class="mt-2 px-3 py-1 bg-white/10 rounded text-sm">Load more</button>
+                                    </div>
                                 </div>
                                 <div x-show="!results.dilisenseData?.other?.total_hits || results.dilisenseData.other.total_hits === 0" class="text-center py-8 text-white/40">
                                     No other records found
@@ -440,13 +474,14 @@
                 
                 <div x-show="selectedHit" class="space-y-4">
                     <div>
-                        <h4 class="font-medium mb-2" x-text="selectedHit.name || selectedHit.headline"></h4>
+                        <h4 class="font-medium mb-2" x-text="selectedHit.name || selectedHit.full_name || selectedHit.title || selectedHit.headline || 'Record'"></h4>
                         <div class="text-sm text-white/60 space-y-2">
                             <div x-show="selectedHit.dataset">
                                 <strong>Dataset:</strong> <span x-text="selectedHit.dataset"></span>
                             </div>
-                            <div x-show="selectedHit.matchScore">
-                                <strong>Match Score:</strong> <span x-text="selectedHit.matchScore + '%'"></span>
+                            <div x-show="selectedHit.matchScore || selectedHit.match_score">
+                                <strong>Match Score:</strong>
+                                <span x-text="(() => { const raw = selectedHit.matchScore ?? selectedHit.match_score ?? 0; const pct = raw > 1 ? raw : raw * 100; return Math.round(pct) + '%'; })()"></span>
                             </div>
                             <div x-show="selectedHit.source">
                                 <strong>Source:</strong> <span x-text="selectedHit.source"></span>
@@ -489,7 +524,8 @@ function individualScreening() {
             scopes: ['sanctions', 'pep', 'adverse_media'],
             fuzzyThreshold: 0.8,
             backgroundJob: false,
-            notes: ''
+            notes: '',
+            gender: ''
         },
         isScreening: false,
         hasResults: false,
@@ -505,6 +541,34 @@ function individualScreening() {
             { name: 'Report Generation', status: 'todo', timestamp: '', logs: [], expanded: false }
         ],
         results: {},
+        COUNTRY_NAMES: { SA:'Saudi Arabia', US:'United States', UK:'United Kingdom', EU:'European Union', UN:'United Nations', CA:'Canada', AU:'Australia' },
+        normalizeDOB(d) { return d ? new Date(d).toISOString().slice(0,10) : ''; },
+        async apiPost(url, payload, { retries = 1, timeoutMs = 15000 } = {}) {
+            const controller = new AbortController();
+            const t = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                if (res.status === 429 && retries > 0) {
+                    await new Promise(r => setTimeout(r, 1200));
+                    return this.apiPost(url, payload, { retries: retries - 1, timeoutMs });
+                }
+                let data = null; try { data = await res.json(); } catch {}
+                if (!res.ok) {
+                    const msg = (data && (data.error || data.message)) || `HTTP ${res.status}`;
+                    throw new Error(msg);
+                }
+                return data;
+            } finally {
+                clearTimeout(t);
+            }
+        },
         
         init() {
             // Check if name was passed via URL parameter
@@ -513,6 +577,8 @@ function individualScreening() {
             if (name) {
                 this.form.fullName = decodeURIComponent(name);
             }
+            // Re-render icons on tab change
+            this.$watch('activeTab', () => { if (window.lucide?.createIcons) window.lucide.createIcons(); });
         },
         
         async startScreening() {
@@ -528,28 +594,20 @@ function individualScreening() {
             
             try {
                 // Start the screening process
-                const response = await fetch('/api/individual-screen', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        name: this.form.fullName,
-                        date_of_birth: this.form.dateOfBirth,
-                        countries: this.form.countries.join(','),
-                        nationality: this.form.nationality,
-                        id_type: this.form.idType,
-                        id_number: this.form.idNumber,
-                        scopes: this.form.scopes,
-                        fuzzy_threshold: this.form.fuzzyThreshold
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Screening failed');
-                }
-                
-                const data = await response.json();
+                const country = (this.form.countries[0] || '');
+                const countryForBackend = this.COUNTRY_NAMES[country] || country;
+                const payload = {
+                    name: this.form.fullName,
+                    country: countryForBackend,
+                    dateOfBirth: this.normalizeDOB(this.form.dateOfBirth),
+                    gender: this.form.gender || '',
+                    nationality: this.form.nationality,
+                    id_type: this.form.idType,
+                    id_number: this.form.idNumber,
+                    scopes: this.form.scopes,
+                    fuzzy_threshold: this.form.fuzzyThreshold
+                };
+                const data = await this.apiPost('/api/individual-screen', payload);
                 
                 // Simulate progress updates
                 await this.simulateProgress();
@@ -573,28 +631,34 @@ function individualScreening() {
                 this.progressSteps[i].status = 'doing';
                 this.progressSteps[i].timestamp = new Date().toLocaleTimeString();
                 this.progressSteps[i].logs = [
-                    { id: 1, message: 'Starting process...' },
-                    { id: 2, message: 'Processing data...' }
+                    { id: crypto.randomUUID?.() || `${i}-1`, message: 'Starting process...' },
+                    { id: crypto.randomUUID?.() || `${i}-2`, message: 'Processing data...' }
                 ];
                 
                 await new Promise(resolve => setTimeout(resolve, 1500));
                 
                 this.progressSteps[i].status = 'done';
                 this.progressSteps[i].timestamp = new Date().toLocaleTimeString();
-                this.progressSteps[i].logs.push({ id: 3, message: 'Completed successfully' });
+                this.progressSteps[i].logs.push({ id: crypto.randomUUID?.() || `${i}-3`, message: 'Completed successfully' });
             }
         },
         
         processResults(data) {
-            // Process the screening results
+            const ds = [];
+            if (data?.dilisense) ds.push('Dilisense API');
+            if (Array.isArray(data?.risk_factors)) ds.push('Risk Heuristics');
+            const backendScore = (typeof data?.risk_score === 'number') ? data.risk_score : null;
+            const computedScore = this.calculateRiskScore(data);
+            const riskScore = backendScore ?? computedScore;
             this.results = {
                 fullName: this.form.fullName,
                 dateOfBirth: this.form.dateOfBirth,
-                riskScore: this.calculateRiskScore(data),
-                dataSources: data.data_sources || [],
-                // Store complete Dilisense data for raw display
-                dilisenseData: data.dilisense || {}
+                riskScore,
+                dataSources: ds,
+                dilisenseData: data.dilisense || {},
+                backendRiskLevel: data?.overall_risk_level || ''
             };
+            queueMicrotask(() => { if (window.lucide?.createIcons) window.lucide.createIcons(); });
         },
         
         calculateRiskScore(data) {
@@ -652,15 +716,16 @@ function individualScreening() {
         },
         
         getRiskClass(score) {
-            if (score >= 70) return 'risk-high';
-            if (score >= 40) return 'risk-medium';
-            return 'risk-low';
+            if (score >= 70) return 'text-red-400';
+            if (score >= 40) return 'text-yellow-400';
+            return 'text-green-400';
         },
-        
-        getRiskLevel(score) {
-            if (score >= 70) return 'HIGH';
-            if (score >= 40) return 'MEDIUM';
-            return 'LOW';
+        getRiskClassFromLabel(label) {
+            const L = (label || '').toString().toLowerCase();
+            if (L === 'high') return 'text-red-400';
+            if (L === 'medium') return 'text-yellow-400';
+            if (L === 'low') return 'text-green-400';
+            return 'text-white/70';
         },
         
         selectHit(hit) {
@@ -682,4 +747,5 @@ function individualScreening() {
     };
 }
 </script>
+<div class="sr-only" aria-live="polite" x-text="`Step ${progressSteps.findIndex(s=>s.status==='doing')+1} in progress`"></div>
 {% endblock %}

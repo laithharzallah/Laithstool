@@ -67,7 +67,7 @@
                                class="flex-1 accent-accent-blue">
                         <span class="text-sm text-white/60 w-12" x-text="form.fuzzyThreshold"></span>
                     </div>
-                    <p class="text-xs text-white/50 mt-1">Lower = stricter matching</p>
+                    <p class="text-xs text-white/50 mt-1">Higher = stricter matching</p>
                 </div>
                 
                 <div>
@@ -227,7 +227,7 @@
                     </button>
                     <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
                             :class="activeTab === 'executives' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-white/60 hover:text-white/80'"
-                            @click="activeTab = 'overview'">
+                            @click="activeTab = 'executives'">
                         Executives
                     </button>
                     <button class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
@@ -812,8 +812,9 @@
                             <div x-show="selectedHit.dataset">
                                 <strong>Dataset:</strong> <span x-text="selectedHit.dataset"></span>
                             </div>
-                            <div x-show="selectedHit.matchScore">
-                                <strong>Match Score:</strong> <span x-text="selectedHit.matchScore + '%'"></span>
+                            <div x-show="selectedHit.matchScore || selectedHit.match_score">
+                                <strong>Match Score:</strong>
+                                <span x-text="((selectedHit.matchScore ?? selectedHit.match_score ?? 0) * (selectedHit.matchScore > 1 || selectedHit.match_score > 1 ? 1 : 100)).toFixed(0) + '%'"></span>
                             </div>
                             <div x-show="selectedHit.source">
                                 <strong>Source:</strong> <span x-text="selectedHit.source"></span>
@@ -1006,35 +1007,35 @@ function companyScreening() {
         updateProgressSteps(data) {
             // Update progress based on real data
             if (data.web_search) {
-                this.progressSteps[0].status = 'completed';
+                this.progressSteps[0].status = 'done';
                 this.progressSteps[0].timestamp = new Date().toLocaleTimeString();
                 this.progressSteps[0].logs = ['Query expansion completed'];
                 
-                this.progressSteps[1].status = 'completed';
+                this.progressSteps[1].status = 'done';
                 this.progressSteps[1].timestamp = new Date().toLocaleTimeString();
                 this.progressSteps[1].logs = [`Found ${data.web_search.company_profile ? 'company info' : 'no company info'}`];
                 
-                this.progressSteps[2].status = 'completed';
+                this.progressSteps[2].status = 'done';
                 this.progressSteps[2].timestamp = new Date().toLocaleTimeString();
                 this.progressSteps[2].logs = [`Extracted ${this.results.executives.length} executives`];
             }
             
             if (data.dilisense) {
-                this.progressSteps[3].status = 'completed';
+                this.progressSteps[3].status = 'done';
                 this.progressSteps[3].timestamp = new Date().toLocaleTimeString();
                 this.progressSteps[3].logs = ['Sanctions check completed'];
                 
-                this.progressSteps[4].status = 'completed';
+                this.progressSteps[4].status = 'done';
                 this.progressSteps[4].timestamp = new Date().toLocaleTimeString();
                 this.progressSteps[4].logs = ['Entity resolution completed'];
             }
             
-            if (data.gpt5_analysis) {
-                this.progressSteps[5].status = 'completed';
+            if (data.gpt5_analysis || data.llm_analysis) {
+                this.progressSteps[5].status = 'done';
                 this.progressSteps[5].timestamp = new Date().toLocaleTimeString();
                 this.progressSteps[5].logs = ['AI analysis completed'];
                 
-                this.progressSteps[6].status = 'completed';
+                this.progressSteps[6].status = 'done';
                 this.progressSteps[6].timestamp = new Date().toLocaleTimeString();
                 this.progressSteps[6].logs = ['Report generation completed'];
             }

@@ -23,7 +23,9 @@ class DilisenseService:
         
         if self.enabled:
             print(f"✅ Dilisense service initialized")
-            print(f"🔑 API Key: {self.api_key[:8]}...{self.api_key[-4:]}")
+            env = (os.getenv("FLASK_ENV") or "").lower()
+            if env == "development":
+                print(f"🔑 API Key present (masked)")
             print(f"🌐 Base URL: {self.base_url}")
         else:
             print(f"⚠️ Dilisense service disabled - no API key found")
@@ -106,19 +108,17 @@ class DilisenseService:
             specific_variations = []
             
             # Handle names with "AL" prefix - focus on the specific person
-            if any('AL ' in part for part in parts):
-                # Find the part with "AL" prefix
+            if any(part.startswith('AL') for part in parts):
                 for i, part in enumerate(parts):
-                    if 'AL ' in part:
-                        # Create variations for THIS specific person only
+                    if part.startswith('AL'):
                         first_name = parts[0]
                         last_name = part
-                        
+                        core = part.replace('AL-', '').replace('AL_', '').replace('AL', '').strip()
                         specific_variations.extend([
-                            f"{first_name} {last_name}",  # Original format
-                            f"{last_name} {first_name}",  # Reversed
-                            f"{first_name} {last_name.replace('AL ', '')}",  # Without AL
-                            f"{last_name.replace('AL ', '')} {first_name}",  # Without AL, reversed
+                            f"{first_name} {last_name}",
+                            f"{last_name} {first_name}",
+                            f"{first_name} {core}",
+                            f"{core} {first_name}",
                         ])
                         break
             
@@ -167,33 +167,18 @@ class DilisenseService:
             }
             
             if country:
-                params['country'] = country
+                params['country'] = self._normalize_country(country)
             if date_of_birth:
                 params['dob'] = date_of_birth
             if gender:
                 params['gender'] = gender
             
-            # Make API call directly
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.get(
-                    f"{self.base_url}/checkIndividual",
-                    headers={
-                        "x-api-key": self.api_key,
-                        "Content-Type": "application/json"
-                    },
-                    params=params
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    print(f"✅ API call successful for '{name}'")
-                    return self._process_individual_results(data, name)
-                elif response.status_code == 401:
-                    print(f"❌ Dilisense API authentication failed for '{name}'")
-                    return None
-                else:
-                    print(f"❌ Dilisense API error for '{name}': {response.status_code}")
-                    return None
+            data = await self._http_get(f"{self.base_url}/checkIndividual", params, retries=1)
+            if data is None:
+                print(f"❌ API error for '{name}'")
+                return None
+            print(f"✅ API call successful for '{name}'")
+            return self._process_individual_results(data, name)
                     
         except Exception as e:
             print(f"❌ Error checking individual '{name}': {e}")
@@ -210,6 +195,11 @@ class DilisenseService:
         # Use the best result as base
         best_result = max(all_results, key=lambda x: x['total_hits'])
         base_result = best_result['result'].copy()
+        # Ensure structures exist
+        base_result.setdefault('sanctions', {}).setdefault('found_records', [])
+        base_result.setdefault('pep', {}).setdefault('found_records', [])
+        base_result.setdefault('criminal', {}).setdefault('found_records', [])
+        base_result.setdefault('other', {}).setdefault('found_records', [])
         
         # Filter results to focus on the specific individual
         filtered_sanctions = []
@@ -266,23 +256,26 @@ class DilisenseService:
         filtered_other = filtered_other[:10]
         
         # Update the base result with filtered data
-        base_result['sanctions']['found_records'] = filtered_sanctions
-        base_result['sanctions']['total_hits'] = len(filtered_sanctions)
-        
-        base_result['pep']['found_records'] = filtered_pep
-        base_result['pep']['total_hits'] = len(filtered_pep)
-        
-        base_result['criminal']['found_records'] = filtered_criminal
-        base_result['criminal']['total_hits'] = len(filtered_criminal)
-        
-        base_result['other']['found_records'] = filtered_other
-        base_result['other']['total_hits'] = len(filtered_other)
+        base_result['sanctions']['found_records'] = filtered_sanctions[:10]
+        base_result['sanctions']['total_hits'] = len(base_result['sanctions']['found_records'])
+        base_result['pep']['found_records'] = filtered_pep[:10]
+        base_result['pep']['total_hits'] = len(base_result['pep']['found_records'])
+        base_result['criminal']['found_records'] = filtered_criminal[:10]
+        base_result['criminal']['total_hits'] = len(base_result['criminal']['found_records'])
+        base_result['other']['found_records'] = filtered_other[:10]
+        base_result['other']['total_hits'] = len(base_result['other']['found_records'])
         
         # Recalculate total hits
         base_result['total_hits'] = len(filtered_sanctions) + len(filtered_pep) + len(filtered_criminal) + len(filtered_other)
         
         # Update risk assessment
         base_result['overall_risk_level'] = self._calculate_individual_risk_level(base_result)
+        # Add risk score for downstream UIs
+        base_result['risk_score'] = self._score_from_buckets(
+            base_result['sanctions']['total_hits'],
+            base_result['pep']['total_hits'],
+            base_result['criminal']['total_hits']
+        )
         base_result['risk_factors'] = self._identify_individual_risk_factors(base_result)
         
         # Add metadata about variations tried
@@ -296,22 +289,19 @@ class DilisenseService:
         Check if a record is relevant to the specific individual being screened
         """
         record_name = record.get('name', '').upper()
-        
-        # Must contain at least the first name or last name
-        if first_name and first_name in record_name:
+        alias_names = record.get('alias_names') or []
+        if isinstance(alias_names, str):
+            alias_names = [alias_names]
+
+        def _contains(piece: str, target: str) -> bool:
+            return bool(piece) and bool(target) and target in piece
+
+        if _contains(record_name, first_name) or _contains(record_name, last_name):
             return True
-        if last_name and last_name in record_name:
-            return True
-        
-        # Check alias names
-        alias_names = record.get('alias_names', [])
         for alias in alias_names:
-            alias_upper = alias.upper()
-            if first_name and first_name in alias_upper:
+            alias_upper = (alias or '').upper()
+            if _contains(alias_upper, first_name) or _contains(alias_upper, last_name):
                 return True
-            if last_name and last_name in alias_upper:
-                return True
-        
         return False
 
     def _process_individual_results(self, data: Dict, name: str) -> Dict[str, Any]:
@@ -327,12 +317,12 @@ class DilisenseService:
             other = []
             
             for record in found_records:
-                source_type = record.get("source_type", "").upper()
-                if source_type == "SANCTION":
+                stype = (record.get("source_type") or "").upper()
+                if ("SANCTION" in stype) or ("OFAC" in stype) or ("EU" in stype):
                     sanctions.append(record)
-                elif source_type == "PEP":
+                elif "PEP" in stype:
                     peps.append(record)
-                elif source_type == "CRIMINAL":
+                elif ("CRIMINAL" in stype) or ("CRIME" in stype):
                     criminal.append(record)
                 else:
                     other.append(record)
@@ -372,6 +362,8 @@ class DilisenseService:
             else:
                 results["overall_risk_level"] = "Low"
                 results["risk_factors"] = []
+            # numeric score for UIs
+            results["risk_score"] = self._score_from_buckets(len(sanctions), len(peps), len(criminal))
             
             return results
             
@@ -406,7 +398,8 @@ class DilisenseService:
                 "total_hits": 0
             },
             "overall_risk_level": "Low",
-            "risk_factors": []
+            "risk_factors": [],
+            "risk_score": 0
         }
     
     def _calculate_individual_risk_level(self, result: dict) -> str:
@@ -421,26 +414,36 @@ class DilisenseService:
             return "Medium"
         else:
             return "High"
-    
-    def _identify_individual_risk_factors(self, result: dict) -> list:
-        """
-        Identify specific risk factors for individual
-        """
-        risk_factors = []
-        
-        if result.get('sanctions', {}).get('total_hits', 0) > 0:
-            risk_factors.append("Sanctions listed")
-        
-        if result.get('pep', {}).get('total_hits', 0) > 0:
-            risk_factors.append("PEP status")
-        
-        if result.get('criminal', {}).get('total_hits', 0) > 0:
-            risk_factors.append("Criminal records")
-        
-        if result.get('other', {}).get('total_hits', 0) > 0:
-            risk_factors.append("Other adverse records")
-        
-        return risk_factors
+
+    def _score_from_buckets(self, s: int, p: int, c: int) -> int:
+        score = 0
+        if s > 0:
+            score += 60
+        if p > 0:
+            score += 25
+        if c > 0:
+            score += 15
+        return min(100, score)
+
+    def _normalize_country(self, country: str) -> str:
+        m = {'SA':'Saudi Arabia','US':'United States','UK':'United Kingdom','EU':'European Union','UN':'United Nations','CA':'Canada','AU':'Australia'}
+        c = (country or '').strip()
+        return m.get(c.upper(), country)
+
+    async def _http_get(self, url: str, params: dict, retries: int = 1) -> Optional[dict]:
+        headers = {"x-api-key": self.api_key, "Content-Type": "application/json"}
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            for attempt in range(retries + 1):
+                resp = await client.get(url, headers=headers, params=params)
+                if resp.status_code == 200:
+                    try:
+                        return resp.json()
+                    except Exception:
+                        return None
+                if resp.status_code in (429, 500, 502, 503, 504) and attempt < retries:
+                    await asyncio.sleep(1.0 * (attempt + 1))
+                    continue
+                return None
 
     # ============================================================================
     # COMPANY SCREENING METHODS
@@ -710,13 +713,14 @@ class DilisenseService:
         try:
             print(f"🔍 Screening {len(executive_names)} executives for {company_name}")
             
-            # Screen each executive
-            executive_results = []
-            for exec_name in executive_names:
-                print(f"🔍 Screening executive: {exec_name}")
-                exec_result = await self.screen_individual(exec_name, country)
-                exec_result["company"] = company_name
-                executive_results.append(exec_result)
+            sem = asyncio.Semaphore(5)
+            async def run_one(exec_name: str):
+                async with sem:
+                    print(f"🔍 Screening executive: {exec_name}")
+                    r = await self.screen_individual(exec_name, country)
+                    r["company"] = company_name
+                    return r
+            executive_results = await asyncio.gather(*[run_one(n) for n in executive_names])
             
             print(f"✅ Executive screening completed for {company_name}")
             return executive_results

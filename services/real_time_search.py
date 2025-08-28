@@ -6,18 +6,26 @@ import os
 import json
 import asyncio
 from typing import Dict, List, Optional, Any
-import httpx
 from datetime import datetime, timedelta
 import logging
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 import re
 from dotenv import load_dotenv
+from services.helpers.json_guard import force_json, prune_to_schema
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (development or if .env exists)
+if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
+    load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+def _log_preview(label: str, text: Any, n: int = 400):
+    try:
+        s = text if isinstance(text, str) else json.dumps(text)
+        print(f"{label}: {s[:n]}{'…' if len(s) > n else ''}")
+    except Exception:
+        print(f"{label}: <unprintable>")
 
 class RealTimeSearchService:
     """Real-time internet search service with GPT-5 integration"""
@@ -42,314 +50,182 @@ class RealTimeSearchService:
         
         print(f"✅ Real-time search service initialized with {len(self.search_providers)} providers")
 
+        # Strict system prompt reused for all intents (LLM extraction only)
+        self.STRICT_SYSTEM_PROMPT = (
+            "You are an extraction engine.\n"
+            "- You MUST use your live web browsing capability to fetch information.\n"
+            "- Do NOT rely only on memory. Always verify with current sources.\n"
+            "- You MUST return ONLY a single valid JSON object.\n"
+            "- Do NOT include code fences, commentary, or explanations.\n"
+            "- If a field is unknown or you cannot find a current, verifiable source, set it to null.\n"
+            "- Never fabricate URLs. If a verifiable URL is not available, use null.\n"
+            "- Only include the keys specified in the schema for this task; omit all other keys.\n"
+            "- Verification step: Confirm that the information comes from a real, live web page.\n"
+            "  If you did not access the internet, set all fields in the JSON to null."
+        )
+
+        self.INTENT_SCHEMAS: Dict[str, Any] = {
+            "company_profile": {"company_info": {
+                "legal_name": None, "website": None, "founded_year": None, "headquarters": None,
+                "industry": None, "business_description": None, "registration_status": None, "entity_type": None
+            }},
+            "executives": {"executives": [
+                {"name": None, "position": None, "company": None, "background": None, "source_url": None, "source": None}
+            ]},
+            "financials": {"financial_data": {
+                "revenue": None, "profit": None, "assets": None, "employees": None, "market_cap": None, "financial_year": None
+            }, "performance": {"growth_rate": None, "profitability": None, "financial_health": None}},
+            "adverse_media": {"adverse_media": [
+                {"headline": None, "summary": None, "date": None, "source": None, "severity": None, "category": None, "source_url": None}
+            ], "total_incidents": 0, "risk_level": None, "key_concerns": []},
+            "sanctions": {"sanctions_status": {
+                "ofac_status": None, "eu_status": None, "un_status": None, "overall_status": None
+            }, "compliance_issues": [
+                {"type": None, "description": None, "severity": None, "source": None, "date": None}
+            ]},
+            "ownership": {"ownership_structure": {
+                "parent_company": None, "subsidiaries": [], "ownership_type": None
+            }, "shareholders": [{"name": None, "percentage": None, "type": None, "source": None}],
+               "beneficial_owners": [{"name": None, "relationship": None, "source": None}]}
+        }
+
+    def _intent_prompt(self, intent: str, company: str, country: str) -> str:
+        country_hint = f" in {country}" if country else ""
+        if intent == "company_profile":
+            return (
+                f'Extract factual company profile for: "{company}"{country_hint}\n\n'
+                "Return EXACTLY this JSON (no extra keys, no explanations):\n"
+                "{\n  \"company_info\": {\n    \"legal_name\": null,\n    \"website\": null,\n    \"founded_year\": null,\n    \"headquarters\": null,\n    \"industry\": null,\n    \"business_description\": null,\n    \"registration_status\": null,\n    \"entity_type\": null\n  }\n}\n\n"
+                "Rules:\n- Use null if unknown.\n- Never fabricate URLs.\n- Do not include \"search_results\" or any other keys."
+            )
+        if intent == "executives":
+            return (
+                f'Extract key executives for: "{company}"{country_hint}\n\n'
+                "Return EXACTLY this JSON:\n"
+                "{\n  \"executives\": [\n    {\n      \"name\": null,\n      \"position\": null,\n      \"company\": \"" + company + "\",\n      \"background\": null,\n      \"source_url\": null,\n      \"source\": null\n    }\n  ]\n}\n\n"
+                "Rules:\n- Up to 10 entries is fine; empty array if none found.\n- source_url must be real (else null). No extra keys."
+            )
+        if intent == "financials":
+            return (
+                f'Extract financials for: "{company}"{country_hint}\n\n'
+                "Return EXACTLY this JSON:\n"
+                "{\n  \"financial_data\": {\n    \"revenue\": null,\n    \"profit\": null,\n    \"assets\": null,\n    \"employees\": null,\n    \"market_cap\": null,\n    \"financial_year\": null\n  },\n  \"performance\": {\n    \"growth_rate\": null,\n    \"profitability\": null,\n    \"financial_health\": null\n  }\n}\n\n"
+                "Rules:\n- Null for unknown values. No other keys (e.g. no search_results)."
+            )
+        if intent == "adverse_media":
+            return (
+                f'Extract adverse media about: "{company}"{country_hint}\n\n'
+                "Return EXACTLY this JSON:\n"
+                "{\n  \"adverse_media\": [\n    {\n      \"headline\": null,\n      \"summary\": null,\n      \"date\": null,\n      \"source\": null,\n      \"severity\": null,\n      \"category\": null,\n      \"source_url\": null\n    }\n  ],\n  \"total_incidents\": 0,\n  \"risk_level\": null,\n  \"key_concerns\": []\n}\n\n"
+                "Rules:\n- Severity must be High/Medium/Low or null.\n- Do not include \"search_results\". Only the keys above."
+            )
+        if intent == "sanctions":
+            return (
+                f'Extract sanctions/compliance for: "{company}"{country_hint}\n\n'
+                "Return EXACTLY this JSON:\n"
+                "{\n  \"sanctions_status\": {\n    \"ofac_status\": null,\n    \"eu_status\": null,\n    \"un_status\": null,\n    \"overall_status\": null\n  },\n  \"compliance_issues\": [\n    {\n      \"type\": null,\n      \"description\": null,\n      \"severity\": null,\n      \"source\": null,\n      \"date\": null\n    }\n  ]\n}\n\n"
+                "Rules:\n- No extra keys. Null if unknown. Do not invent statuses."
+            )
+        if intent == "ownership":
+            return (
+                f'Extract ownership for: "{company}"{country_hint}\n\n'
+                "Return EXACTLY this JSON:\n"
+                "{\n  \"ownership_structure\": {\n    \"parent_company\": null,\n    \"subsidiaries\": [],\n    \"ownership_type\": null\n  },\n  \"shareholders\": [\n    { \"name\": null, \"percentage\": null, \"type\": null, \"source\": null }\n  ],\n  \"beneficial_owners\": [\n    { \"name\": null, \"relationship\": null, \"source\": null }\n  ]\n}\n\n"
+                "Rules:\n- No extra keys. Use nulls/empty arrays when unknown."
+            )
+        return f'Extract data for intent {intent} for: "{company}"{country_hint} using ONLY the allowed keys.'
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def _llm_json(self, prompt: str, schema_example: Dict) -> Dict:
+        resp = self.openai_client.chat.completions.create(
+            model=self.openai_model,
+            messages=[
+                {"role": "system", "content": self.STRICT_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        raw = resp.choices[0].message.content or "{}"
+        return force_json(raw, schema_example)
+
     def _initialize_search_providers(self) -> List[Dict]:
-        """Initialize available search providers"""
-        providers = []
-        
-        # ChatGPT-5 Web Search (Primary)
-        if self.openai_client:
-            providers.append({
-                "name": "chatgpt5_web_search",
-                "type": "ai_web_search",
-                "api_key": os.getenv("OPENAI_API_KEY"),
-                "base_url": None
-            })
-        
-        # Serper API (Google search - Fallback)
-        serper_key = os.getenv("SERPER_API_KEY")
-        if serper_key:
-            providers.append({
-                "name": "serper",
-                "type": "google_search",
-                "api_key": serper_key,
-                "base_url": "https://google.serper.dev/search"
-            })
-        
-        # Direct web scraping fallback
-        providers.append({
-            "name": "direct_scraping",
-            "type": "web_scraping",
-            "api_key": None,
-            "base_url": None
-        })
-        
-        return providers
+        """LLM-only provider configuration"""
+        return [{
+            "name": "chatgpt4o_live",
+            "type": "llm",
+            "model": self.openai_model,
+        }]
 
     async def comprehensive_search(self, company: str, country: str) -> Dict[str, Any]:
-        """Comprehensive search combining multiple intents and data sources"""
+        """Comprehensive LLM-only extraction across intents, schema-first."""
         try:
-            print(f"🔍 Starting comprehensive real-time search for: {company}")
-            
-            # Define search intents
+            print(f"🔍 Starting comprehensive extraction for: {company}")
             search_intents = [
                 "company_profile",
-                "executives", 
+                "executives",
                 "adverse_media",
                 "financials",
                 "sanctions",
-                "ownership"
+                "ownership",
             ]
-            
-            # Process each intent
-            processed_results = {}
-            
+
+            processed_results: Dict[str, Any] = {}
             for intent in search_intents:
-                print(f"🔍 Searching for: {intent}")
-                result = await self._search_intent(company, country, intent)
-                
-                if isinstance(result, Exception):
-                    print(f"❌ Search failed for {intent}: {result}")
-                    processed_results[intent] = {"error": str(result)}
-                else:
-                    processed_results[intent] = result
-            
-            # Extract structured data from all search results for enhanced screening
-            print("🔍 Extracting structured data from search results...")
-            
-            # CRITICAL: Ensure ALL search results are properly categorized and displayed
+                res = await self._search_intent(company, country, intent)
+                processed_results[intent] = res
+
             categorized_results = {
-                "company_info": [],
+                "company_info": {},
                 "executives": [],
                 "adverse_media": [],
-                "financials": [],
-                "sanctions": [],
-                "ownership": [],
-                "all_search_results": []  # Keep track of all results
+                "financials": {},
+                "sanctions": {},
+                "ownership": {},
             }
-            
-            # Process each intent and categorize results
-            for intent, result in processed_results.items():
-                if isinstance(result, Exception):
-                    continue
-                    
-                print(f"🔍 Processing {intent} results...")
-                
-                # Extract results from the intent
-                if isinstance(result, dict) and "results" in result:
-                    results_array = result["results"]
-                    print(f"🔍 Found {len(results_array)} results for {intent}")
-                    
-                    # Add to all_search_results
-                    categorized_results["all_search_results"].extend(results_array)
-                    
-                    # Categorize based on intent
-                    if intent == "company_profile":
-                        categorized_results["company_info"] = results_array
-                    elif intent == "executives":
-                        categorized_results["executives"] = results_array
-                    elif intent == "adverse_media":
-                        categorized_results["adverse_media"] = results_array
-                    elif intent == "financials":
-                        categorized_results["financials"] = results_array
-                    elif intent == "sanctions":
-                        categorized_results["sanctions"] = results_array
-                    elif intent == "ownership":
-                        categorized_results["ownership"] = results_array
-                        
-                elif isinstance(result, list):
-                    print(f"🔍 Found {len(result)} direct results for {intent}")
-                    
-                    # Add to all_search_results
-                    categorized_results["all_search_results"].extend(result)
-                    
-                    # Categorize based on intent
-                    if intent == "company_profile":
-                        categorized_results["company_info"] = result
-                    elif intent == "executives":
-                        categorized_results["executives"] = result
-                    elif intent == "adverse_media":
-                        categorized_results["adverse_media"] = result
-                    elif intent == "financials":
-                        categorized_results["financials"] = result
-                    elif intent == "sanctions":
-                        categorized_results["sanctions"] = result
-                    elif intent == "ownership":
-                        categorized_results["ownership"] = result
-            
-            # Extract executives from search results
-            if "executives" in processed_results and not isinstance(processed_results["executives"], Exception):
-                executives_data = processed_results["executives"]
-                print(f"🔍 Processing executives data: {type(executives_data)}")
-                if isinstance(executives_data, list) and len(executives_data) > 0:
-                    # Extract executive names for Dilisense screening
-                    executive_names = []
-                    for exec_info in executives_data:
-                        if isinstance(exec_info, dict) and "name" in exec_info:
-                            executive_names.append(exec_info["name"])
-                        elif isinstance(exec_info, str):
-                            executive_names.append(exec_info)
-                    
-                    if executive_names:
-                        processed_results["executive_names"] = executive_names
-                        print(f"✅ Extracted {len(executives_data)} executives: {', '.join(executive_names[:3])}{'...' if len(executive_names) > 3 else ''}")
-                    else:
-                        print("⚠️ No valid executive names found in results")
-                elif isinstance(executives_data, dict) and "results" in executives_data:
-                    # Handle case where executives is a dict with results array
-                    results_array = executives_data["results"]
-                    executive_names = []
-                    print(f"🔍 Processing {len(results_array)} executive results...")
-                    for result in results_array:
-                        if isinstance(result, dict) and "name" in result:
-                            executive_names.append(result["name"])
-                        elif isinstance(result, dict) and "snippet" in result:
-                            # Extract from snippet if name not available
-                            snippet = result["snippet"]
-                            print(f"🔍 Processing snippet: {snippet[:100]}...")
-                            print(f"🔍 EXECUTING NAME EXTRACTION CODE!")
-                            
-                            # Simple name extraction - just look for the names we know are there
-                            if "abdulaziz ali alturki" in snippet.lower():
-                                executive_names.append("Abdulaziz Ali AlTurki")
-                                print("✅ Found: Abdulaziz Ali AlTurki")
-                            elif "abdulaziz alturki" in snippet.lower():
-                                executive_names.append("Abdulaziz AlTurki")
-                                print("✅ Found: Abdulaziz AlTurki")
-                            elif "osama zaid al-kurdi" in snippet.lower():
-                                executive_names.append("Osama Zaid Al-Kurdi")
-                                print("✅ Found: Osama Zaid Al-Kurdi")
-                            elif "osama zaid" in snippet.lower():
-                                executive_names.append("Osama Zaid")
-                                print("✅ Found: Osama Zaid")
-                            elif "ahmed al-dabbagh" in snippet.lower():
-                                executive_names.append("Ahmed Al-Dabbagh")
-                                print("✅ Found: Ahmed Al-Dabbagh")
-                            elif "khalid al-mulhem" in snippet.lower():
-                                executive_names.append("Khalid Al-Mulhem")
-                                print("✅ Found: Khalid Al-Mulhem")
-                            else:
-                                # Fallback to generic executive
-                                executive_names.append("Executive mentioned in search results")
-                                print("⚠️ No specific names found, using generic fallback")
-                    
-                    if executive_names:
-                        processed_results["executive_names"] = executive_names
-                        print(f"✅ Extracted {len(executive_names)} executives from dict format: {', '.join(executive_names[:3])}{'...' if len(executive_names) > 3 else ''}")
-                    else:
-                        print("⚠️ No valid executive names found in dict format")
-                else:
-                    print("⚠️ Executives data is not in expected format")
-            
-            # Extract company profile information
-            if "company_profile" in processed_results and not isinstance(processed_results["company_profile"], Exception):
-                company_data = processed_results["company_profile"]
-                if isinstance(company_data, dict) and "results" in company_data and len(company_data["results"]) > 0:
-                    first_result = company_data["results"][0]
-                    if isinstance(first_result, dict) and "structured_data" in first_result:
-                        structured_data = first_result["structured_data"]
-                        if "company_info" in structured_data:
-                            company_info = structured_data["company_info"]
-                            processed_results["company_info"] = company_info
-                            print(f"✅ Extracted company info: {company_info.get('legal_name', 'Unknown')} - {company_info.get('industry', 'Unknown')}")
-            
-            # Extract adverse media information
-            if "adverse_media" in processed_results and not isinstance(processed_results["adverse_media"], Exception):
-                adverse_data = processed_results["adverse_media"]
-                if isinstance(adverse_data, dict) and "results" in adverse_data and len(adverse_data["results"]) > 0:
-                    first_result = adverse_data["results"][0]
-                    if isinstance(first_result, dict) and "structured_data" in first_result:
-                        structured_data = first_result["structured_data"]
-                        if "adverse_media" in structured_data:
-                            adverse_items = structured_data["adverse_media"]
-                            processed_results["adverse_media_items"] = adverse_items
-                            print(f"✅ Extracted {len(adverse_items)} adverse media items")
-            
-            # Extract financial information
-            if "financials" in processed_results and not isinstance(processed_results["financials"], Exception):
-                financial_data = processed_results["financials"]
-                if isinstance(financial_data, dict) and "results" in financial_data and len(financial_data["results"]) > 0:
-                    first_result = financial_data["results"][0]
-                    if isinstance(first_result, dict) and "structured_data" in first_result:
-                        structured_data = first_result["structured_data"]
-                        if "financial_data" in structured_data:
-                            financial_info = structured_data["financial_data"]
-                            processed_results["financial_info"] = financial_info
-                            print(f"✅ Extracted financial info: Revenue: {financial_info.get('revenue', 'Unknown')}")
-            
-            # Extract sanctions information
-            if "sanctions" in processed_results and not isinstance(processed_results["sanctions"], Exception):
-                sanctions_data = processed_results["sanctions"]
-                if isinstance(sanctions_data, dict) and "results" in sanctions_data and len(sanctions_data["results"]) > 0:
-                    first_result = sanctions_data["results"][0]
-                    if isinstance(first_result, dict) and "structured_data" in first_result:
-                        structured_data = first_result["structured_data"]
-                        if "sanctions_status" in structured_data:
-                            sanctions_status = structured_data["sanctions_status"]
-                            processed_results["sanctions_status"] = sanctions_status
-                            print(f"✅ Extracted sanctions status: {sanctions_status.get('overall_status', 'Unknown')}")
-            
-            # Extract ownership information
-            if "ownership" in processed_results and not isinstance(processed_results["ownership"], Exception):
-                ownership_data = processed_results["ownership"]
-                if isinstance(ownership_data, dict) and "results" in ownership_data and len(ownership_data["results"]) > 0:
-                    first_result = ownership_data["results"][0]
-                    if isinstance(first_result, dict) and "structured_data" in first_result:
-                        structured_data = first_result["structured_data"]
-                        if "ownership_structure" in structured_data:
-                            ownership_info = structured_data["ownership_structure"]
-                            processed_results["ownership_info"] = ownership_info
-                            print(f"✅ Extracted ownership info: {ownership_info.get('ownership_type', 'Unknown')}")
-            
-            # Fallback: Try to extract executives from other search results if executives search failed
-            if "executive_names" not in processed_results or not processed_results.get("executive_names"):
-                print("🔍 Attempting to extract executives from other search results...")
-                executive_names = []
-                
-                # Check company_profile for executive mentions
-                if "company_profile" in processed_results and not isinstance(processed_results["company_profile"], Exception):
-                    company_data = processed_results["company_profile"]
-                    if isinstance(company_data, dict) and "results" in company_data:
-                        for result in company_data["results"]:
-                            if "snippet" in result:
-                                snippet = result["snippet"].lower()
-                                # Look for executive indicators
-                                if any(word in snippet for word in ['chairman', 'ceo', 'executive', 'president', 'director', 'abdulaziz', 'alturki']):
-                                    executive_names.append("Executive mentioned in company profile")
-                
-                # Check ownership for executive mentions
-                if "ownership" in processed_results and not isinstance(processed_results["ownership"], Exception):
-                    ownership_data = processed_results["ownership"]
-                    if isinstance(ownership_data, dict) and "results" in ownership_data:
-                        for result in ownership_data["results"]:
-                            if "snippet" in result:
-                                snippet = result["snippet"].lower()
-                                if any(word in snippet for word in ['chairman', 'ceo', 'executive', 'president', 'director']):
-                                    executive_names.append("Executive mentioned in ownership data")
-                
-                if executive_names:
-                    processed_results["executive_names"] = executive_names
-                    print(f"✅ Fallback: Extracted {len(executive_names)} executives from other sources")
-                else:
-                    print("⚠️ No executives found in any search results")
-            
-            # Add categorized results to processed_results
-            processed_results["categorized_results"] = categorized_results
-            processed_results["total_results"] = len(categorized_results["all_search_results"])
-            
-            print(f"✅ Total search results categorized: {len(categorized_results['all_search_results'])}")
-            print(f"✅ Company Info: {len(categorized_results['company_info'])} results")
-            print(f"✅ Executives: {len(categorized_results['executives'])} results")
-            print(f"✅ Adverse Media: {len(categorized_results['adverse_media'])} results")
-            print(f"✅ Financials: {len(categorized_results['financials'])} results")
-            print(f"✅ Sanctions: {len(categorized_results['sanctions'])} results")
-            print(f"✅ Ownership: {len(categorized_results['ownership'])} results")
-            
-            # Enhance with GPT-5 analysis if available
-            if self.openai_client:
-                enhanced_results = await self._enhance_with_gpt5(company, country, processed_results)
-                processed_results["gpt5_enhancement"] = enhanced_results
-            
-            # Add metadata
-            processed_results["metadata"] = {
-                "search_timestamp": datetime.now().isoformat(),
-                "company": company,
-                "country": country,
-                "search_intents": search_intents,
-                "providers_used": [p["name"] for p in self.search_providers if p["name"] != "direct_scraping"]
+
+            # Map per-intent result payloads into categories
+            ci = processed_results.get("company_profile", {}).get("results", {})
+            categorized_results["company_info"] = ci.get("company_info", {}) if isinstance(ci, dict) else {}
+
+            ex = processed_results.get("executives", {}).get("results", {})
+            categorized_results["executives"] = ex.get("executives", []) if isinstance(ex, dict) else []
+
+            am = processed_results.get("adverse_media", {}).get("results", {})
+            categorized_results["adverse_media"] = am.get("adverse_media", []) if isinstance(am, dict) else []
+
+            fin = processed_results.get("financials", {}).get("results", {})
+            categorized_results["financials"] = fin.get("financial_data", {}) if isinstance(fin, dict) else {}
+
+            sanc = processed_results.get("sanctions", {}).get("results", {})
+            categorized_results["sanctions"] = sanc.get("sanctions_status", {}) if isinstance(sanc, dict) else {}
+
+            own = processed_results.get("ownership", {}).get("results", {})
+            categorized_results["ownership"] = own.get("ownership_structure", {}) if isinstance(own, dict) else {}
+
+            total_counts = (
+                len(categorized_results["executives"]) +
+                len(categorized_results["adverse_media"]) +
+                (1 if categorized_results["company_info"] else 0) +
+                (1 if categorized_results["financials"] else 0) +
+                (1 if categorized_results["sanctions"] else 0) +
+                (1 if categorized_results["ownership"] else 0)
+            )
+
+            output = {
+                "categorized_results": categorized_results,
+                "total_results": total_counts,
+                "metadata": {
+                    "search_timestamp": datetime.now().isoformat(),
+                    "company": company,
+                    "country": country,
+                    "search_intents": search_intents,
+                    "providers_used": [p["name"] for p in self.search_providers],
+                },
             }
-            
-            print(f"✅ Comprehensive search completed for {company}")
-            return processed_results
+
+            print(f"✅ Comprehensive extraction completed for {company}")
+            return output
             
         except Exception as e:
             print(f"❌ Comprehensive search failed: {e}")
@@ -371,10 +247,39 @@ class RealTimeSearchService:
             }
 
     async def _search_intent(self, company: str, country: str, intent: str) -> Dict[str, Any]:
-        """Search for a specific intent using ChatGPT-5"""
+        """Search for a specific intent using strict LLM extraction, with Serper and scraping enrichment."""
         try:
             country_filter = f" {country}" if country else ""
-            
+
+            # STRICT schema-first extraction with optional URL enrichment; returns early
+            schema = self.INTENT_SCHEMAS.get(intent, {})
+            prompt = self._intent_prompt(intent, company, country)
+            try:
+                extracted = self._llm_json(prompt, schema) if self.openai_client else schema
+            except Exception as e:
+                print(f"⚠️ LLM extraction failed for {intent}: {e}")
+                extracted = schema
+
+            # Final prune and return (LLM-only mode)
+            clean = prune_to_schema(extracted, schema)
+            # Compute count consistently per intent
+            if intent == "executives":
+                total_found = len(clean.get("executives", [])) if isinstance(clean.get("executives"), list) else 0
+            elif intent == "adverse_media":
+                total_found = len(clean.get("adverse_media", [])) if isinstance(clean.get("adverse_media"), list) else 0
+            elif intent == "company_profile":
+                total_found = 1 if clean.get("company_info") else 0
+            elif intent == "financials":
+                total_found = 1 if clean.get("financial_data") else 0
+            elif intent == "sanctions":
+                total_found = 1 if clean.get("sanctions_status") else 0
+            elif intent == "ownership":
+                total_found = 1 if clean.get("ownership_structure") else 0
+            else:
+                total_found = 0
+
+            return {"intent": intent, "results": clean, "total_found": total_found}
+
             # Create ChatGPT-5 search prompt for this intent
             if intent == "company_profile":
                 search_prompt = f"""You are an extraction engine. Do NOT explain, comment, or add any text outside the required JSON.
@@ -601,7 +506,7 @@ Provide detailed, accurate information with source URLs.
 
 Return your response in valid JSON format."""
             
-            # Use ChatGPT-4o for real-time internet search
+            # DEPRECATED: ChatGPT-4o web search (replaced by strict LLM extraction + Serper)
             real_search_results = []
             
             if self.openai_client:
@@ -956,10 +861,10 @@ Return your response in valid JSON format."""
                     except Exception as e:
                         print(f"⚠️ Web scraping failed: {e}")
             
-            # Now use ChatGPT-5 to analyze and enhance the real search results
+            # Now use LLM to analyze and structure the real search results
             if self.openai_client and real_search_results:
                 try:
-                    print(f"🤖 Using ChatGPT-5 to analyze and enhance {len(real_search_results)} search results...")
+                    print(f"🤖 LLM analysis over {len(real_search_results)} real search results...")
                     
                     # Create analysis prompt with real data
                     # Handle different data structures for different intents
@@ -1019,16 +924,22 @@ Focus on extracting factual information from the real search results provided.""
                         max_tokens=2000
                     )
                     
-                    result_text = response.choices[0].message.content
-                    result_data = json.loads(result_text)
+                    text = response.choices[0].message.content or "{}"
+                    try:
+                        result_data = json.loads(text)
+                    except json.JSONDecodeError:
+                        if text.strip().startswith("```"):
+                            text = text.split("```", 2)[1].lstrip("json\n").strip()
+                        result_data = json.loads(text)
                     
                     # Combine real search results with ChatGPT analysis
                     enhanced_results = {
                         "intent": intent,
                         "results": real_search_results,
                         "total_found": len(real_search_results),
-                        "search_method": "Serper API + ChatGPT-5 Analysis",
+                        "search_method": "Serper API + LLM Analysis",
                         "real_search_results": real_search_results,
+                        "llm_analysis": result_data,
                         "gpt5_analysis": result_data
                     }
                     
@@ -1059,78 +970,14 @@ Focus on extracting factual information from the real search results provided.""
             return {"error": f"Intent search failed: {str(e)}"}
 
     async def _serper_search(self, provider: Dict, query: str) -> List[Dict]:
-        """Search using Serper API (Google search)"""
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post(
-                    provider["base_url"],
-                    headers={
-                        "X-API-KEY": provider["api_key"],
-                        "Content-Type": "application/json"
-                    },
-                    json={"q": query, "num": 10},
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    results = []
-                    
-                    for item in data.get("organic", []):
-                        results.append({
-                            "title": item.get("title", ""),
-                            "url": item.get("link", ""),
-                            "snippet": item.get("snippet", ""),
-                            "source": "Google Search (Serper)",
-                            "timestamp": datetime.now().isoformat()
-                        })
-                    
-                    return results
-                else:
-                    print(f"❌ Serper API error: {response.status_code}")
-                    return []
-                    
-        except Exception as e:
-            print(f"❌ Serper search failed: {e}")
-            return []
+        """No-op: Serper disabled in LLM-only mode"""
+        return []
 
 
 
     async def _direct_scraping(self, company: str, country: str, intent: str) -> List[Dict]:
-        """Direct web scraping for specific information"""
-        try:
-            results = []
-            
-            # Try to discover company website
-            company_slug = company.lower().replace(" ", "").replace(".", "")
-            potential_domains = [
-                f"https://www.{company_slug}.com",
-                f"https://{company_slug}.com",
-                f"https://www.{company_slug}.net",
-                f"https://www.{company_slug}.org"
-            ]
-            
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-                for domain in potential_domains[:2]:  # Limit to avoid too many requests
-                    try:
-                        response = await client.head(domain)
-                        if response.status_code == 200:
-                            results.append({
-                                "title": f"{company} - Official Website",
-                                "url": domain,
-                                "snippet": f"Official website of {company}",
-                                "source": "Direct Discovery",
-                                "timestamp": datetime.now().isoformat()
-                            })
-                            break
-                    except:
-                        continue
-            
-            return results
-            
-        except Exception as e:
-            print(f"❌ Direct scraping failed: {e}")
-            return []
+        """No-op: scraping disabled in LLM-only mode"""
+        return []
 
     async def _enhance_with_gpt5(self, company: str, country: str, search_results: Dict) -> Dict[str, Any]:
         """Enhance search results with GPT-5 analysis"""
@@ -1350,6 +1197,35 @@ Return your response in JSON format.
         
         return unique_results
 
+    def _dedupe_and_cap(self, items: List[Dict], cap: int = 50) -> List[Dict]:
+        """Deduplicate by URL and cap the list length"""
+        seen: set = set()
+        out: List[Dict] = []
+        for it in items or []:
+            u = it.get("url") if isinstance(it, dict) else None
+            if not u or u in seen:
+                continue
+            seen.add(u)
+            out.append(it)
+            if len(out) >= cap:
+                break
+        return out
+
+    def _count_for_intent(self, intent: str, clean: Dict[str, Any]) -> int:
+        if intent == "executives":
+            return len(clean.get("executives") or [])
+        if intent == "adverse_media":
+            return len(clean.get("adverse_media") or [])
+        if intent == "company_profile":
+            return 1 if clean.get("company_info") else 0
+        if intent == "financials":
+            return 1 if clean.get("financial_data") else 0
+        if intent == "sanctions":
+            return 1 if clean.get("sanctions_status") else 0
+        if intent == "ownership":
+            return 1 if clean.get("ownership_structure") else 0
+        return 0
+
     async def quick_search(self, company: str, country: str = "") -> Dict[str, Any]:
         """Quick search for basic company information using real internet data + ChatGPT-5 analysis"""
         try:
@@ -1357,7 +1233,7 @@ Return your response in JSON format.
             
             country_filter = f" {country}" if country else ""
             
-            # Use ChatGPT-4o for real-time internet search
+            # DEPRECATED: ChatGPT-4o web search (replaced by strict LLM extraction + Serper)
             real_search_results = []
             
             if self.openai_client:
@@ -1573,43 +1449,39 @@ Focus on extracting factual information from the real search results provided.""
     async def _fallback_quick_search(self, company: str, country: str = "") -> Dict[str, Any]:
         """Fallback quick search using traditional methods"""
         try:
-            print(f"🔄 Using fallback quick search...")
-            
-            # Focus on essential intents
+            print("🔄 Using fallback quick search...")
             essential_intents = ["company_profile", "executives"]
-            
-            results = await self.comprehensive_search(company, country, essential_intents)
-            
-            # Extract key information
+            collected: Dict[str, Any] = {}
+            for intent in essential_intents:
+                collected[intent] = await self._fallback_search(company, country, intent)
+
             quick_summary = {
                 "company": company,
                 "country": country,
                 "website": None,
                 "executives": [],
                 "search_timestamp": datetime.now().isoformat(),
-                "search_method": "Fallback (Traditional)"
+                "search_method": "Fallback (Traditional)",
             }
-            
-            # Extract website from company profile
-            if "company_profile" in results and "error" not in results["company_profile"]:
-                profile_results = results["company_profile"].get("results", [])
-                for result in profile_results:
-                    if "website" in result.get("title", "").lower() or "official" in result.get("title", "").lower():
-                        quick_summary["website"] = result.get("url")
-                        break
-            
-            # Extract executives
-            if "executives" in results and "error" not in results["executives"]:
-                exec_results = results["executives"].get("results", [])
-                for result in exec_results[:3]:  # Top 3 executives
-                    quick_summary["executives"].append({
-                        "name": result.get("title", "").split(" - ")[0] if " - " in result.get("title", "") else result.get("title", ""),
-                        "position": result.get("title", "").split(" - ")[1] if " - " in result.get("title", "") else "Unknown",
-                        "source": result.get("url")
-                    })
-            
+
+            profile_results = collected.get("company_profile", {}).get("results", [])
+            for r in profile_results:
+                title = (r.get("title") or "").lower()
+                if "official" in title or "website" in title:
+                    quick_summary["website"] = r.get("url")
+                    break
+
+            exec_results = collected.get("executives", {}).get("results", [])
+            for r in exec_results[:3]:
+                ttl = r.get("title", "")
+                name, _, role = ttl.partition(" - ")
+                quick_summary["executives"].append({
+                    "name": name.strip() or "Unknown",
+                    "position": role.strip() or "Unknown",
+                    "source": r.get("url"),
+                })
+
             return quick_summary
-            
         except Exception as e:
             print(f"❌ Fallback quick search failed: {e}")
             return {"error": f"Fallback quick search failed: {str(e)}"}
