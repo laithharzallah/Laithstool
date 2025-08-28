@@ -1006,7 +1006,7 @@ def enhanced_company_screening():
             data = {}
         print(f"📊 Request data: {data}")
         
-        company_name = data.get("company_name", "").strip() or data.get("companyName", "").strip()
+        company_name = (data.get("company_name") or data.get("companyName") or data.get("company") or "").strip()
         country = data.get("country", "").strip()
         
         print(f"🏢 Company: '{company_name}', Country: '{country}'")
@@ -1034,6 +1034,14 @@ def enhanced_company_screening():
                 finally:
                     new_loop.close()
         
+        # Sanity logs for env presence
+        try:
+            print("🔎 OPENAI present?", bool(os.getenv("OPENAI_API_KEY")))
+            print("🔎 SERPER present?", bool(os.getenv("SERPER_API_KEY")))
+            print("🔎 DILISENSE present?", bool(os.getenv("DILISENSE_API_KEY")))
+        except Exception:
+            pass
+
         # Run both services
         dilisense_results = run_async(dilisense_service.screen_company(company_name, country))
         web_search_results = run_async(real_time_search_service.comprehensive_search(company=company_name, country=country))
@@ -1065,6 +1073,19 @@ def enhanced_company_screening():
             "risk_factors": dilisense_results.get("risk_factors", [])
         }
         
+        # Persist a copy for inspection
+        try:
+            out_dir = os.environ.get("REPORT_DIR", "/tmp")
+            os.makedirs(out_dir, exist_ok=True)
+            fname = f"{out_dir}/company_{company_name.replace(' ', '_')}_{int(datetime.utcnow().timestamp())}.json"
+            with open(fname, "w", encoding="utf-8") as f:
+                import json as _json
+                _json.dump(combined_results, f, ensure_ascii=False, indent=2)
+            combined_results.setdefault("metadata", {})
+            combined_results["metadata"]["saved_to"] = fname
+        except Exception as _e:
+            print(f"⚠️ Failed writing report file: {_e}")
+
         print(f"✅ Enhanced screening completed for {company_name}")
         return jsonify(combined_results)
         
