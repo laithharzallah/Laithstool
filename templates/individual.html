@@ -63,8 +63,9 @@ form.addEventListener('submit', async (e) => {
     showSkeleton(true);
     
     try {
-        const res = await fetch('/api/screening/individual', {
+        const res = await fetch('/api/individual-screen', {
             method: 'POST',
+            credentials: 'include',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)
         });
