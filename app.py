@@ -170,6 +170,34 @@ def _run_company_task(task_id, data):
 
         # Step 4: Report Generation
         s3 = _add_step(t, "Report Generation", status="active", message="Merging results")
+        # Derive a simple web risk from adverse media
+        def _derive_web_risk(categorized: dict) -> dict:
+            sev_weight = {"high": 3, "medium": 2, "low": 1, None: 0}
+            items = (categorized or {}).get("adverse_media") or []
+            score = 0
+            for it in items:
+                sev = (it.get("severity") or "").strip().lower()
+                score += sev_weight.get(sev, 0)
+            level = "Low"
+            if score >= 6:
+                level = "High"
+            elif score >= 2:
+                level = "Medium"
+            return {"web_risk_level": level, "web_risk_score": score}
+
+        web_cat = (combined_results.get("web_search") or {}).get("categorized_results") or {}
+        web_risk = _derive_web_risk(web_cat)
+        # Merge overall level and score
+        dl_level = (combined_results.get("dilisense") or {}).get("overall_risk_level")
+        overall = (
+            "High" if (dl_level == "High" or web_risk["web_risk_level"] == "High") else
+            "Medium" if (dl_level == "Medium" or web_risk["web_risk_level"] == "Medium") else
+            "Low"
+        )
+        combined_results["overall_risk_level"] = overall
+        combined_results["risk_score"] = max(combined_results.get("risk_score", 0), web_risk["web_risk_score"])
+        combined_results.setdefault("risk_factors", [])
+        combined_results.setdefault("data_sources", ["Dilisense API", "Serper + GPT-4o"])
         with TASKS_LOCK:
             combined_results["task_id"] = task_id
             combined_results["metadata"] = {"processing_time_ms": int((time.time() - start_ts) * 1000)}

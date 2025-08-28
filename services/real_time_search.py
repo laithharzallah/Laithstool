@@ -7,6 +7,7 @@ import json
 import asyncio
 from typing import Dict, List, Optional, Any
 import httpx
+import tldextract
 from datetime import datetime, timedelta
 import logging
 from openai import OpenAI
@@ -255,46 +256,55 @@ class RealTimeSearchService:
                 "error": f"Search failed: {str(e)}"
             }
 
-    async def _search_intent(self, company: str, country: str, intent: str) -> Dict[str, Any]:
-        """Serper-first search; then LLM structures into schema and returns total_found."""
+    async def _search_intent(self, company: str, country: str, intent: str, domain: str = "") -> Dict[str, Any]:
+        """Serper-first; pass real results to GPT-4o to structure into schema."""
         try:
-            country_filter = f" {country}" if country else ""
             schema = self.INTENT_SCHEMAS.get(intent, {})
+            # 1) Build geo+intent-aware query
+            query = _build_query(company, country, intent, domain or None)
+            # 2) Serper search (web + news)
+            serper_results = await self._serper_search(query, country=country)
+            if not serper_results:
+                return {"intent": intent, "results": schema, "total_found": 0, "providers": ["serper:0"]}
 
-            real_search_results: List[Dict[str, Any]] = []
-            # Run Serper first if available
-            for provider in self.search_providers:
-                if provider.get("type") == "google_search":
-                    try:
-                        q = f"{company}{country_filter} {intent}"
-                        serper_results = await self._serper_search(provider, q)
-                        if serper_results:
-                            real_search_results.extend(serper_results)
-                            print(f"✅ Serper search results received: {len(serper_results)} items")
-                    except Exception as e:
-                        print(f"⚠️ Serper search failed for {intent}: {e}")
+            if not self.openai_client:
+                clean = prune_to_schema({}, schema)
+                return {"intent": intent, "results": clean, "total_found": 0, "providers": [f"serper:{len(serper_results)}"]}
 
-            # Build a strict prompt that includes the schema-by-example and the search context
-            base_prompt = self._intent_prompt(intent, company, country)
-            context_blob = json.dumps(real_search_results[:10], ensure_ascii=False)
-            struct_prompt = (
-                base_prompt +
-                "\nUse ONLY the allowed keys and set null if unknown.\n" +
-                "Context search results (JSON array of {title,url,snippet,source}):\n" +
-                context_blob
+            # 3) Strict prompt with only the real results
+            STRICT_SYS = (
+                "You are a factual extraction engine.\n"
+                "Use ONLY the provided web results below as evidence. Do not use prior knowledge.\n"
+                "Return a SINGLE JSON object matching the schema. Unknown ⇒ null. Do not invent URLs."
             )
-
-            # Call LLM to structure according to schema
+            base = self._intent_prompt(intent, company, country)
+            user_prompt = (
+                f'Company: "{company}" Country: "{country}" Intent: "{intent}"\n\n'
+                f"WEB RESULTS (use as evidence; cite with source_url fields where applicable):\n"
+                f"{json.dumps(serper_results[:12], ensure_ascii=False, indent=2)}\n\n"
+                f"Return ONLY a JSON object that matches this schema example (same keys, nulls allowed):\n"
+                f"{json.dumps(schema, ensure_ascii=False, indent=2)}\n"
+            )
             try:
-                extracted = self._llm_json(struct_prompt, schema) if self.openai_client else schema
+                resp = self.openai_client.chat.completions.create(
+                    model=self.openai_model,
+                    messages=[{"role": "system", "content": STRICT_SYS}, {"role": "user", "content": base + "\n\n" + user_prompt}],
+                    response_format={"type": "json_object"},
+                    temperature=0,
+                )
+                raw = resp.choices[0].message.content or "{}"
+                try:
+                    data = json.loads(raw)
+                except Exception:
+                    data = {}
+                clean = prune_to_schema(data, schema)
+                total_found = self._count_for_intent(intent, clean)
                 print("✅ GPT-4o structured response parsed")
+                return {"intent": intent, "results": clean, "total_found": total_found, "providers": [f"serper:{len(serper_results)}", "gpt-4o"]}
             except Exception as e:
                 print(f"⚠️ LLM structuring failed for {intent}: {e}")
-                extracted = schema
-
-            clean = prune_to_schema(extracted, schema)
-            total_found = self._count_for_intent(intent, clean)
-            return {"intent": intent, "results": clean, "total_found": total_found}
+                clean = prune_to_schema({}, schema)
+                return {"intent": intent, "results": clean, "total_found": 0, "providers": [f"serper:{len(serper_results)}"]}
 
             # Create ChatGPT-5 search prompt for this intent
             if intent == "company_profile":
@@ -715,7 +725,7 @@ Return your response in valid JSON format."""
                                     
                                     # Approach 3: Look for "Name is Position" pattern
                                     if not potential_name:
-                                        name_is_pattern = r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+is\s+(?:CEO|Chairman|President|Director|Managing Director|Chief|Head|Founder|Owner)'
+                                        name_is_pattern = r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+is\s+(?:CEO|Chairman|President|Director)'
                                         match = re.search(name_is_pattern, snippet)
                                         if match:
                                             potential_name = match.group(1)
@@ -858,7 +868,7 @@ Return your response in valid JSON format."""
                 for provider in self.search_providers:
                     if provider["type"] == "google_search":
                         try:
-                            serper_results = await self._serper_search(provider, f"{company}{country_filter} {intent}")
+                            serper_results = await self._serper_search(f"{company}{country_filter} {intent}", country=country)
                             if serper_results:
                                 real_search_results.extend(serper_results)
                                 print(f"✅ Found {len(serper_results)} results via Serper fallback")
@@ -985,30 +995,53 @@ Focus on extracting factual information from the real search results provided.""
             print(f"❌ Intent search failed for {intent}: {e}")
             return {"error": f"Intent search failed: {str(e)}"}
 
-    async def _serper_search(self, provider: Dict, query: str) -> List[Dict]:
-        """Query Serper (Google Search API) for results."""
+    async def _serper_search(self, query: str, country: str = "", num: int = 20) -> List[Dict]:
+        """Query Serper: web + news; geo-aware; de-dup URLs."""
+        api_key = os.getenv("SERPER_API_KEY")
+        if not api_key:
+            return []
+        headers = {"X-API-KEY": api_key, "Content-Type": "application/json"}
+        payload = {"q": query, "gl": _gl_for(country), "num": num}
+        out: List[Dict[str, Any]] = []
         try:
-            headers = {"X-API-KEY": provider.get("api_key", ""), "Content-Type": "application/json"}
-            payload = {"q": query, "num": 10}
-            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
-                resp = await client.post(provider.get("base_url", "https://google.serper.dev/search"), headers=headers, json=payload)
-                if resp.status_code != 200:
-                    raise RuntimeError(f"Serper status {resp.status_code}")
-                data = resp.json()
-                organic = data.get("organic", []) or []
-                out: List[Dict[str, Any]] = []
-                for it in organic:
-                    link = it.get("link")
-                    if not link:
-                        continue
-                    out.append({
-                        "title": it.get("title", ""),
-                        "url": link,
-                        "snippet": it.get("snippet", ""),
-                        "source": "Google Search (Serper)",
-                        "timestamp": datetime.now().isoformat()
-                    })
-                return out
+            async with httpx.AsyncClient(timeout=25) as client:
+                r1 = await client.post(f"{SERPER_BASE}/search", headers=headers, json=payload)
+                if r1.status_code == 200:
+                    data = r1.json()
+                    for sec in ["organic", "topStories", "knowledgeGraph", "answerBox"]:
+                        items = data.get(sec) or []
+                        if isinstance(items, dict):
+                            items = [items]
+                        for it in items:
+                            url = it.get("link") or it.get("url") or it.get("website") or ""
+                            src = tldextract.extract(url).registered_domain or "serper"
+                            out.append({
+                                "title": it.get("title") or it.get("name") or it.get("snippet") or "",
+                                "url": url,
+                                "snippet": it.get("snippet") or it.get("description") or "",
+                                "source": src,
+                                "section": sec
+                            })
+                r2 = await client.post(f"{SERPER_BASE}/news", headers=headers, json=payload)
+                if r2.status_code == 200:
+                    news = r2.json().get("news") or []
+                    for n in news:
+                        out.append({
+                            "title": n.get("title", ""),
+                            "url": n.get("link", ""),
+                            "snippet": n.get("snippet", ""),
+                            "source": n.get("source", "news"),
+                            "date": n.get("date"),
+                            "section": "news"
+                        })
+            # de-dupe by URL
+            seen: set = set(); final: List[Dict[str, Any]] = []
+            for r in out:
+                u = r.get("url") or ""
+                if u and u not in seen:
+                    seen.add(u)
+                    final.append(r)
+            return final[:50]
         except Exception as e:
             print(f"❌ Serper search error: {e}")
             return []
@@ -1195,7 +1228,7 @@ Return your response in JSON format.
             for provider in self.search_providers:
                 if provider["type"] == "google_search":
                     try:
-                        results = await self._serper_search(provider, query)
+                        results = await self._serper_search(query, country=country)
                         if results:
                             all_results.extend(results)
                     except Exception as e:
@@ -1372,7 +1405,7 @@ Search the web thoroughly and provide detailed, factual information with source 
                 for provider in self.search_providers:
                     if provider["type"] == "google_search":
                         try:
-                            serper_results = await self._serper_search(provider, f"{company}{country_filter} company profile executives")
+                            serper_results = await self._serper_search(f"{company}{country_filter} company profile executives", country=country)
                             if serper_results:
                                 real_search_results.extend(serper_results)
                                 print(f"✅ Found {len(serper_results)} results via Serper fallback")
