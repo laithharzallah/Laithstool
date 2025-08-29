@@ -308,11 +308,19 @@ class RealTimeSearchService:
             serper_results: List[Dict[str, Any]] = []
             google_hits: List[Dict[str, Any]] = []
             try:
-                # Prefer Google if configured
-                gq = query
-                google_hits = await self.google.search(gq, num=10)
+                # Prefer Google if configured and query is valid
+                gq = query.strip()
+                if len(gq) >= 3 and getattr(self.google, "api_key", None) and getattr(self.google, "cx", None):
+                    print(f"🔍 Google CSE query: '{gq[:50]}...'")
+                    google_hits = await self.google.search(gq, num=10)
+                    if google_hits:
+                        print(f"✅ Google CSE returned {len(google_hits)} results")
+                    else:
+                        print("⚠️ Google CSE returned 0 results")
+                else:
+                    print(f"⚠️ Google CSE skipped: query too short or keys missing")
             except Exception as _ge:
-                print(f"⚠️ Google search failed: {_ge}")
+                print(f"⚠️ Google CSE failed (falling back to Serper): {_ge}")
             if self.serper_api_key:
                 max_attempts = 3 if (cc or "").upper() == "SA" else 2
                 for attempt in range(max_attempts):

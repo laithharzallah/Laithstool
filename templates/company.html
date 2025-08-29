@@ -181,11 +181,28 @@ form.addEventListener('submit', async (e) => {
         try {
             window.__last_api__ = data;
             const overallEl = document.getElementById('overall-json');
-            if (overallEl) overallEl.textContent = JSON.stringify(data, null, 2);
-            if (typeof window.__showPanel === 'function') {
-                window.__showPanel('overall');
+            if (overallEl) {
+                overallEl.textContent = JSON.stringify(data, null, 2);
+                console.log('Set overall JSON, length:', JSON.stringify(data, null, 2).length);
             }
-        } catch (_) {}
+            // Force switch to overall tab immediately
+            const tabOverall = document.getElementById('tab-overall');
+            const panelOverall = document.getElementById('panel-overall');
+            const tabDetails = document.getElementById('tab-details');
+            const panelDetails = document.getElementById('panel-details');
+            
+            if (tabOverall && panelOverall && tabDetails && panelDetails) {
+                panelOverall.classList.remove('hidden');
+                panelDetails.classList.add('hidden');
+                tabOverall.classList.add('border-b-2','border-accent-blue','text-accent-blue');
+                tabOverall.classList.remove('text-[var(--text-1)]');
+                tabDetails.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
+                tabDetails.classList.add('text-[var(--text-1)]');
+                console.log('Switched to overall tab');
+            }
+        } catch (e) {
+            console.error('Overall tab error:', e);
+        }
 
         renderCompanyResults(adapted);
         toast('Screening completed successfully', 'success');
