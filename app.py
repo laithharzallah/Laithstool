@@ -47,12 +47,12 @@ PORT = int(os.getenv("PORT", "5000"))
 # Initialize OpenAI client only if key is available
 client = None
 if OPENAI_API_KEY:
-try:
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
         print("✅ OpenAI client initialized")
-except Exception as e:
-    print(f"❌ Failed to initialize OpenAI client: {str(e)}")
-    client = None
+    except Exception as e:
+        print(f"❌ Failed to initialize OpenAI client: {str(e)}")
+        client = None
 else:
     print("⚠️ OPENAI_API_KEY not found - some features will be limited")
     print("ℹ️ Set OPENAI_API_KEY in Render → Environment (not in .env)")
