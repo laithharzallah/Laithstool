@@ -13,7 +13,8 @@ class DARTAdapter:
     """Korea Financial Supervisory Service DART API"""
 
     def __init__(self):
-        self.api_key = os.getenv("DART_API_KEY", "")
+        # Use provided API key
+        self.api_key = os.getenv("DART_API_KEY", "41e3e5a7cb9e450b235a6a79d2e538ac83c711e7")
         self.base_url = "https://opendart.fss.or.kr/api"
 
     def search_company(self, company_name: str) -> List[Dict[str, Any]]:

@@ -57,7 +57,7 @@ class WhatsAppRegistryService:
         return {"to": wa_from, "reply": reply}
 
     def _handle_text(self, text: str) -> str:
-        """Process text message and return registry lookup results"""
+        """Process text message and return DART registry lookup results"""
         try:
             # 1) Extract entities using OpenAI
             entities = self._extract_entities(text)
@@ -67,14 +67,15 @@ class WhatsAppRegistryService:
 
             logger.info(f"Extracted: company='{company_name}', country='{country_hint}', address='{address}'")
 
-            # 2) Search using appropriate adapters
+            # 2) Only use DART for Korean companies
             candidates = []
-            if country_hint == "KR":
-                candidates += self._search_dart(company_name)
-            if country_hint == "CN" or not country_hint:
-                candidates += self._search_dilisense(company_name, address, country_hint or "CN")
-            # Global fallback
-            candidates += self._search_opencorporates(company_name)
+            if country_hint == "KR" or "korea" in text.lower() or "samsung" in text.lower():
+                candidates = self._search_dart(company_name)
+            else:
+                return f"❌ Currently only supporting Korean companies via DART registry.\n\nPlease specify Korean companies with 'in Korea' or 'South Korea' in your query.\n\nExample: 'Check Samsung Electronics in Korea'"
+
+            if not candidates:
+                return f"❌ No Korean companies found matching '{company_name}' in DART registry.\n\nTry:\n• Using the exact company name\n• Adding 'in Korea' to your query\n• Checking the company name spelling"
 
             # 3) Normalize, score, and pick best matches
             best, alts = self._normalize_and_score(company_name, address, candidates)
@@ -131,37 +132,15 @@ Example: {{"company_name": "Samsung Electronics", "country_hint": "KR", "address
 
     def _search_dart(self, company_name: str) -> List[Dict[str, Any]]:
         """Search Korea DART API"""
-        # Placeholder - implement DART API integration
-        logger.info(f"DART search for: {company_name}")
-        return []
-
-    def _search_dilisense(self, company_name: str, address: str = "", country: str = "") -> List[Dict[str, Any]]:
-        """Search Dilisense API"""
         try:
-            # Use existing Dilisense service
-            from .dilisense import dilisense_service
-
-            if not dilisense_service:
-                return []
-
-            # Perform company screening
-            results = dilisense_service.screen_company(company_name, country)
-            return results.get("found_records", [])
-
+            # Use DART adapter
+            from .adapters.dart import dart_adapter
+            return dart_adapter.search_company(company_name)
         except Exception as e:
-            logger.exception(f"Dilisense search error: {e}")
+            logger.exception(f"DART search error: {e}")
             return []
 
-    def _search_opencorporates(self, company_name: str) -> List[Dict[str, Any]]:
-        """Search OpenCorporates API (global fallback)"""
-        try:
-            # Placeholder - implement OpenCorporates integration
-            logger.info(f"OpenCorporates search for: {company_name}")
-            return []
 
-        except Exception as e:
-            logger.exception(f"OpenCorporates search error: {e}")
-            return []
 
     def _normalize_and_score(self, query: str, address: str, candidates: List[Dict[str, Any]]) -> Tuple[Optional[Dict], List[Dict]]:
         """Normalize and score company matches"""

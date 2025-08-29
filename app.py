@@ -613,10 +613,10 @@ def debug_providers():
             "WHATSAPP_BEARER": bool(os.getenv("WHATSAPP_BEARER")),
             "WHATSAPP_VERIFY_TOKEN": bool(os.getenv("WHATSAPP_VERIFY_TOKEN")),
             "WHATSAPP_SENDER_E164": bool(os.getenv("WHATSAPP_SENDER_E164")),
-            "DART_API_KEY": bool(os.getenv("DART_API_KEY")),
-            "OPENCORPORATES_API_KEY": bool(os.getenv("OPENCORPORATES_API_KEY")),
+            "DART_API_KEY": bool(os.getenv("DART_API_KEY", "41e3e5a7cb9e450b235a6a79d2e538ac83c711e7")),
             "providers": getattr(rt, "search_providers", []),
             "whatsapp_service": WHATSAPP_AVAILABLE,
+            "korean_registry_focus": True,
         }
         return jsonify(info)
     except Exception as e:

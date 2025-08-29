@@ -18,10 +18,10 @@ A professional due diligence and company screening platform powered by GPT-5 art
 - **Risk Assessment**: Bribery/corruption, political exposure, compliance issues
 - **Real-time Data**: Live web scraping and content extraction
 
-### 💬 **WhatsApp Registry Agent**
-- **Natural Language Processing**: Extract company names and countries from WhatsApp messages
-- **Multi-Source Registry Search**: Dilisense, DART (Korea), OpenCorporates (Global)
-- **Intelligent Matching**: Fuzzy matching with confidence scoring
+### 💬 **WhatsApp Registry Agent (DART Focus)**
+- **Natural Language Processing**: Extract company names from WhatsApp messages
+- **Korean Company Registry**: DART (Data Analysis, Retrieval and Transfer) API integration
+- **Intelligent Matching**: Fuzzy matching with confidence scoring for Korean companies
 - **WhatsApp Webhook Integration**: Real-time message processing
 - **Local Simulation**: Test functionality without WhatsApp setup
 
@@ -37,6 +37,7 @@ A professional due diligence and company screening platform powered by GPT-5 art
 
 - **Backend**: Flask (Python)
 - **AI Engine**: GPT-5 (GPT-4o) via OpenAI API
+- **Registry APIs**: DART (Korean Financial Supervisory Service)
 - **Web Scraping**: httpx, trafilatura, BeautifulSoup
 - **Search APIs**: NewsAPI, Serper, RSS feeds
 - **Frontend**: HTMX + Alpine.js + TailwindCSS + DaisyUI
@@ -99,17 +100,16 @@ NEWS_API_KEY=your-newsapi-key
 SEARCH_PROVIDER=newsapi
 ```
 
-**WhatsApp Registry Agent:**
+**WhatsApp Registry Agent (Korean Companies):**
 ```bash
-# WhatsApp Business API (Meta)
+# DART API (Korean Financial Supervisory Service)
+DART_API_KEY=41e3e5a7cb9e450b235a6a79d2e538ac83c711e7
+
+# WhatsApp Business API (Meta) - Optional for live messaging
 WHATSAPP_PHONE_ID=your-whatsapp-phone-id
 WHATSAPP_BEARER=your-whatsapp-bearer-token
 WHATSAPP_VERIFY_TOKEN=your-webhook-verify-token
 WHATSAPP_SENDER_E164=+your-whatsapp-number
-
-# Additional Registry APIs
-DART_API_KEY=your-dart-api-key
-OPENCORPORATES_API_KEY=your-opencorporates-api-key
 ```
 
 ### Deployment Steps
@@ -135,13 +135,15 @@ OPENCORPORATES_API_KEY=your-opencorporates-api-key
 4. **Monitor Progress**: Watch real-time updates
 5. **Review Results**: Explore detailed findings in multiple tabs
 
-### WhatsApp Registry Testing
+### WhatsApp Registry Testing (Korean Companies)
 
 1. **Access Test Interface**: Click "💬 WhatsApp Registry" in the sidebar
-2. **Test Messages**: Try natural language queries like:
-   - "Check Samsung Electronics in South Korea"
-   - "Find company Alibaba Group in China"
-   - "Look up Siemens AG in Germany"
+2. **Test Messages**: Try natural language queries for Korean companies:
+   - "Check Samsung Electronics in Korea"
+   - "Find Hyundai Motor Company in South Korea"
+   - "Search for LG Chem in Korea"
+   - "Look up SK Hynix in South Korea"
+   - "Check POSCO in Korea"
 3. **Simulate**: Use the test interface to simulate WhatsApp messages
 4. **Webhook Setup**: Configure Meta WhatsApp Business API for live messaging
 

@@ -41,8 +41,26 @@
             <!-- Test Form -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-                    Test Company Lookup
+                    Test Korean Company Lookup (DART Registry)
                 </h2>
+
+                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                                Korean Companies Only
+                            </h3>
+                            <div class="mt-2 text-sm text-blue-700 dark:text-blue-300">
+                                <p>This service currently only supports Korean companies via the DART (Data Analysis, Retrieval and Transfer) registry from the Korean Financial Supervisory Service.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <form id="whatsapp-test-form" class="space-y-4">
                     <div>
@@ -96,28 +114,34 @@
                     </h3>
                     <div class="space-y-2">
                         <button
-                            onclick="setExample('Check Samsung Electronics in South Korea')"
+                            onclick="setExample('Check Samsung Electronics in Korea')"
                             class="block w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition duration-200"
                         >
-                            🇰🇷 Samsung Electronics (Korea)
+                            🇰🇷 Samsung Electronics
                         </button>
                         <button
-                            onclick="setExample('Check Alibaba Group in China')"
+                            onclick="setExample('Find Hyundai Motor Company in South Korea')"
                             class="block w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition duration-200"
                         >
-                            🇨🇳 Alibaba Group (China)
+                            🇰🇷 Hyundai Motor
                         </button>
                         <button
-                            onclick="setExample('Check Apple Inc in USA')"
+                            onclick="setExample('Search for LG Chem in Korea')"
                             class="block w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition duration-200"
                         >
-                            🇺🇸 Apple Inc (USA)
+                            🇰🇷 LG Chem
                         </button>
                         <button
-                            onclick="setExample('Check Siemens AG in Germany')"
+                            onclick="setExample('Look up SK Hynix in South Korea')"
                             class="block w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition duration-200"
                         >
-                            🇩🇪 Siemens AG (Germany)
+                            🇰🇷 SK Hynix
+                        </button>
+                        <button
+                            onclick="setExample('Check POSCO in Korea')"
+                            class="block w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition duration-200"
+                        >
+                            🇰🇷 POSCO Steel
                         </button>
                     </div>
                 </div>
@@ -185,7 +209,7 @@
                 Service Configuration
             </h2>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="flex items-center space-x-3">
                     <div class="w-3 h-3 rounded-full {% if whatsapp_available %}bg-green-500{% else %}bg-red-500{% endif %}"></div>
                     <span class="text-sm text-gray-600 dark:text-gray-400">WhatsApp Service</span>
@@ -196,22 +220,18 @@
                 </div>
                 <div class="flex items-center space-x-3">
                     <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span class="text-sm text-gray-600 dark:text-gray-400">Dilisense Integration</span>
+                    <span class="text-sm text-gray-600 dark:text-gray-400">DART Registry API</span>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-                    <span class="text-sm text-gray-600 dark:text-gray-400">DART (Korean Registry)</span>
-                </div>
-                <div class="flex items-center space-x-3">
-                    <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-                    <span class="text-sm text-gray-600 dark:text-gray-400">OpenCorporates (Global)</span>
+                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Fuzzy Matching</span>
                 </div>
             </div>
 
             <div class="mt-6">
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                    <strong>Note:</strong> Yellow indicators mean services are available but may require API keys for full functionality.
-                    Configure <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">WHATSAPP_*</code> and <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">DART_API_KEY</code> environment variables for complete WhatsApp integration.
+                    <strong>Note:</strong> This service is configured to use your DART API key for Korean company lookups.
+                    For full WhatsApp integration, configure <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">WHATSAPP_*</code> environment variables.
                 </p>
             </div>
         </div>
