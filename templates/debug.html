@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug - Raw API Responses</title>
+    <style>
+        body { font-family: monospace; margin: 20px; background: #1a1a1a; color: #fff; }
+        .form { background: #333; padding: 20px; margin: 20px 0; border-radius: 8px; }
+        .result { background: #222; padding: 20px; margin: 20px 0; border-radius: 8px; white-space: pre-wrap; overflow: auto; max-height: 600px; }
+        input, button { padding: 8px; margin: 5px; border-radius: 4px; border: 1px solid #555; background: #444; color: #fff; }
+        button { background: #007acc; cursor: pointer; }
+        button:hover { background: #0066aa; }
+        .error { color: #ff6b6b; }
+        .success { color: #51cf66; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug - Raw API Responses</h1>
+    
+    <div class="form">
+        <h2>Company Screening</h2>
+        <input type="text" id="companyName" placeholder="Company Name" value="Rawabi Holding">
+        <input type="text" id="country" placeholder="Country" value="SA">
+        <input type="text" id="domain" placeholder="Domain" value="rawabi.com">
+        <button onclick="testCompany()">Test Company API</button>
+    </div>
+    
+    <div class="form">
+        <h2>Individual Screening</h2>
+        <input type="text" id="individualName" placeholder="Full Name" value="Boris Johnson">
+        <input type="text" id="indCountry" placeholder="Country" value="GB">
+        <button onclick="testIndividual()">Test Individual API</button>
+    </div>
+    
+    <div class="form">
+        <h2>Provider Status</h2>
+        <button onclick="testProviders()">Check Providers</button>
+        <button onclick="testHealth()">Check Health</button>
+    </div>
+    
+    <div id="result" class="result">Results will appear here...</div>
+
+    <script>
+        async function login() {
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'username=admin&password=change-me',
+                    credentials: 'include'
+                });
+                return res.ok;
+            } catch (e) {
+                console.error('Login failed:', e);
+                return false;
+            }
+        }
+
+        async function testCompany() {
+            const result = document.getElementById('result');
+            result.textContent = 'Testing company screening...';
+            
+            try {
+                await login();
+                
+                const payload = {
+                    company_name: document.getElementById('companyName').value,
+                    country: document.getElementById('country').value,
+                    domain: document.getElementById('domain').value
+                };
+                
+                const res = await fetch('/api/enhanced-screen', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await res.json();
+                
+                result.innerHTML = `<div class="${res.ok ? 'success' : 'error'}">Status: ${res.status}</div>\n` + 
+                                   JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                result.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testIndividual() {
+            const result = document.getElementById('result');
+            result.textContent = 'Testing individual screening...';
+            
+            try {
+                await login();
+                
+                const payload = {
+                    name: document.getElementById('individualName').value,
+                    country: document.getElementById('indCountry').value
+                };
+                
+                const res = await fetch('/api/individual-screen', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await res.json();
+                
+                result.innerHTML = `<div class="${res.ok ? 'success' : 'error'}">Status: ${res.status}</div>\n` + 
+                                   JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                result.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testProviders() {
+            const result = document.getElementById('result');
+            result.textContent = 'Checking providers...';
+            
+            try {
+                const res = await fetch('/debug/providers');
+                const data = await res.json();
+                
+                result.innerHTML = `<div class="${res.ok ? 'success' : 'error'}">Status: ${res.status}</div>\n` + 
+                                   JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                result.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testHealth() {
+            const result = document.getElementById('result');
+            result.textContent = 'Checking health...';
+            
+            try {
+                const res = await fetch('/api/health');
+                const data = await res.json();
+                
+                result.innerHTML = `<div class="${res.ok ? 'success' : 'error'}">Status: ${res.status}</div>\n` + 
+                                   JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                result.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

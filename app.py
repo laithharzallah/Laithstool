@@ -1007,6 +1007,11 @@ def test_company():
     print("🔍 Test company route accessed!")
     return "Company screening route is working! No session required!"
 
+@app.route("/debug")
+def debug_page():
+    """Debug page with raw API testing"""
+    return render_template("debug.html")
+
 @app.route("/individual")
 def individual_screening():
     """Individual screening page"""
