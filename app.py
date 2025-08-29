@@ -28,7 +28,7 @@ except ImportError:
 
 # Load environment variables only in development or if .env exists locally
 if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
-load_dotenv()
+    load_dotenv()
     print("✅ Environment variables loaded from .env file")
 else:
     print("🌍 Production mode: using system environment variables")
