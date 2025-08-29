@@ -552,25 +552,21 @@ def api_dart_search():
         # Search Korean companies using DART registry
         companies = dart_adapter.search_company(company_name)
 
-        # If we found companies and user wants detailed info, get complete data
+        # If we found companies, get complete data (keep it fast: only first result, no translation)
         detailed_results = []
-        for company in companies[:3]:  # Get detailed info for top 3 results
+        for company in companies[:1]:  # Keep response fast: only top 1 result
             corp_code = company.get('corp_code')
             if corp_code:
                 # Get complete company information
                 complete_info = dart_adapter.get_complete_company_info(corp_code)
                 if complete_info and 'error' not in complete_info:
-                    # Translate Korean fields to English
-                    from utils.translate import translate_company_data
-                    translated_info = translate_company_data(complete_info)
-                    logger.info(f"Translation completed for {corp_code}")
-                    company['detailed_info'] = translated_info
+                    company['detailed_info'] = complete_info
 
             detailed_results.append(company)
 
         return jsonify({
             "success": True,
-            "companies": detailed_results,
+            "companies": detailed_results or companies,
             "search_term": company_name,
             "total_results": len(companies),
             "detailed_info_available": len(detailed_results) > 0
