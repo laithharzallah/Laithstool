@@ -172,7 +172,11 @@ class DARTAdapter:
         # If basic info is empty, try getting it from the list endpoint
         if not basic_row or not any(basic_row.values()):
             logger.info("Basic info empty, trying to get from list.json...")
-            list_js = self._get("list.json", corp_code=corp_code, bgn_de="20240101", end_de="20241231", page_no=1, page_count=1)
+            # DART API requires 3-month limit when searching by corp_code
+            from datetime import datetime, timedelta
+            three_months_ago = (datetime.now() - timedelta(days=90)).strftime('%Y%m%d')
+            today = datetime.now().strftime('%Y%m%d')
+            list_js = self._get("list.json", corp_code=corp_code, bgn_de=three_months_ago, end_de=today, page_no=1, page_count=1)
             if list_js.get("list") and len(list_js["list"]) > 0:
                 list_item = list_js["list"][0]
                 basic_row = {
