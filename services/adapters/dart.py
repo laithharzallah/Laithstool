@@ -43,7 +43,14 @@ class DARTAdapter:
     def _get(self, path: str, **params) -> dict:
         """Minimal HTTP helper for DART API calls (strict - surfaces errors)."""
         params = {"crtfc_key": self.api_key, **params}
-        r = requests.get(f"{self.base_url}/{path}", params=params, timeout=20)
+        try:
+            r = requests.get(f"{self.base_url}/{path}", params=params, timeout=12)
+        except requests.Timeout:
+            logger.error("DART %s timed out with params=%s", path, params)
+            return {"status": "408", "message": "DART request timed out"}
+        except Exception as e:
+            logger.error("DART %s request error: %s", path, e)
+            return {"status": "500", "message": f"request error: {e}"}
         try:
             js = r.json()
         except Exception:
@@ -255,3 +262,5 @@ dart_adapter = DARTAdapter()
 def search_dart(company_name: str) -> List[Dict[str, Any]]:
     """Convenience function for DART search"""
     return dart_adapter.search_company(company_name)
+
+

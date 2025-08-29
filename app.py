@@ -578,7 +578,8 @@ def api_dart_search():
 
     except Exception as e:
         logger.exception(f"DART search API error: {e}")
-        return jsonify({"error": f"Search failed: {str(e)}"}), 500
+        # Hint to front-end when it's likely an API or timeout issue
+        return jsonify({"error": f"Search failed: {str(e)}", "hint": "Check DART_API_KEY and rate limits."}), 500
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
