@@ -1,5 +1,6 @@
 import os, json
 import asyncio
+import logging
 from uuid import uuid4
 import threading
 from threading import Lock
@@ -70,6 +71,13 @@ if not os.environ.get('OPENAI_API_KEY'):
     print("📝 Add OPENAI_API_KEY in Render → Environment")
 
 app = Flask(__name__)
+
+# Setup logging
+logger = logging.getLogger(__name__)
+if os.environ.get('FLASK_ENV') == 'development':
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+else:
+    logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # Add WhiteNoise for robust static file serving in production
 if WHITENOISE_AVAILABLE and os.environ.get('FLASK_ENV') != 'development':
@@ -514,7 +522,7 @@ def whatsapp_simulate():
 
 @app.route("/api/dart/search", methods=["POST"])
 def api_dart_search():
-    """API endpoint for DART company search - DART ONLY (no other sources)"""
+    """API endpoint for DART company search with complete information"""
     if 'logged_in' not in session:
         return jsonify({"error": "Authentication required"}), 401
 
@@ -528,14 +536,27 @@ def api_dart_search():
         # DART-ONLY SEARCH: Import and use DART adapter exclusively
         from services.adapters.dart import dart_adapter
 
-        # Search Korean companies using DART registry only
+        # Search Korean companies using DART registry
         companies = dart_adapter.search_company(company_name)
+
+        # If we found companies and user wants detailed info, get complete data
+        detailed_results = []
+        for company in companies[:3]:  # Get detailed info for top 3 results
+            corp_code = company.get('corp_code')
+            if corp_code:
+                # Get complete company information
+                complete_info = dart_adapter.get_complete_company_info(corp_code)
+                if complete_info and 'error' not in complete_info:
+                    company['detailed_info'] = complete_info
+
+            detailed_results.append(company)
 
         return jsonify({
             "success": True,
-            "companies": companies,
+            "companies": detailed_results,
             "search_term": company_name,
-            "total_results": len(companies)
+            "total_results": len(companies),
+            "detailed_info_available": len(detailed_results) > 0
         })
 
     except Exception as e:

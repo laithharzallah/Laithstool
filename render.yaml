@@ -19,5 +19,7 @@ services:
         sync: false
       - key: GOOGLE_CSE_ID
         sync: false
+      - key: DART_API_KEY
+        sync: false
     healthCheckPath: /healthz
     autoDeploy: true

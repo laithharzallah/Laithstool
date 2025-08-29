@@ -152,17 +152,235 @@
                         <!-- Results content will be populated by JavaScript -->
                     </div>
 
+                    <!-- Detailed Results Modal -->
+                    <div id="detailed-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+                        <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-6xl shadow-lg rounded-md bg-white dark:bg-gray-800">
+                            <div class="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 class="text-2xl font-bold text-gray-900 dark:text-white" id="modal-title">Company Details</h3>
+                                    <p class="text-gray-600 dark:text-gray-400 mt-1" id="modal-subtitle">Complete DART Registry Information</p>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <button onclick="toggleJsonView()" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm">
+                                        📄 JSON View
+                                    </button>
+                                    <button onclick="closeDetailedModal()" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+                                </div>
+                            </div>
+
+                            <!-- Tab Navigation -->
+                            <div class="border-b border-gray-200 dark:border-gray-600 mb-6">
+                                <nav class="flex overflow-x-auto">
+                                    <button onclick="switchTab('overview')" class="tab-dart tab-dart-active whitespace-nowrap">
+                                        <i class="fas fa-chart-line mr-2"></i>Overview
+                                    </button>
+                                    <button onclick="switchTab('basic')" class="tab-dart whitespace-nowrap">
+                                        <i class="fas fa-building mr-2"></i>Basic Info
+                                    </button>
+                                    <button onclick="switchTab('shareholders')" class="tab-dart whitespace-nowrap">
+                                        <i class="fas fa-users mr-2"></i>Shareholders
+                                    </button>
+                                    <button onclick="switchTab('executives')" class="tab-dart whitespace-nowrap">
+                                        <i class="fas fa-user-tie mr-2"></i>Executives
+                                    </button>
+                                    <button onclick="switchTab('financials')" class="tab-dart whitespace-nowrap">
+                                        <i class="fas fa-chart-bar mr-2"></i>Financials
+                                    </button>
+                                    <button onclick="switchTab('filings')" class="tab-dart whitespace-nowrap">
+                                        <i class="fas fa-file-alt mr-2"></i>Filings
+                                    </button>
+                                </nav>
+                            </div>
+
+                            <!-- Tab Content -->
+                            <div class="tab-content">
+                                <div id="overview-tab" class="tab-pane active">
+                                    <!-- Overview content will be populated by JavaScript -->
+                                </div>
+                                <div id="basic-tab" class="tab-pane hidden">
+                                    <!-- Basic info content -->
+                                </div>
+                                <div id="shareholders-tab" class="tab-pane hidden">
+                                    <!-- Shareholders content -->
+                                </div>
+                                <div id="executives-tab" class="tab-pane hidden">
+                                    <!-- Executives content -->
+                                </div>
+                                <div id="financials-tab" class="tab-pane hidden">
+                                    <!-- Financials content -->
+                                </div>
+                                <div id="filings-tab" class="tab-pane hidden">
+                                    <!-- Filings content -->
+                                </div>
+                            </div>
+
+                            <!-- JSON View Modal -->
+                            <div id="json-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full z-60 hidden">
+                                <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white dark:bg-gray-800">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">Raw JSON Data</h3>
+                                        <button onclick="closeJsonModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                                    </div>
+                                    <pre id="json-content" class="bg-gray-50 dark:bg-gray-700 p-4 rounded text-sm overflow-x-auto max-h-96"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<style>
+    /* DART Tab Styling */
+    .tab-dart {
+        padding: 12px 20px;
+        border-bottom: 3px solid transparent;
+        color: #64748b;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: none;
+    }
+
+    .tab-dart:hover {
+        color: #1e40af;
+        background-color: #f8fafc;
+    }
+
+    .tab-dart.tab-dart-active {
+        color: #1e40af;
+        border-bottom-color: #f59e0b;
+        background-color: #f8fafc;
+    }
+
+    .tab-pane {
+        display: none;
+    }
+
+    .tab-pane.active {
+        display: block;
+    }
+
+    .data-card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+        transition: all 0.2s ease;
+    }
+
+    .data-card:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #1e40af;
+    }
+
+    .metric-label {
+        font-size: 0.875rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .json-content {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+</style>
+
 <script>
+// Global variables
+let currentCompanyData = null;
+
+// Utility functions
 function setCompany(name) {
     document.getElementById('company-name').value = name;
 }
 
+function formatNumber(num) {
+    if (!num) return 'N/A';
+    const number = parseFloat(num.toString().replace(/[^0-9.-]/g, ''));
+    if (isNaN(number)) return num;
+
+    if (number >= 1e12) return (number / 1e12).toFixed(1) + 'T';
+    if (number >= 1e9) return (number / 1e9).toFixed(1) + 'B';
+    if (number >= 1e6) return (number / 1e6).toFixed(1) + 'M';
+    if (number >= 1e3) return (number / 1e3).toFixed(1) + 'K';
+    return number.toString();
+}
+
+// Tab switching functionality
+function switchTab(tabName) {
+    // Hide all tab content
+    const tabPanes = document.querySelectorAll('.tab-pane');
+    tabPanes.forEach(pane => pane.classList.remove('active'));
+
+    // Remove active class from all tabs
+    const tabs = document.querySelectorAll('.tab-dart');
+    tabs.forEach(tab => tab.classList.remove('tab-dart-active'));
+
+    // Show selected tab content
+    const selectedTab = document.getElementById(tabName + '-tab');
+    const selectedTabButton = document.querySelector(`[onclick="switchTab('${tabName}')"]`);
+
+    if (selectedTab) selectedTab.classList.add('active');
+    if (selectedTabButton) selectedTabButton.classList.add('tab-dart-active');
+
+    // Populate tab content if data is available
+    if (currentCompanyData && currentCompanyData.detailed_info) {
+        populateTabContent(tabName, currentCompanyData.detailed_info);
+    }
+}
+
+// Modal functions
+function showDetailedModal(companyData) {
+    currentCompanyData = companyData;
+    const modal = document.getElementById('detailed-modal');
+    const title = document.getElementById('modal-title');
+
+    if (companyData.name) {
+        title.textContent = companyData.name;
+    }
+
+    modal.classList.remove('hidden');
+
+    // Default to overview tab
+    switchTab('overview');
+}
+
+function closeDetailedModal() {
+    const modal = document.getElementById('detailed-modal');
+    modal.classList.add('hidden');
+    currentCompanyData = null;
+}
+
+function toggleJsonView() {
+    const jsonModal = document.getElementById('json-modal');
+    const jsonContent = document.getElementById('json-content');
+
+    if (currentCompanyData) {
+        jsonContent.textContent = JSON.stringify(currentCompanyData, null, 2);
+        jsonModal.classList.remove('hidden');
+    }
+}
+
+function closeJsonModal() {
+    const jsonModal = document.getElementById('json-modal');
+    jsonModal.classList.add('hidden');
+}
+
+// Main search functionality
 document.getElementById('dart-search-form').addEventListener('submit', async function(e) {
     e.preventDefault();
 
@@ -238,44 +456,54 @@ function displayResults(companies, searchTerm) {
     `;
 
     companies.forEach((company, index) => {
+        const detailedInfo = company.detailed_info;
+        const hasDetailedInfo = detailedInfo && Object.keys(detailedInfo).length > 0;
+
         html += `
             <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition duration-200">
                 <div class="flex items-start justify-between">
                     <div class="flex-1">
-                        <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                            ${company.name || 'Unknown Company'}
-                        </h4>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div class="flex items-center mb-2">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                ${company.name || 'Unknown Company'}
+                            </h4>
+                            ${hasDetailedInfo ? '<span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-200 dark:text-green-900">Complete Data Available</span>' : '<span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-200 dark:text-gray-900">Basic Info Only</span>'}
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
                             <div>
-                                <span class="font-medium text-gray-500 dark:text-gray-400">English Name:</span>
-                                <span class="ml-2 text-gray-900 dark:text-white">${company.name_eng || 'N/A'}</span>
+                                <span class="font-medium text-gray-500 dark:text-gray-400">Company Code:</span>
+                                <span class="ml-2 text-gray-900 dark:text-white font-mono">${company.corp_code || 'N/A'}</span>
                             </div>
                             <div>
                                 <span class="font-medium text-gray-500 dark:text-gray-400">Stock Code:</span>
-                                <span class="ml-2 text-gray-900 dark:text-white">${company.stock_code || 'N/A'}</span>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-500 dark:text-gray-400">Company Code:</span>
-                                <span class="ml-2 text-gray-900 dark:text-white">${company.corp_code || 'N/A'}</span>
+                                <span class="ml-2 text-gray-900 dark:text-white font-mono">${company.stock_code || 'N/A'}</span>
                             </div>
                             <div>
                                 <span class="font-medium text-gray-500 dark:text-gray-400">Registry:</span>
                                 <span class="ml-2 text-gray-900 dark:text-white">
                                     🇰🇷 DART (Korean Financial Supervisory Service)
-                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-200 dark:text-blue-900 ml-2">
-                                        Official Data Only
-                                    </span>
+                                </span>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-500 dark:text-gray-400">Data Status:</span>
+                                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${hasDetailedInfo ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                                    ${hasDetailedInfo ? 'Complete' : 'Basic'}
                                 </span>
                             </div>
                         </div>
+
+                        ${hasDetailedInfo ? generateCompanyPreview(detailedInfo) : '<p class="text-sm text-gray-600 dark:text-gray-400">Click "View Details" to load complete company information from DART.</p>'}
                     </div>
-                    <div class="ml-4">
+                    <div class="ml-4 flex flex-col space-y-2">
                         <button
-                            onclick="viewCompanyDetails('${company.corp_code}')"
+                            onclick="showDetailedModal(${JSON.stringify(company).replace(/"/g, '&quot;')})"
                             class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition duration-200"
                         >
-                            View Details
+                            <i class="fas fa-eye mr-2"></i>
+                            ${hasDetailedInfo ? 'View Full Details' : 'Load Complete Data'}
                         </button>
+                        ${hasDetailedInfo ? '<span class="text-xs text-green-600 dark:text-green-400 text-center">📊 Complete dataset ready</span>' : '<span class="text-xs text-blue-600 dark:text-blue-400 text-center">🔄 Click to fetch data</span>'}
                     </div>
                 </div>
             </div>
@@ -313,9 +541,9 @@ function showNoResults(searchTerm) {
             <div class="text-sm text-gray-500 dark:text-gray-400">
                 <p>Try:</p>
                 <ul class="list-disc list-inside mt-2 space-y-1">
-                    <li>Using the exact company name</li>
+                    <li>Using the exact Korean company name</li>
                     <li>Checking the spelling</li>
-                    <li>Using the English name if available</li>
+                    <li>Using major companies like "삼성전자", "현대자동차", "SK하이닉스"</li>
                 </ul>
             </div>
         </div>
@@ -346,15 +574,304 @@ function showError(message) {
     `;
 }
 
-function viewCompanyDetails(corpCode) {
-    // For now, just show an alert. In the future, this could open a detailed view
-    alert(`Company details for ${corpCode} would be shown here.\n\nThis feature can be enhanced to show:\n• Financial reports\n• Executive information\n• Company filings\n• Historical data`);
+function generateCompanyPreview(detailedInfo) {
+    if (!detailedInfo) return '';
+
+    let html = '<div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 space-y-4">';
+
+    // Quick metrics preview
+    if (detailedInfo.shareholders && detailedInfo.shareholders.length > 0) {
+        const totalShareholders = detailedInfo.shareholders.length;
+        const topShareholder = detailedInfo.shareholders[0];
+        const topHolderName = topShareholder.holder || 'N/A';
+        const topHolderRatio = topShareholder.ratio || 'N/A';
+
+        html += `
+            <div>
+                <h5 class="text-sm font-medium text-gray-900 dark:text-white mb-2">👥 Major Shareholders</h5>
+                <div class="space-y-1">
+                    <div class="text-xs text-gray-600 dark:text-gray-300">
+                        ${totalShareholders} total shareholders
+                    </div>
+                    <div class="text-xs text-gray-600 dark:text-gray-300">
+                        Top: ${topHolderName} (${topHolderRatio}%)
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Financial highlights
+    if (detailedInfo.financials && detailedInfo.financials.length > 0) {
+        html += `
+            <div>
+                <h5 class="text-sm font-medium text-gray-900 dark:text-white mb-2">💰 Financial Snapshot</h5>
+                <div class="text-xs text-gray-600 dark:text-gray-300">
+                    ${detailedInfo.financials.length} financial accounts available
+                </div>
+            </div>
+        `;
+    }
+
+    html += `
+        <div class="text-xs text-blue-600 dark:text-blue-400 font-medium">
+            📊 Click "View Full Details" for complete data analysis
+        </div>
+    `;
+
+    html += '</div>';
+    return html;
 }
 
-// Auto-focus on the company name input when page loads
+function populateTabContent(tabName, detailedInfo) {
+    const tabElement = document.getElementById(tabName + '-tab');
+    if (!tabElement || !detailedInfo) return;
+
+    let html = '';
+
+    switch(tabName) {
+        case 'overview':
+            html = generateOverviewContent(detailedInfo);
+            break;
+        case 'basic':
+            html = generateBasicInfoContent(detailedInfo);
+            break;
+        case 'shareholders':
+            html = generateShareholdersContent(detailedInfo);
+            break;
+        case 'executives':
+            html = generateExecutivesContent(detailedInfo);
+            break;
+        case 'financials':
+            html = generateFinancialsContent(detailedInfo);
+            break;
+        case 'filings':
+            html = generateFilingsContent(detailedInfo);
+            break;
+    }
+
+    tabElement.innerHTML = html;
+}
+
+function generateOverviewContent(detailedInfo) {
+    let html = '<div class="space-y-6">';
+
+    // Key metrics cards
+    html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
+
+    if (detailedInfo.shareholders && detailedInfo.shareholders.length > 0) {
+        html += `
+            <div class="data-card text-center">
+                <div class="metric-value text-green-600">${detailedInfo.shareholders.length}</div>
+                <div class="metric-label">Major Shareholders</div>
+            </div>
+        `;
+    }
+
+    if (detailedInfo.executives && detailedInfo.executives.length > 0) {
+        html += `
+            <div class="data-card text-center">
+                <div class="metric-value text-blue-600">${detailedInfo.executives.length}</div>
+                <div class="metric-label">Executives</div>
+            </div>
+        `;
+    }
+
+    if (detailedInfo.financials && detailedInfo.financials.length > 0) {
+        html += `
+            <div class="data-card text-center">
+                <div class="metric-value text-purple-600">${detailedInfo.financials.length}</div>
+                <div class="metric-label">Financial Records</div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+
+    // Key financial metrics
+    if (detailedInfo.financials && detailedInfo.financials.length > 0) {
+        html += '<div class="data-card"><h4 class="font-semibold text-gray-900 dark:text-white mb-3">💰 Key Financial Metrics</h4>';
+
+        const financials = detailedInfo.financials;
+        let keyMetrics = {};
+
+        financials.forEach(fin => {
+            const accountName = fin.account_nm || '';
+            const amount = fin.thstrm_amount || '0';
+
+            if ('자산총계' in accountName) keyMetrics['Total Assets'] = amount;
+            if ('매출액' in accountName) keyMetrics['Revenue'] = amount;
+            if ('영업이익' in accountName) keyMetrics['Operating Profit'] = amount;
+            if ('당기순이익' in accountName) keyMetrics['Net Income'] = amount;
+        });
+
+        html += '<div class="grid grid-cols-2 gap-4">';
+        Object.entries(keyMetrics).forEach(([metric, amount]) => {
+            if (amount !== '0') {
+                const formattedAmount = formatNumber(amount);
+                html += `<div><strong>${metric}:</strong> ₩${formattedAmount}</div>`;
+            }
+        });
+        html += '</div></div>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function generateBasicInfoContent(detailedInfo) {
+    let html = '<div class="space-y-4">';
+
+    if (detailedInfo.basic_info) {
+        const basic = detailedInfo.basic_info;
+        html += '<div class="data-card">';
+        html += '<h4 class="font-semibold text-gray-900 dark:text-white mb-3">🏢 Company Information</h4>';
+        html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+
+        if (basic.corp_name) html += `<div><strong>Company Name:</strong> ${basic.corp_name}</div>`;
+        if (basic.ceo_nm) html += `<div><strong>CEO:</strong> ${basic.ceo_nm}</div>`;
+        if (basic.est_dt) html += `<div><strong>Established:</strong> ${basic.est_dt}</div>`;
+        if (basic.adr) html += `<div><strong>Address:</strong> ${basic.adr}</div>`;
+        if (basic.hm_url) html += `<div><strong>Website:</strong> <a href="${basic.hm_url}" target="_blank" class="text-blue-600 hover:text-blue-800">${basic.hm_url}</a></div>`;
+        if (basic.phn_no) html += `<div><strong>Phone:</strong> ${basic.phn_no}</div>`;
+
+        html += '</div></div>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function generateShareholdersContent(detailedInfo) {
+    let html = '<div class="space-y-4">';
+
+    if (detailedInfo.shareholders && detailedInfo.shareholders.length > 0) {
+        html += '<div class="data-card">';
+        html += '<h4 class="font-semibold text-gray-900 dark:text-white mb-3">👥 Major Shareholders (≥5%)</h4>';
+        html += '<div class="space-y-3">';
+
+        detailedInfo.shareholders.forEach((shareholder, index) => {
+            const holder = shareholder.holder || 'N/A';
+            const ratio = shareholder.ratio || 'N/A';
+            const reportDate = shareholder.report_date || 'N/A';
+            const changeReason = shareholder.change_reason || '';
+
+            html += `
+                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+                    <div class="flex justify-between items-start mb-2">
+                        <h5 class="font-medium text-gray-900 dark:text-white">${holder}</h5>
+                        <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">${ratio}%</span>
+                    </div>
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                        <div>Report Date: ${reportDate}</div>
+                        ${changeReason ? `<div>Reason: ${changeReason}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div></div>';
+    } else {
+        html += '<div class="data-card"><p class="text-gray-600 dark:text-gray-400">No shareholder data available</p></div>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function generateExecutivesContent(detailedInfo) {
+    let html = '<div class="space-y-4">';
+
+    if (detailedInfo.executives && detailedInfo.executives.length > 0) {
+        html += '<div class="data-card">';
+        html += '<h4 class="font-semibold text-gray-900 dark:text-white mb-3">👨‍💼 Executives & Board Members</h4>';
+        html += '<div class="space-y-3">';
+
+        detailedInfo.executives.forEach((exec, index) => {
+            const name = exec.name || 'N/A';
+            const relation = exec.relation || 'N/A';
+            const changeDate = exec.chg_date || 'N/A';
+            const beforeShares = exec.before || 'N/A';
+            const afterShares = exec.after || 'N/A';
+
+            html += `
+                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+                    <div class="flex justify-between items-start mb-2">
+                        <h5 class="font-medium text-gray-900 dark:text-white">${name}</h5>
+                        <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">${relation}</span>
+                    </div>
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                        <div>Change Date: ${changeDate}</div>
+                        ${beforeShares !== 'N/A' && afterShares !== 'N/A' ? `<div>Shares: ${beforeShares} → ${afterShares}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div></div>';
+    } else {
+        html += '<div class="data-card"><p class="text-gray-600 dark:text-gray-400">No executive data available</p></div>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function generateFinancialsContent(detailedInfo) {
+    let html = '<div class="space-y-4">';
+
+    if (detailedInfo.financials && detailedInfo.financials.length > 0) {
+        html += '<div class="data-card">';
+        html += '<h4 class="font-semibold text-gray-900 dark:text-white mb-3">💰 Financial Statements</h4>';
+        html += '<div class="space-y-3">';
+
+        detailedInfo.financials.forEach((fin, index) => {
+            const accountName = fin.account_nm || 'N/A';
+            const amount = fin.thstrm_amount || '0';
+            const formattedAmount = amount !== '0' ? formatNumber(amount) : 'N/A';
+
+            html += `
+                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium text-gray-900 dark:text-white">${accountName}</span>
+                        <span class="text-lg font-bold text-blue-600">₩${formattedAmount}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div></div>';
+    } else {
+        html += '<div class="data-card"><p class="text-gray-600 dark:text-gray-400">No financial data available</p></div>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function generateFilingsContent(detailedInfo) {
+    let html = '<div class="space-y-4">';
+
+    // This would show historical filings if available
+    html += '<div class="data-card">';
+    html += '<h4 class="font-semibold text-gray-900 dark:text-white mb-3">📄 Historical Filings</h4>';
+    html += '<p class="text-gray-600 dark:text-gray-400">Historical filing data would be displayed here. The DART adapter retrieves all available filings for the specified time period.</p>';
+    html += '<div class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">';
+    html += '<p class="text-sm text-blue-800 dark:text-blue-200">💡 <strong>Note:</strong> Complete historical filings are available through the DART adapter but are displayed in the terminal output for performance reasons.</p>';
+    html += '</div></div>';
+
+    html += '</div>';
+    return html;
+}
+
+// Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('company-name').focus();
 });
+
+
+
+
 </script>
 
 {% endblock %}

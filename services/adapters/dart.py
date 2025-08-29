@@ -1,5 +1,6 @@
 """
 DART (Data Analysis, Retrieval and Transfer) API Adapter for Korean Companies
+FAST & TARGETED VERSION - Only real DART endpoints
 """
 
 import os
@@ -9,233 +10,221 @@ from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger("dart-adapter")
 
+def _translate_to_korean(text: str) -> str:
+    """Translate company name to Korean legal/company name form for better DART search."""
+    key = os.getenv("OPENAI_API_KEY", "")
+    if not key or not text.strip():
+        return text
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=key)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role":"system","content":"Translate the company name to Korean legal/company name form. Return text only."},
+                {"role":"user","content": text.strip()}
+            ],
+            temperature=0,
+            max_tokens=50
+        )
+        return (resp.choices[0].message.content or text).strip()
+    except Exception as e:
+        logger.warning(f"Translation failed for '{text}': {e}")
+        return text
+
 class DARTAdapter:
-    """Korea Financial Supervisory Service DART API - INSTANT VERSION"""
+    """Korea Financial Supervisory Service DART API - FAST TARGETED VERSION"""
 
     def __init__(self):
-        # Use provided API key
-        self.api_key = os.getenv("DART_API_KEY", "41e3e5a7cb9e450b235a6a79d2e538ac83c711e7")
+        # Use provided API key (no hardcoded default)
+        self.api_key = os.getenv("DART_API_KEY", "")
         self.base_url = "https://opendart.fss.or.kr/api"
 
-        # Pre-loaded top Korean companies for INSTANT searches
-        self._top_companies = self._get_top_korean_companies()
-        self._full_data_loaded = False
+    def _get(self, path: str, **params) -> dict:
+        """Minimal HTTP helper for DART API calls (strict - surfaces errors)."""
+        params = {"crtfc_key": self.api_key, **params}
+        r = requests.get(f"{self.base_url}/{path}", params=params, timeout=20)
+        try:
+            js = r.json()
+        except Exception:
+            js = {"status": "999", "message": f"invalid json (HTTP {r.status_code})", "raw": r.text[:500]}
+        # If not OK, include the raw bits so you can see why
+        if js.get("status") != "000":
+            logger.error("DART %s error status=%s msg=%s params=%s",
+                         path, js.get("status"), js.get("message"), params)
+        return js
 
     def search_company(self, company_name: str) -> List[Dict[str, Any]]:
-        """Search for Korean companies by name - INSTANT VERSION"""
-        if not self.api_key:
-            logger.warning("DART_API_KEY not configured")
+        """Targeted search via filings; retries in Korean if first pass empty."""
+        if not (self.api_key and company_name.strip()):
             return []
 
-        try:
-            # INSTANT search using pre-loaded top companies
-            matches = []
-            query_lower = company_name.lower().strip()
+        def _search_once(name: str) -> List[Dict[str, Any]]:
+            from datetime import datetime, timedelta
+            three_months_ago = (datetime.now() - timedelta(days=90)).strftime('%Y%m%d')
+            today = datetime.now().strftime('%Y%m%d')
 
-            # Search in top companies first (INSTANT)
-            for corp in self._top_companies:
-                corp_name = corp.get("corp_name", "").lower()
-                corp_name_eng = corp.get("corp_name_eng", "").lower() if corp.get("corp_name_eng") else ""
+            js = self._get(
+                "list.json",
+                corp_name=name.strip(),
+                bgn_de=three_months_ago,
+                end_de=today,
+                page_no=1,
+                page_count=50
+            )
+            rows = js.get("list") or []
+            seen, out = set(), []
+            for it in rows:
+                cc, cn = it.get("corp_code"), it.get("corp_name")
+                if not cc or not cn or cc in seen:
+                    continue
+                seen.add(cc)
+                out.append({
+                    "name": cn,
+                    "corp_code": cc,
+                    "stock_code": it.get("stock_code",""),
+                    "country": "KR",
+                    "source": "DART",
+                    "entity_type": "COMPANY",
+                    "match_type": "list.json"
+                })
+                if len(out) >= 5:
+                    break
+            return out
 
-                # Exact match first, then partial match
-                if query_lower == corp_name or query_lower == corp_name_eng:
-                    # Exact match - highest priority
-                    matches.insert(0, {
-                        "name": corp.get("corp_name", ""),
-                        "name_eng": corp.get("corp_name_eng", ""),
-                        "corp_code": corp.get("corp_code", ""),
-                        "stock_code": corp.get("stock_code", ""),
-                        "country": "KR",
-                        "source": "DART",
-                        "entity_type": "COMPANY",
-                        "match_type": "exact"
-                    })
-                elif query_lower in corp_name or query_lower in corp_name_eng:
-                    # Partial match
-                    matches.append({
-                        "name": corp.get("corp_name", ""),
-                        "name_eng": corp.get("corp_name_eng", ""),
-                        "corp_code": corp.get("corp_code", ""),
-                        "stock_code": corp.get("stock_code", ""),
-                        "country": "KR",
-                        "source": "DART",
-                        "entity_type": "COMPANY",
-                        "match_type": "partial"
-                    })
+        # 1) First try as-is (works if you already used Korean)
+        out = _search_once(company_name)
+        if out:
+            return out
 
-            # If no matches in top companies and not fully loaded, load full data
-            if not matches and not self._full_data_loaded:
-                logger.info("🔄 Company not in top list, loading full DART data...")
-                full_data = self._load_full_corp_data()
-                if full_data:
-                    self._full_data_loaded = True
-                    # Search in full data
-                    for corp in full_data:
-                        corp_name = corp.get("corp_name", "").lower()
-                        corp_name_eng = corp.get("corp_name_eng", "").lower() if corp.get("corp_name_eng") else ""
+        # 2) If empty and the name looks English/Arabic/etc., translate to Korean and retry
+        ko = _translate_to_korean(company_name)
+        if ko and ko != company_name:
+            logger.info("Retrying DART search with Korean name: %s", ko)
+            out = _search_once(ko)
+        return out
 
-                        if query_lower == corp_name or query_lower == corp_name_eng:
-                            matches.insert(0, {
-                                "name": corp.get("corp_name", ""),
-                                "name_eng": corp.get("corp_name_eng", ""),
-                                "corp_code": corp.get("corp_code", ""),
-                                "stock_code": corp.get("stock_code", ""),
-                                "country": "KR",
-                                "source": "DART",
-                                "entity_type": "COMPANY",
-                                "match_type": "exact"
-                            })
-                        elif query_lower in corp_name or query_lower in corp_name_eng:
-                            if len(matches) < 5:
-                                matches.append({
-                                    "name": corp.get("corp_name", ""),
-                                    "name_eng": corp.get("corp_name_eng", ""),
-                                    "corp_code": corp.get("corp_code", ""),
-                                    "stock_code": corp.get("stock_code", ""),
-                                    "country": "KR",
-                                    "source": "DART",
-                                    "entity_type": "COMPANY",
-                                    "match_type": "partial"
-                                })
-
-            # Sort: exact matches first
-            matches.sort(key=lambda x: 0 if x.get("match_type") == "exact" else 1)
-
-            result_count = len(matches)
-            search_type = "top companies" if not self._full_data_loaded else "full database"
-            logger.info(f"✅ DART found {result_count} matches for '{company_name}' from {search_type}")
-            return matches[:5]  # Return top 5 results
-
-        except Exception as e:
-            logger.exception(f"❌ DART search error: {e}")
+    def search_filings(self, corp_code: str, years_back: int = 5) -> List[Dict[str, Any]]:
+        """Search for ALL filings for a company over specified years (optimized for speed)."""
+        if not (self.api_key and corp_code):
             return []
 
-    def _get_top_korean_companies(self) -> List[Dict[str, Any]]:
-        """Get pre-loaded top Korean companies for INSTANT searches"""
-        # Top Korean companies by market cap and recognition
-        top_companies = [
-            {
-                "corp_code": "00126380",
-                "corp_name": "삼성전자",
-                "corp_name_eng": "Samsung Electronics Co., Ltd.",
-                "stock_code": "005930"
-            },
-            {
-                "corp_code": "00164742",
-                "corp_name": "현대자동차",
-                "corp_name_eng": "Hyundai Motor Company",
-                "stock_code": "005380"
-            },
-            {
-                "corp_code": "00164779",
-                "corp_name": "현대모비스",
-                "corp_name_eng": "Hyundai Mobis Co., Ltd.",
-                "stock_code": "012330"
-            },
-            {
-                "corp_code": "00356361",
-                "corp_name": "LG화학",
-                "corp_name_eng": "LG Chem, Ltd.",
-                "stock_code": "051910"
-            },
-            {
-                "corp_code": "00120030",
-                "corp_name": "SK하이닉스",
-                "corp_name_eng": "SK Hynix, Inc.",
-                "stock_code": "000660"
-            },
-            {
-                "corp_code": "00155319",
-                "corp_name": "POSCO",
-                "corp_name_eng": "POSCO",
-                "stock_code": "005490"
-            },
-            {
-                "corp_code": "00130641",
-                "corp_name": "LG전자",
-                "corp_name_eng": "LG Electronics Inc.",
-                "stock_code": "066570"
-            },
-            {
-                "corp_code": "00159193",
-                "corp_name": "카카오",
-                "corp_name_eng": "Kakao Corp.",
-                "stock_code": "035720"
-            },
-            {
-                "corp_code": "00164788",
-                "corp_name": "현대건설",
-                "corp_name_eng": "Hyundai Engineering & Construction Co., Ltd.",
-                "stock_code": "000720"
-            },
-            {
-                "corp_code": "00266961",
-                "corp_name": "셀트리온",
-                "corp_name_eng": "Celltrion, Inc.",
-                "stock_code": "068270"
-            }
-        ]
+        from datetime import datetime
+        current_year = datetime.now().year
+        start_year = current_year - years_back
 
-        logger.info(f"✅ Pre-loaded {len(top_companies)} top Korean companies for instant search")
-        return top_companies
+        all_filings = []
 
-    def _load_full_corp_data(self) -> List[Dict[str, Any]]:
-        """Load complete corporation data from DART API"""
-        try:
-            logger.info("📡 Downloading complete DART corporation database...")
+        # OPTIMIZATION: Use broader date ranges to reduce API calls
+        # Instead of 1 call per year, use 1 call per 2 years
+        for start in range(start_year, current_year + 1, 2):
+            end = min(start + 1, current_year)
+            logger.info(f"Searching filings for {corp_code} in {start}-{end}...")
 
-            url = f"{self.base_url}/corpCode.xml"
-            params = {"crtfc_key": self.api_key}
+            # Search for all filing types in this period
+            js = self._get(
+                "list.json",
+                corp_code=corp_code,
+                bgn_de=f"{start}0101",
+                end_de=f"{end}1231",
+                page_no=1,
+                page_count=100  # Get many filings per period
+            )
 
-            response = requests.get(url, params=params, timeout=30)
-            response.raise_for_status()
-
-            # Parse XML response
-            import xml.etree.ElementTree as ET
-            root = ET.fromstring(response.content)
-
-            corps = []
-            for corp in root.findall(".//list"):
-                corp_data = {
-                    "corp_code": corp.find("corp_code").text if corp.find("corp_code") is not None else "",
-                    "corp_name": corp.find("corp_name").text if corp.find("corp_name") is not None else "",
-                    "corp_name_eng": corp.find("corp_name_eng").text if corp.find("corp_name_eng") is not None else "",
-                    "stock_code": corp.find("stock_code").text if corp.find("stock_code") is not None else "",
-                    "modify_date": corp.find("modify_date").text if corp.find("modify_date") is not None else ""
+            filings = js.get("list") or []
+            for filing in filings:
+                filing_data = {
+                    "corp_code": filing.get("corp_code"),
+                    "corp_name": filing.get("corp_name"),
+                    "stock_code": filing.get("stock_code"),
+                    "report_nm": filing.get("report_nm"),
+                    "rcept_no": filing.get("rcept_no"),
+                    "flr_nm": filing.get("flr_nm"),
+                    "rcept_dt": filing.get("rcept_dt"),
+                    "rm": filing.get("rm")
                 }
-                corps.append(corp_data)
+                all_filings.append(filing_data)
 
-            logger.info(f"✅ Loaded complete database: {len(corps)} Korean corporations")
-            return corps
+        logger.info(f"✅ Found {len(all_filings)} total filings for {corp_code} over {years_back} years")
+        return all_filings
 
-        except Exception as e:
-            logger.exception(f"❌ Failed to load complete DART database: {e}")
-            return []
 
-    def get_company_info(self, corp_code: str) -> Optional[Dict[str, Any]]:
-        """Get detailed company information"""
-        if not self.api_key:
-            return None
 
-        try:
-            url = f"{self.base_url}/company.json"
-            params = {
-                "crtfc_key": self.api_key,
-                "corp_code": corp_code
-            }
+    def get_complete_company_info(self, corp_code: str, year: str = "2024") -> Dict[str, Any]:
+        """Full snapshot from DART (real endpoints only) - defensive version."""
+        if not (self.api_key and corp_code):
+            return {"error": "API key or corp_code missing"}
 
-            response = requests.get(url, params=params, timeout=30)
-            response.raise_for_status()
+        # basics
+        basic_js = self._get("company.json", corp_code=corp_code)
+        basic_row = {}
+        if isinstance(basic_js.get("list"), list) and basic_js["list"]:
+            basic_row = basic_js["list"][0]
+        elif isinstance(basic_js.get("company"), dict):
+            basic_row = basic_js["company"]
 
-            data = response.json()
-            if data.get("status") == "000":
-                return data.get("list", [{}])[0] if data.get("list") else {}
+        # ≥5% holders
+        major_js = self._get("majorstock.json", corp_code=corp_code)
+        majors = []
+        for it in (major_js.get("list") or []):
+            majors.append({
+                "holder": it.get("repror"),                      # shareholder name (Korean)
+                "ratio": it.get("stkrt"),                        # ownership ratio
+                "report_date": it.get("rcept_dt"),               # report date
+                "change_reason": it.get("report_resn"),          # report reason
+            })
 
-            return None
+        # executives / major shareholders (insiders)
+        exec_js = self._get("elestock.json", corp_code=corp_code)
+        execs = []
+        for it in (exec_js.get("list") or []):
+            execs.append({
+                "name": it.get("repror"),                         # executive name (Korean)
+                "relation": it.get("isu_exctv_ofcps"),            # position/title
+                "chg_date": it.get("rcept_dt"),                   # change date
+                "stock_code": it.get("corp_code"),                # company code
+                "before": it.get("sp_stock_lmp_irds_cnt"),        # shares before change
+                "after": it.get("sp_stock_lmp_cnt"),              # shares after change
+            })
 
-        except Exception as e:
-            logger.exception(f"Failed to get company info for {corp_code}: {e}")
-            return None
+        # financials (single-account, latest full year report)
+        # OPTIMIZATION: Try current year first, then fallback to previous years
+        financials = []
+        years_to_try = [year] + [str(int(year) - i) for i in range(1, 3)]  # Current year + 2 previous
+
+        for try_year in years_to_try:
+            logger.info(f"Trying financials for year {try_year}...")
+            fin_js = self._get(
+                "fnlttSinglAcnt.json",
+                corp_code=corp_code,
+                bsns_year=try_year,
+                reprt_code="11011"   # 11011 = business report (annual)
+            )
+            financials = fin_js.get("list") or []
+            if financials:
+                logger.info(f"✅ Found financials for year {try_year}")
+                break
+            else:
+                logger.info(f"❌ No financials for year {try_year}, trying next year...")
+
+        return {
+            "basic_info": {
+                "corp_name": basic_row.get("corp_name"),
+                "ceo_nm":    basic_row.get("ceo_nm"),
+                "est_dt":    basic_row.get("est_dt"),
+                "acc_mt":    basic_row.get("acc_mt"),
+                "adr":       basic_row.get("adr"),
+                "hm_url":    basic_row.get("hm_url"),
+                "phn_no":    basic_row.get("phn_no"),
+                "fax_no":    basic_row.get("fax_no"),
+                "corp_code": corp_code,
+            },
+            "shareholders": majors,      # may be empty for some issuers
+            "executives":   execs,       # may be empty if no recent insider filings
+            "financials":   financials   # large; filter by account_nm if needed
+        }
+
+
 
 # Global adapter instance
 dart_adapter = DARTAdapter()
