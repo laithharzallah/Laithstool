@@ -39,6 +39,12 @@ function toast(msg, type = 'info') {
     }, 3000);
 }
 
+// Safe setters
+function setTextById(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+
 // Skeleton loading states
 function showSkeleton(on) {
     const skeleton = document.getElementById('skeleton');
@@ -46,13 +52,13 @@ function showSkeleton(on) {
     const resultsEmpty = document.getElementById('resultsEmpty');
     
     if (on) {
-        skeleton.classList.remove('hidden');
-        resultsWrap.classList.add('hidden');
-        resultsEmpty.classList.add('hidden');
+        if (skeleton) skeleton.classList.remove('hidden');
+        if (resultsWrap) resultsWrap.classList.add('hidden');
+        if (resultsEmpty) resultsEmpty.classList.add('hidden');
     } else {
-        skeleton.classList.add('hidden');
-        resultsWrap.classList.remove('hidden');
-        resultsEmpty.classList.add('hidden');
+        if (skeleton) skeleton.classList.add('hidden');
+        if (resultsWrap) resultsWrap.classList.remove('hidden');
+        if (resultsEmpty) resultsEmpty.classList.add('hidden');
     }
 }
 
@@ -203,28 +209,30 @@ function renderSparkline() {
 // Render company screening results
 function renderCompanyResults(data) {
     // Hide empty state and show results
-    document.getElementById('resultsEmpty').classList.add('hidden');
-    document.getElementById('resultsWrap').classList.remove('hidden');
+    const re = document.getElementById('resultsEmpty');
+    const rw = document.getElementById('resultsWrap');
+    if (re) re.classList.add('hidden');
+    if (rw) rw.classList.remove('hidden');
     
     // Extract metrics
     const m = data.metrics || {};
     const juris = (data.entity && data.entity.country) ? [data.entity.country] : [];
     
     // Update KPI tiles
-    document.getElementById('kpi-overall').textContent = formatNum(m.overall_risk, 3);
-    document.getElementById('kpi-sanc').textContent = formatNum(m.sanctions, 3);
-    document.getElementById('kpi-pep').textContent = formatNum(m.pep, 3);
-    document.getElementById('kpi-adv').textContent = formatNum(m.adverse_media, 3);
+    setTextById('kpi-overall', formatNum(m.overall_risk, 3));
+    setTextById('kpi-sanc', formatNum(m.sanctions, 3));
+    setTextById('kpi-pep', formatNum(m.pep, 3));
+    setTextById('kpi-adv', formatNum(m.adverse_media, 3));
     
     // Update secondary KPIs
-    document.getElementById('kpi-matches').textContent = m.matches ?? '—';
-    document.getElementById('kpi-alerts').textContent = m.alerts ?? '—';
-    document.getElementById('kpi-last').textContent = data.ts ? new Date(data.ts).toLocaleString() : '—';
-    document.getElementById('kpi-juris').textContent = juris.join(', ') || '—';
+    setTextById('kpi-matches', m.matches ?? '—');
+    setTextById('kpi-alerts', m.alerts ?? '—');
+    setTextById('kpi-last', data.ts ? new Date(data.ts).toLocaleString() : '—');
+    setTextById('kpi-juris', juris.join(', ') || '—');
     
     // Update AI commentary
     const ai = data.ai_summary || {};
-    document.getElementById('ai-comment').textContent = (ai.commentary || 'No AI commentary available.');
+    setTextById('ai-comment', (ai.commentary || 'No AI commentary available.'));
     
     // Update provider status
     updateProviderStatus(data.providers);
@@ -292,26 +300,28 @@ function renderCompanyResults(data) {
 // Render individual screening results
 function renderIndividualResults(data) {
     // Hide empty state and show results
-    document.getElementById('resultsEmpty').classList.add('hidden');
-    document.getElementById('resultsWrap').classList.remove('hidden');
+    const re = document.getElementById('resultsEmpty');
+    const rw = document.getElementById('resultsWrap');
+    if (re) re.classList.add('hidden');
+    if (rw) rw.classList.remove('hidden');
     
     // Extract metrics
     const m = data.metrics || {};
     
     // Update KPI tiles
-    document.getElementById('kpi-overall').textContent = formatNum(m.overall_risk, 3);
-    document.getElementById('kpi-sanc').textContent = formatNum(m.sanctions, 3);
-    document.getElementById('kpi-pep').textContent = formatNum(m.pep, 3);
-    document.getElementById('kpi-adv').textContent = formatNum(m.adverse_media, 3);
+    setTextById('kpi-overall', formatNum(m.overall_risk, 3));
+    setTextById('kpi-sanc', formatNum(m.sanctions, 3));
+    setTextById('kpi-pep', formatNum(m.pep, 3));
+    setTextById('kpi-adv', formatNum(m.adverse_media, 3));
     
     // Update secondary KPIs
-    document.getElementById('kpi-matches').textContent = m.matches ?? '—';
-    document.getElementById('kpi-alerts').textContent = m.alerts ?? '—';
-    document.getElementById('kpi-last').textContent = data.ts ? new Date(data.ts).toLocaleString() : '—';
-    document.getElementById('kpi-juris').textContent = (data.person && data.person.nationality) || '—';
+    setTextById('kpi-matches', m.matches ?? '—');
+    setTextById('kpi-alerts', m.alerts ?? '—');
+    setTextById('kpi-last', data.ts ? new Date(data.ts).toLocaleString() : '—');
+    setTextById('kpi-juris', (data.person && data.person.nationality) || '—');
     
     // Update AI commentary
-    document.getElementById('ai-comment').textContent = 'Individual screening completed. Review results above.';
+    setTextById('ai-comment', 'Individual screening completed. Review results above.');
     
     // Render charts
     renderRiskBar({

@@ -182,7 +182,9 @@ form.addEventListener('submit', async (e) => {
             window.__last_api__ = data;
             const overallEl = document.getElementById('overall-json');
             if (overallEl) overallEl.textContent = JSON.stringify(data, null, 2);
-            showPanel('overall');
+            if (typeof window.__showPanel === 'function') {
+                window.__showPanel('overall');
+            }
         } catch (_) {}
 
         renderCompanyResults(adapted);
