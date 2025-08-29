@@ -135,6 +135,18 @@ WHATSAPP_SENDER_E164=+your-whatsapp-number
 4. **Monitor Progress**: Watch real-time updates
 5. **Review Results**: Explore detailed findings in multiple tabs
 
+### DART Registry Search (Korean Companies)
+
+1. **Access DART Tab**: Click "🇰🇷 DART Registry" in the sidebar
+2. **Search Companies**: Enter Korean company names directly:
+   - Samsung Electronics
+   - Hyundai Motor
+   - LG Chem
+   - SK Hynix
+   - POSCO
+3. **View Results**: Get official company information from the Korean Financial Supervisory Service
+4. **DART-Only**: This tab uses only the official DART registry (no other sources)
+
 ### WhatsApp Registry Testing (Korean Companies)
 
 1. **Access Test Interface**: Click "💬 WhatsApp Registry" in the sidebar

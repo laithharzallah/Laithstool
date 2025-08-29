@@ -512,6 +512,36 @@ def whatsapp_simulate():
     result = whatsapp_registry_service.simulate_message(text, wa_from)
     return jsonify(result)
 
+@app.route("/api/dart/search", methods=["POST"])
+def api_dart_search():
+    """API endpoint for DART company search - DART ONLY (no other sources)"""
+    if 'logged_in' not in session:
+        return jsonify({"error": "Authentication required"}), 401
+
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        company_name = data.get('company_name', '').strip()
+
+        if not company_name:
+            return jsonify({"error": "Company name is required"}), 400
+
+        # DART-ONLY SEARCH: Import and use DART adapter exclusively
+        from services.adapters.dart import dart_adapter
+
+        # Search Korean companies using DART registry only
+        companies = dart_adapter.search_company(company_name)
+
+        return jsonify({
+            "success": True,
+            "companies": companies,
+            "search_term": company_name,
+            "total_results": len(companies)
+        })
+
+    except Exception as e:
+        logger.exception(f"DART search API error: {e}")
+        return jsonify({"error": f"Search failed: {str(e)}"}), 500
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -1070,6 +1100,15 @@ def individual_screening():
     if 'logged_in' not in session:
         return redirect(url_for('login'))
     return render_template("individual.html", env_name=os.environ.get('FLASK_ENV','development').capitalize(), version="2.3.0")
+
+@app.route("/dart")
+def dart_search():
+    """DART Registry search page"""
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    return render_template("dart_search.html",
+                         env_name=os.environ.get('FLASK_ENV','development').capitalize(),
+                         version="2.3.0")
 
 @app.route("/whatsapp-test")
 def whatsapp_test():
