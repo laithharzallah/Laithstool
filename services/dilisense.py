@@ -9,11 +9,108 @@ import httpx
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 import logging
+import unicodedata
+import re
 
 logger = logging.getLogger(__name__)
 
 # Strict client timeout: total 20s, connect 5s
 HTTP_TIMEOUT = httpx.Timeout(20.0, connect=5.0)
+
+# --- Normalization helpers (for exact comparison) ---
+LEGAL_SUFFIXES = r"(?:S\.?A\.?|SAE|SE|AG|GMBH|LLC|LTD\.?|PLC|PJSC|NV|BV|SPA|OYJ|AB|AS|JSC|OJSC|INC\.?|CORP\.?|CO\.?|S\.?P\.?A\.?)"
+SUFFIX_RE = re.compile(rf"\b{LEGAL_SUFFIXES}\b\.?", re.IGNORECASE)
+
+def _strip_accents(s: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c))
+
+def _normalize_org(name: str) -> str:
+    # trim, collapse spaces, strip accents, drop quotes/punct that commonly vary
+    n = (name or "").strip()
+    n = re.sub(r"\s+", " ", n)
+    n = _strip_accents(n)
+    n = n.replace("'", "'").replace("`","'")
+    # remove legal suffixes (for strict org equality we compare both with & without)
+    n_no_suffix = SUFFIX_RE.sub("", n).strip()
+    # lower + remove dots/commas/hyphens and extra spaces
+    def canon(x: str) -> str:
+        x = x.lower()
+        x = re.sub(r"[.,''`\"()\-_/]", " ", x)
+        x = re.sub(r"\s+", " ", x).strip()
+        return x
+    return canon(n_no_suffix)
+
+def _normalize_person(name: str) -> str:
+    n = (name or "").strip()
+    n = re.sub(r"\s+", " ", n)
+    n = _strip_accents(n)
+    n = n.replace("'", "'").replace("`","'")
+    n = n.lower()
+    return n
+
+def _candidate_org_names(base: str) -> set:
+    """Build a set of canonical variants for exact comparison"""
+    variants = set()
+    raw = (base or "").strip()
+    variants.add(_normalize_org(raw))
+    # remove trailing parenthetical like "(USC)"
+    variants.add(_normalize_org(re.sub(r"\s*\([^)]*\)\s*$", "", raw)))
+    # also compare the raw (no suffix removal) canon as backup
+    def canon_full(x: str) -> str:
+        x = _strip_accents((x or "").strip())
+        x = x.lower()
+        x = re.sub(r"[.,''`\"()\-_/]", " ", x)
+        x = re.sub(r"\s+", " ", x).strip()
+        return x
+    variants.add(canon_full(raw))
+    return {v for v in variants if v}
+
+def _record_name_variants(record: dict) -> set:
+    """Collect all plausible name strings for a record"""
+    fields = []
+    def add(x):
+        if not x: return
+        if isinstance(x, str): fields.append(x)
+        elif isinstance(x, list):
+            for i in x:
+                if i: fields.append(str(i))
+    add(record.get("name"))
+    add(record.get("alias_names"))
+    add(record.get("also_known_as"))
+    add(record.get("other_names"))
+    add(record.get("entity_name"))
+    out = set()
+    for f in fields:
+        out.add(_normalize_org(f))
+        # also keep a fully-canon variant
+        fc = _strip_accents(f).lower()
+        fc = re.sub(r"[.,''`\"()\-_/]", " ", fc)
+        fc = re.sub(r"\s+", " ", fc).strip()
+        out.add(fc)
+    return {x for x in out if x}
+
+def _exact_company_match(record: dict, company: str) -> bool:
+    # If record is clearly an INDIVIDUAL and this is a company screening, skip
+    ent_type = (record.get("entity_type") or "").upper()
+    if ent_type == "INDIVIDUAL":
+        return False
+    targets = _candidate_org_names(company)
+    names = _record_name_variants(record)
+    # Exact equality on any normalized variant
+    return any(n in targets or t in names for n in names for t in targets)
+
+def _country_consistent(record: dict, country: str) -> bool:
+    if not country:
+        return True
+    pool = []
+    for k in ("country", "countries", "citizenship", "address", "jurisdiction"):
+        v = record.get(k)
+        if isinstance(v, str):
+            pool.append(v)
+        elif isinstance(v, list):
+            pool.extend([str(x) for x in v if x])
+    c = country.lower()
+    return any(c in str(x).lower() for x in pool)
 
 class DilisenseService:
     """Dilisense AML compliance service for individual and company screening"""
@@ -453,7 +550,7 @@ class DilisenseService:
     # COMPANY SCREENING METHODS
     # ============================================================================
     
-    async def screen_company(self, company_name: str, country: str = "") -> Dict[str, Any]:
+    async def screen_company(self, company_name: str, country: str = "", *, exact: bool = True) -> Dict[str, Any]:
         """
         Comprehensive company screening for sanctions, PEPs, and compliance issues
         
@@ -471,9 +568,9 @@ class DilisenseService:
             print(f"🔍 Screening company: {company_name}")
             
             # Execute all company checks in parallel
-            sanctions_task = self._check_company_sanctions(company_name, country)
-            peps_task = self._check_company_peps(company_name, country)
-            criminal_task = self._check_company_criminal(company_name, country)
+            sanctions_task = self._check_company_sanctions(company_name, country, exact=exact)
+            peps_task = self._check_company_peps(company_name, country, exact=exact)
+            criminal_task = self._check_company_criminal(company_name, country, exact=exact)
             
             # Wait for all checks to complete
             sanctions_result, peps_result, criminal_result = await asyncio.gather(
@@ -531,101 +628,123 @@ class DilisenseService:
             print(f"❌ Company screening failed: {e}")
             return {"error": f"Company screening failed: {str(e)}"}
 
-    async def _check_company_sanctions(self, company_name: str, country: str = "") -> Dict[str, Any]:
+    async def _check_company_sanctions(self, company_name: str, country: str = "", *, exact: bool = True) -> Dict[str, Any]:
         """Check company for sanctions using Dilisense API"""
         try:
-            print(f"🔍 Checking company sanctions for: {company_name}")
-            
-            search_params = {
-                "names": company_name,
-                "fuzzy_search": 1,
-                "includes": "dilisense_sanctions"
-            }
-            
-            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-                response = await client.get(
-                    f"{self.base_url}/checkIndividual",  # Companies also use this endpoint
-                    headers={
-                        "x-api-key": self.api_key,
-                        "Content-Type": "application/json"
-                    },
-                    params=search_params
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    print(f"✅ Company sanctions check successful")
-                    return self._process_company_sanctions(data, company_name)
-                else:
-                    print(f"❌ Company sanctions check failed: {response.status_code}")
-                    return {"error": f"API error: {response.status_code}"}
-                    
+            print(f"🔍 Checking company sanctions for: {company_name} (exact={exact})")
+
+            async def call_once(fuzzy: bool) -> Optional[dict]:
+                params = {
+                    "names": company_name,
+                    "includes": "dilisense_sanctions",
+                    "fuzzy_search": 0 if fuzzy is False else 1
+                }
+                if country:
+                    params["country"] = self._normalize_country(country)
+                return await self._http_get(f"{self.base_url}/checkIndividual", params, retries=1)
+
+            # 1) exact pass
+            data = await call_once(fuzzy=False) if exact else None
+            # 2) fallback to fuzzy only if exact empty
+            if not data or not data.get("found_records"):
+                data = await call_once(fuzzy=True)
+
+            if not data:
+                print("❌ API error (sanctions)")
+                return {"total_hits": 0, "found_records": [], "sanctions_found": False}
+
+            # Post-filter to exact company name if exact requested
+            recs = data.get("found_records", [])
+            if exact and recs:
+                recs = [r for r in recs if _exact_company_match(r, company_name) and _country_consistent(r, country)]
+            total = len(recs)
+
+            print(f"✅ Company sanctions check ok; total after filter: {total}")
+            return {"total_hits": total, "found_records": recs, "sanctions_found": total > 0}
+
         except Exception as e:
             print(f"❌ Company sanctions check failed: {e}")
             return {"error": f"Sanctions check failed: {str(e)}"}
 
-    async def _check_company_peps(self, company_name: str, country: str = "") -> Dict[str, Any]:
+    async def _check_company_peps(self, company_name: str, country: str = "", *, exact: bool = True) -> Dict[str, Any]:
         """Check company for PEPs using Dilisense API"""
         try:
-            print(f"🔍 Checking company PEPs for: {company_name}")
-            
-            search_params = {
-                "names": company_name,
-                "fuzzy_search": 1,
-                "includes": "dilisense_pep"
-            }
-            
-            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-                response = await client.get(
-                    f"{self.base_url}/checkIndividual",  # Companies also use this endpoint
-                    headers={
-                        "x-api-key": self.api_key,
-                        "Content-Type": "application/json"
-                    },
-                    params=search_params
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    print(f"✅ Company PEP check successful")
-                    return self._process_company_peps(data, company_name)
-                else:
-                    print(f"❌ Company PEP check failed: {response.status_code}")
-                    return {"error": f"API error: {response.status_code}"}
-                    
+            print(f"🔍 Checking company PEPs for: {company_name} (exact={exact})")
+
+            async def call_once(fuzzy: bool) -> Optional[dict]:
+                params = {
+                    "names": company_name,
+                    "includes": "dilisense_pep",
+                    "fuzzy_search": 0 if fuzzy is False else 1
+                }
+                if country:
+                    params["country"] = self._normalize_country(country)
+                return await self._http_get(f"{self.base_url}/checkIndividual", params, retries=1)
+
+            data = await call_once(fuzzy=False) if exact else None
+            if not data or not data.get("found_records"):
+                data = await call_once(fuzzy=True)
+
+            if not data:
+                print("❌ API error (pep)")
+                return {"total_hits": 0, "found_records": [], "peps_found": False}
+
+            recs = data.get("found_records", [])
+
+            # Company context: keep only org-linked records; drop RCA noise
+            filtered = []
+            for r in recs:
+                pep_type = (r.get("pep_type") or "").upper()
+                if pep_type in {"RELATIVES_AND_CLOSE_ASSOCIATES", "RCA"}:
+                    continue
+                # For companies, require exact org match if exact mode
+                if exact:
+                    if not _exact_company_match(r, company_name):
+                        continue
+                # country scoping
+                if not _country_consistent(r, country):
+                    continue
+                filtered.append(r)
+
+            total = len(filtered)
+            print(f"✅ Company PEP check ok; total after filter: {total}")
+            return {"total_hits": total, "found_records": filtered, "peps_found": total > 0}
+
         except Exception as e:
             print(f"❌ Company PEP check failed: {e}")
             return {"error": f"PEP check failed: {str(e)}"}
 
-    async def _check_company_criminal(self, company_name: str, country: str = "") -> Dict[str, Any]:
+    async def _check_company_criminal(self, company_name: str, country: str = "", *, exact: bool = True) -> Dict[str, Any]:
         """Check company for criminal records using Dilisense API"""
         try:
-            print(f"🔍 Checking company criminal records for: {company_name}")
-            
-            search_params = {
-                "names": company_name,
-                "fuzzy_search": 1,
-                "includes": "dilisense_criminal"
-            }
-            
-            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-                response = await client.get(
-                    f"{self.base_url}/checkIndividual",  # Companies also use this endpoint
-                    headers={
-                        "x-api-key": self.api_key,
-                        "Content-Type": "application/json"
-                    },
-                    params=search_params
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    print(f"✅ Company criminal check successful")
-                    return self._process_company_criminal(data, company_name)
-                else:
-                    print(f"❌ Company criminal check failed: {response.status_code}")
-                    return {"error": f"API error: {response.status_code}"}
-                    
+            print(f"🔍 Checking company criminal records for: {company_name} (exact={exact})")
+
+            async def call_once(fuzzy: bool) -> Optional[dict]:
+                params = {
+                    "names": company_name,
+                    "includes": "dilisense_criminal",
+                    "fuzzy_search": 0 if fuzzy is False else 1
+                }
+                if country:
+                    params["country"] = self._normalize_country(country)
+                return await self._http_get(f"{self.base_url}/checkIndividual", params, retries=1)
+
+            data = await call_once(fuzzy=False) if exact else None
+            if not data or not data.get("found_records"):
+                data = await call_once(fuzzy=True)
+
+            if not data:
+                print("❌ API error (criminal)")
+                return {"total_hits": 0, "found_records": [], "criminal_records_found": False}
+
+            recs = data.get("found_records", [])
+            if exact and recs:
+                recs = [r for r in recs if _exact_company_match(r, company_name) and _country_consistent(r, country)]
+            total = len(recs)
+
+            print(f"✅ Company criminal check ok; total after filter: {total}")
+            return {"total_hits": total, "found_records": recs, "criminal_records_found": total > 0}
+
         except Exception as e:
             print(f"❌ Company criminal check failed: {e}")
             return {"error": f"Criminal check failed: {str(e)}"}
