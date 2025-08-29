@@ -1,877 +1,343 @@
-{% extends "_base.html" %}
-
-{% block title %}DART Registry Search{% endblock %}
-
-{% block content %}
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <!-- Header -->
-    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-6">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                        🇰🇷 DART Registry Search
-                    </h1>
-                    <p class="mt-2 text-gray-600 dark:text-gray-400">
-                        Search Korean companies in the official Financial Supervisory Service registry
-                    </p>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <div class="flex items-center space-x-2">
-                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                        <span class="text-sm text-gray-600 dark:text-gray-400">DART API Connected</span>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DART Registry - Risklytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .nav-item { transition: all 0.2s ease; }
+        .nav-item:hover { background: rgba(255,255,255,0.1); transform: translateX(4px); }
+        .nav-item.active { background: rgba(255,255,255,0.15); border-left: 4px solid #fff; }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <div x-data="dartSearch()" x-init="init()" class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-72 glass-panel m-4 rounded-2xl flex flex-col">
+            <div class="p-8 border-b border-white/10">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
                     </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-white">Risklytics</h1>
+                        <p class="text-white/60 text-sm">Risk Intelligence Platform</p>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="flex-1 p-6 space-y-2">
+                <a href="/" class="nav-item flex items-center p-4 rounded-xl text-white/70 hover:text-white font-medium">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i>
+                    Dashboard
+                </a>
+                <a href="/company" class="nav-item flex items-center p-4 rounded-xl text-white/70 hover:text-white font-medium">
+                    <i data-lucide="building-2" class="w-5 h-5 mr-3"></i>
+                    Company Screening
+                </a>
+                <a href="/individual" class="nav-item flex items-center p-4 rounded-xl text-white/70 hover:text-white font-medium">
+                    <i data-lucide="user-check" class="w-5 h-5 mr-3"></i>
+                    Individual Screening
+                </a>
+                <a href="/dart" class="nav-item active flex items-center p-4 rounded-xl text-white/90 font-medium">
+                    <i data-lucide="search" class="w-5 h-5 mr-3"></i>
+                    DART Registry
+                </a>
+                <a href="/whatsapp" class="nav-item flex items-center p-4 rounded-xl text-white/70 hover:text-white font-medium">
+                    <i data-lucide="message-circle" class="w-5 h-5 mr-3"></i>
+                    WhatsApp Agent
+                </a>
+            </nav>
+            
+            <div class="p-6 border-t border-white/10">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="user" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-white font-medium">Admin User</p>
+                        <p class="text-white/60 text-sm">Professional License</p>
+                    </div>
+                    <a href="/logout" class="text-white/60 hover:text-white">
+                        <i data-lucide="log-out" class="w-5 h-5"></i>
+                    </a>
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Main Content -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-            <!-- Search Panel -->
-            <div class="lg:col-span-1">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-                        🔍 DART Registry Search
-                    </h2>
-                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                                </svg>
-                            </div>
-                            <div class="ml-3">
-                                <p class="text-sm font-medium text-blue-800 dark:text-blue-200">
-                                    DART-Only Search
-                                </p>
-                                <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                                    This search uses only the official DART registry from the Korean Financial Supervisory Service.
-                                </p>
-                            </div>
-                        </div>
+        
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col m-4 ml-0">
+            <!-- Header -->
+            <div class="glass-panel rounded-2xl p-6 mb-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">🇰🇷 DART Registry Search</h2>
+                        <p class="text-gray-600 mt-1">Official Korean Financial Supervisory Service database</p>
                     </div>
-
-                    <form id="dart-search-form" class="space-y-4">
-                        <div>
-                            <label for="company-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Company Name
-                            </label>
-                            <input
-                                type="text"
-                                id="company-name"
-                                name="company_name"
-                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                placeholder="e.g., Samsung Electronics, Hyundai Motor"
-                                required
-                            >
-                        </div>
-
-                        <button
-                            type="submit"
-                            id="search-btn"
-                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <span id="btn-text">🔍 Search DART Registry</span>
-                            <span id="loading-text" class="hidden">
-                                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Searching...
-                            </span>
-                        </button>
-                    </form>
-
-                    <!-- Quick Search Examples -->
-                    <div class="mt-6 border-t border-gray-200 dark:border-gray-600 pt-6">
-                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                            Popular Korean Companies:
-                        </h3>
-                        <div class="space-y-2">
-                            <button
-                                onclick="setCompany('Samsung Electronics')"
-                                class="block w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition duration-200"
-                            >
-                                Samsung Electronics
-                            </button>
-                            <button
-                                onclick="setCompany('Hyundai Motor')"
-                                class="block w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition duration-200"
-                            >
-                                Hyundai Motor
-                            </button>
-                            <button
-                                onclick="setCompany('LG Chem')"
-                                class="block w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition duration-200"
-                            >
-                                LG Chem
-                            </button>
-                            <button
-                                onclick="setCompany('SK Hynix')"
-                                class="block w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition duration-200"
-                            >
-                                SK Hynix
-                            </button>
-                            <button
-                                onclick="setCompany('POSCO')"
-                                class="block w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition duration-200"
-                            >
-                                POSCO
-                            </button>
-                        </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span class="text-sm text-gray-600">DART API Connected</span>
                     </div>
                 </div>
             </div>
-
-            <!-- Results Panel -->
-            <div class="lg:col-span-2">
-                <div id="results-container" class="space-y-6">
-
-                    <!-- No Results State -->
-                    <div id="no-results" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-12">
-                        <div class="text-center">
-                            <div class="text-gray-400 dark:text-gray-500 mb-4">
-                                <svg class="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                                </svg>
-                            </div>
-                            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                                Search Korean Companies
-                            </h3>
-                            <p class="text-gray-600 dark:text-gray-400">
-                                Enter a company name above to search the official DART registry for Korean companies.
+            
+            <!-- Search Form -->
+            <div class="glass-panel rounded-2xl p-8 mb-6">
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                    <div class="flex items-start space-x-3">
+                        <i data-lucide="info" class="w-5 h-5 text-blue-600 mt-0.5"></i>
+                        <div>
+                            <h4 class="font-medium text-blue-900">Korean Companies Only</h4>
+                            <p class="text-blue-800 text-sm mt-1">
+                                Search the official DART registry for Korean public companies with shareholder information.
                             </p>
                         </div>
                     </div>
-
-                    <!-- Results will be displayed here -->
-                    <div id="search-results" class="hidden">
-                        <!-- Results content will be populated by JavaScript -->
+                </div>
+                
+                <form @submit.prevent="searchCompany" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
+                        <input type="text" x-model="searchQuery" required :disabled="isSearching"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., Samsung Electronics, 삼성전자">
                     </div>
-
-                    <!-- Detailed Results Modal -->
-                    <div id="detailed-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
-                        <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-6xl shadow-lg rounded-md bg-white dark:bg-gray-800">
-                            <div class="flex justify-between items-center mb-6">
-                                <div>
-                                    <h3 class="text-2xl font-bold text-gray-900 dark:text-white" id="modal-title">Company Details</h3>
-                                    <p class="text-gray-600 dark:text-gray-400 mt-1" id="modal-subtitle">Complete DART Registry Information</p>
-                                </div>
-                                <div class="flex items-center space-x-3">
-                                    <button onclick="toggleJsonView()" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm">
-                                        📄 JSON View
-                                    </button>
-                                    <button onclick="closeDetailedModal()" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
-                                </div>
-                            </div>
-
-                            <!-- Tab Navigation -->
-                            <div class="border-b border-gray-200 dark:border-gray-600 mb-6">
-                                <nav class="flex overflow-x-auto">
-                                    <button onclick="switchTab('overview')" class="tab-dart tab-dart-active whitespace-nowrap">
-                                        <i class="fas fa-chart-line mr-2"></i>Overview
-                                    </button>
-                                    <button onclick="switchTab('basic')" class="tab-dart whitespace-nowrap">
-                                        <i class="fas fa-building mr-2"></i>Basic Info
-                                    </button>
-                                    <button onclick="switchTab('shareholders')" class="tab-dart whitespace-nowrap">
-                                        <i class="fas fa-users mr-2"></i>Shareholders
-                                    </button>
-                                    <button onclick="switchTab('executives')" class="tab-dart whitespace-nowrap">
-                                        <i class="fas fa-user-tie mr-2"></i>Executives
-                                    </button>
-                                    <button onclick="switchTab('financials')" class="tab-dart whitespace-nowrap">
-                                        <i class="fas fa-chart-bar mr-2"></i>Financials
-                                    </button>
-                                    <button onclick="switchTab('filings')" class="tab-dart whitespace-nowrap">
-                                        <i class="fas fa-file-alt mr-2"></i>Filings
-                                    </button>
-                                </nav>
-                            </div>
-
-                            <!-- Tab Content -->
-                            <div class="tab-content">
-                                <div id="overview-tab" class="tab-pane active">
-                                    <!-- Overview content will be populated by JavaScript -->
-                                </div>
-                                <div id="basic-tab" class="tab-pane hidden">
-                                    <!-- Basic info content -->
-                                </div>
-                                <div id="shareholders-tab" class="tab-pane hidden">
-                                    <!-- Shareholders content -->
-                                </div>
-                                <div id="executives-tab" class="tab-pane hidden">
-                                    <!-- Executives content -->
-                                </div>
-                                <div id="financials-tab" class="tab-pane hidden">
-                                    <!-- Financials content -->
-                                </div>
-                                <div id="filings-tab" class="tab-pane hidden">
-                                    <!-- Filings content -->
-                                </div>
-                            </div>
-
-                            <!-- JSON View Modal -->
-                            <div id="json-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full z-60 hidden">
-                                <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white dark:bg-gray-800">
-                                    <div class="flex justify-between items-center mb-4">
-                                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">Raw JSON Data</h3>
-                                        <button onclick="closeJsonModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                    
+                    <div class="flex items-center justify-between">
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" @click="searchQuery = 'Samsung Electronics'" 
+                                    class="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">
+                                Samsung Electronics
+                            </button>
+                            <button type="button" @click="searchQuery = 'Hyundai Motor'" 
+                                    class="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">
+                                Hyundai Motor
+                            </button>
+                            <button type="button" @click="searchQuery = 'LG Chem'" 
+                                    class="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">
+                                LG Chem
+                            </button>
+                            <button type="button" @click="searchQuery = 'SK Hynix'" 
+                                    class="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">
+                                SK Hynix
+                            </button>
+                        </div>
+                        
+                        <button type="submit" :disabled="isSearching || !searchQuery.trim()"
+                                class="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium disabled:opacity-50">
+                            <span x-show="!isSearching">Search DART</span>
+                            <span x-show="isSearching" class="flex items-center">
+                                <i data-lucide="loader-2" class="w-4 h-4 animate-spin mr-2"></i>
+                                Searching...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Results -->
+            <div x-show="hasResults" class="glass-panel rounded-2xl p-8">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-semibold text-gray-900">
+                        Search Results for "<span x-text="lastSearchQuery"></span>"
+                    </h3>
+                    <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                        <span x-text="results.length"></span> result<span x-show="results.length !== 1">s</span>
+                    </span>
+                </div>
+                
+                <div class="space-y-4">
+                    <template x-for="company in results" :key="company.corp_code">
+                        <div class="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-3 mb-3">
+                                        <h4 class="text-lg font-medium text-gray-900" x-text="company.name"></h4>
+                                        <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                                            Official Registry
+                                        </span>
                                     </div>
-                                    <pre id="json-content" class="bg-gray-50 dark:bg-gray-700 p-4 rounded text-sm overflow-x-auto max-h-96"></pre>
+                                    
+                                    <div class="grid grid-cols-2 gap-4 text-sm mb-4">
+                                        <div>
+                                            <span class="font-medium text-gray-600">Company Code:</span>
+                                            <span class="ml-2 text-gray-900 font-mono" x-text="company.corp_code"></span>
+                                        </div>
+                                        <div>
+                                            <span class="font-medium text-gray-600">Stock Code:</span>
+                                            <span class="ml-2 text-gray-900 font-mono" x-text="company.stock_code || 'N/A'"></span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div x-show="company.detailed_info" class="bg-white rounded-lg p-4 border border-gray-200">
+                                        <h5 class="font-medium text-gray-900 mb-2">Available Information</h5>
+                                        <div class="text-sm text-gray-600 space-y-1">
+                                            <div x-show="company.detailed_info?.shareholders?.length">
+                                                📊 <span x-text="company.detailed_info.shareholders.length"></span> major shareholders
+                                            </div>
+                                            <div x-show="company.detailed_info?.executives?.length">
+                                                👥 <span x-text="company.detailed_info.executives.length"></span> executive records
+                                            </div>
+                                            <div x-show="company.detailed_info?.financials?.length">
+                                                💰 <span x-text="company.detailed_info.financials.length"></span> financial accounts
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
+                                
+                                <button @click="showDetails(company)" 
+                                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                                    <i data-lucide="eye" class="w-4 h-4 mr-2"></i>
+                                    View Details
+                                </button>
                             </div>
                         </div>
-                    </div>
-
+                    </template>
+                </div>
+            </div>
+            
+            <!-- No Results -->
+            <div x-show="!hasResults && !isSearching" class="glass-panel rounded-2xl p-12">
+                <div class="text-center">
+                    <i data-lucide="search" class="w-16 h-16 text-gray-400 mx-auto mb-4"></i>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">Search Korean Companies</h3>
+                    <p class="text-gray-600">Enter a company name to search the official DART registry</p>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<style>
-    /* DART Tab Styling */
-    .tab-dart {
-        padding: 12px 20px;
-        border-bottom: 3px solid transparent;
-        color: #64748b;
-        font-weight: 500;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: none;
-    }
+    <!-- Company Details Modal -->
+    <div x-show="selectedCompany" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="flex items-center justify-between p-6 border-b border-gray-200">
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-900" x-text="selectedCompany?.name || 'Company Details'"></h3>
+                    <p class="text-sm text-gray-500">Complete DART registry information</p>
+                </div>
+                <button @click="selectedCompany = null" class="text-gray-400 hover:text-gray-600">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto max-h-[70vh]">
+                <div x-show="selectedCompany" class="space-y-6">
+                    <!-- Basic Info -->
+                    <div class="bg-gray-50 rounded-xl p-6">
+                        <h4 class="font-semibold text-gray-900 mb-4">Basic Information</h4>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="font-medium text-gray-600">Company Code:</span>
+                                <span class="ml-2 text-gray-900 font-mono" x-text="selectedCompany?.corp_code"></span>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-600">Stock Code:</span>
+                                <span class="ml-2 text-gray-900 font-mono" x-text="selectedCompany?.stock_code || 'N/A'"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Shareholders -->
+                    <div x-show="selectedCompany?.detailed_info?.shareholders?.length" class="bg-gray-50 rounded-xl p-6">
+                        <h4 class="font-semibold text-gray-900 mb-4">Major Shareholders</h4>
+                        <div class="space-y-3">
+                            <template x-for="shareholder in selectedCompany.detailed_info.shareholders.slice(0, 10)" :key="shareholder.holder">
+                                <div class="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
+                                    <div>
+                                        <p class="font-medium text-gray-900" x-text="shareholder.holder_eng || shareholder.holder"></p>
+                                        <p class="text-sm text-gray-500" x-text="'Report Date: ' + (shareholder.report_date || 'Unknown')"></p>
+                                    </div>
+                                    <span class="font-bold text-blue-600" x-text="(shareholder.ratio || '0') + '%'"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- Executives -->
+                    <div x-show="selectedCompany?.detailed_info?.executives?.length" class="bg-gray-50 rounded-xl p-6">
+                        <h4 class="font-semibold text-gray-900 mb-4">Executive Information</h4>
+                        <div class="space-y-3">
+                            <template x-for="exec in selectedCompany.detailed_info.executives.slice(0, 5)" :key="exec.name">
+                                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                    <h5 class="font-medium text-gray-900" x-text="exec.name_eng || exec.name"></h5>
+                                    <p class="text-blue-600 text-sm" x-text="exec.relation_eng || exec.relation"></p>
+                                    <p class="text-gray-500 text-sm" x-text="'Change Date: ' + (exec.chg_date || 'Unknown')"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    .tab-dart:hover {
-        color: #1e40af;
-        background-color: #f8fafc;
-    }
-
-    .tab-dart.tab-dart-active {
-        color: #1e40af;
-        border-bottom-color: #f59e0b;
-        background-color: #f8fafc;
-    }
-
-    .tab-pane {
-        display: none;
-    }
-
-    .tab-pane.active {
-        display: block;
-    }
-
-    .data-card {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 16px;
-        transition: all 0.2s ease;
-    }
-
-    .data-card:hover {
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    }
-
-    .metric-value {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #1e40af;
-    }
-
-    .metric-label {
-        font-size: 0.875rem;
-        color: #64748b;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .json-content {
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 12px;
-        line-height: 1.4;
-    }
-</style>
-
-<script>
-// Global variables
-let currentCompanyData = null;
-
-// Utility functions
-function setCompany(name) {
-    document.getElementById('company-name').value = name;
-}
-
-function formatNumber(num) {
-    if (!num) return 'N/A';
-    const number = parseFloat(num.toString().replace(/[^0-9.-]/g, ''));
-    if (isNaN(number)) return num;
-
-    if (number >= 1e12) return (number / 1e12).toFixed(1) + 'T';
-    if (number >= 1e9) return (number / 1e9).toFixed(1) + 'B';
-    if (number >= 1e6) return (number / 1e6).toFixed(1) + 'M';
-    if (number >= 1e3) return (number / 1e3).toFixed(1) + 'K';
-    return number.toString();
-}
-
-// Tab switching functionality
-function switchTab(tabName) {
-    // Hide all tab content
-    const tabPanes = document.querySelectorAll('.tab-pane');
-    tabPanes.forEach(pane => pane.classList.remove('active'));
-
-    // Remove active class from all tabs
-    const tabs = document.querySelectorAll('.tab-dart');
-    tabs.forEach(tab => tab.classList.remove('tab-dart-active'));
-
-    // Show selected tab content
-    const selectedTab = document.getElementById(tabName + '-tab');
-    const selectedTabButton = document.querySelector(`[onclick="switchTab('${tabName}')"]`);
-
-    if (selectedTab) selectedTab.classList.add('active');
-    if (selectedTabButton) selectedTabButton.classList.add('tab-dart-active');
-
-    // Populate tab content if data is available
-    if (currentCompanyData && currentCompanyData.detailed_info) {
-        populateTabContent(tabName, currentCompanyData.detailed_info);
-    }
-}
-
-// Modal functions
-function showDetailedModal(companyData) {
-    currentCompanyData = companyData;
-    const modal = document.getElementById('detailed-modal');
-    const title = document.getElementById('modal-title');
-
-    if (companyData.name) {
-        title.textContent = companyData.name;
-    }
-
-    modal.classList.remove('hidden');
-
-    // Default to overview tab
-    switchTab('overview');
-}
-
-function closeDetailedModal() {
-    const modal = document.getElementById('detailed-modal');
-    modal.classList.add('hidden');
-    currentCompanyData = null;
-}
-
-function toggleJsonView() {
-    const jsonModal = document.getElementById('json-modal');
-    const jsonContent = document.getElementById('json-content');
-
-    if (currentCompanyData) {
-        jsonContent.textContent = JSON.stringify(currentCompanyData, null, 2);
-        jsonModal.classList.remove('hidden');
-    }
-}
-
-function closeJsonModal() {
-    const jsonModal = document.getElementById('json-modal');
-    jsonModal.classList.add('hidden');
-}
-
-// Main search functionality
-document.getElementById('dart-search-form').addEventListener('submit', async function(e) {
-    e.preventDefault();
-
-    const searchBtn = document.getElementById('search-btn');
-    const btnText = document.getElementById('btn-text');
-    const loadingText = document.getElementById('loading-text');
-    const noResults = document.getElementById('no-results');
-    const searchResults = document.getElementById('search-results');
-    const companyName = document.getElementById('company-name').value.trim();
-
-    if (!companyName) {
-        alert('Please enter a company name');
-        return;
-    }
-
-    // Show loading state
-    searchBtn.disabled = true;
-    btnText.classList.add('hidden');
-    loadingText.classList.remove('hidden');
-
-    try {
-        // Call DART search API
-        const response = await fetch('/api/dart/search', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                company_name: companyName
-            })
-        });
-
-        const data = await response.json();
-
-        // Hide loading, show results
-        btnText.classList.remove('hidden');
-        loadingText.classList.add('hidden');
-        searchBtn.disabled = false;
-
-        if (response.ok && data.companies && data.companies.length > 0) {
-            displayResults(data.companies, companyName);
-        } else {
-            showNoResults(companyName);
+    <script>
+        function dartSearch() {
+            return {
+                searchQuery: '',
+                isSearching: false,
+                hasResults: false,
+                lastSearchQuery: '',
+                results: [],
+                selectedCompany: null,
+                
+                init() {
+                    lucide.createIcons();
+                },
+                
+                async searchCompany() {
+                    if (!this.searchQuery.trim()) return;
+                    
+                    this.isSearching = true;
+                    this.hasResults = false;
+                    
+                    try {
+                        const response = await fetch('/api/dart/search', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                company_name: this.searchQuery.trim()
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.results = data.companies || [];
+                            this.hasResults = true;
+                            this.lastSearchQuery = this.searchQuery;
+                        } else {
+                            alert('Search failed: ' + (data.error || 'Unknown error'));
+                        }
+                        
+                    } catch (error) {
+                        alert('Network error: ' + error.message);
+                    } finally {
+                        this.isSearching = false;
+                        lucide.createIcons();
+                    }
+                },
+                
+                showDetails(company) {
+                    this.selectedCompany = company;
+                    this.$nextTick(() => {
+                        lucide.createIcons();
+                    });
+                }
+            };
         }
-
-    } catch (error) {
-        console.error('Search failed:', error);
-        searchBtn.disabled = false;
-        btnText.classList.remove('hidden');
-        loadingText.classList.add('hidden');
-        showError('Search failed. Please try again.');
-    }
-});
-
-function displayResults(companies, searchTerm) {
-    const searchResults = document.getElementById('search-results');
-    const noResults = document.getElementById('no-results');
-
-    noResults.classList.add('hidden');
-    searchResults.classList.remove('hidden');
-
-    let html = `
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                    Search Results for "${searchTerm}"
-                </h3>
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-200 dark:text-blue-900">
-                    ${companies.length} result${companies.length !== 1 ? 's' : ''}
-                </span>
-            </div>
-            <div class="space-y-4">
-    `;
-
-    companies.forEach((company, index) => {
-        const detailedInfo = company.detailed_info;
-        const hasDetailedInfo = detailedInfo && Object.keys(detailedInfo).length > 0;
-
-        html += `
-            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition duration-200">
-                <div class="flex items-start justify-between">
-                    <div class="flex-1">
-                        <div class="flex items-center mb-2">
-                            <h4 class="text-lg font-medium text-gray-900 dark:text-white">
-                                ${company.name || 'Unknown Company'}
-                            </h4>
-                            ${hasDetailedInfo ? '<span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-200 dark:text-green-900">Complete Data Available</span>' : '<span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-200 dark:text-gray-900">Basic Info Only</span>'}
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
-                            <div>
-                                <span class="font-medium text-gray-500 dark:text-gray-400">Company Code:</span>
-                                <span class="ml-2 text-gray-900 dark:text-white font-mono">${company.corp_code || 'N/A'}</span>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-500 dark:text-gray-400">Stock Code:</span>
-                                <span class="ml-2 text-gray-900 dark:text-white font-mono">${company.stock_code || 'N/A'}</span>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-500 dark:text-gray-400">Registry:</span>
-                                <span class="ml-2 text-gray-900 dark:text-white">
-                                    🇰🇷 DART (Korean Financial Supervisory Service)
-                                </span>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-500 dark:text-gray-400">Data Status:</span>
-                                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${hasDetailedInfo ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
-                                    ${hasDetailedInfo ? 'Complete' : 'Basic'}
-                                </span>
-                            </div>
-                        </div>
-
-                        ${hasDetailedInfo ? generateCompanyPreview(detailedInfo) : '<p class="text-sm text-gray-600 dark:text-gray-400">Click "View Details" to load complete company information from DART.</p>'}
-                    </div>
-                    <div class="ml-4 flex flex-col space-y-2">
-                        <button
-                            onclick="showDetailedModal(${JSON.stringify(company).replace(/"/g, '&quot;')})"
-                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition duration-200"
-                        >
-                            <i class="fas fa-eye mr-2"></i>
-                            ${hasDetailedInfo ? 'View Full Details' : 'Load Complete Data'}
-                        </button>
-                        ${hasDetailedInfo ? '<span class="text-xs text-green-600 dark:text-green-400 text-center">📊 Complete dataset ready</span>' : '<span class="text-xs text-blue-600 dark:text-blue-400 text-center">🔄 Click to fetch data</span>'}
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-
-    html += `
-            </div>
-        </div>
-    `;
-
-    searchResults.innerHTML = html;
-}
-
-function showNoResults(searchTerm) {
-    const searchResults = document.getElementById('search-results');
-    const noResults = document.getElementById('no-results');
-
-    noResults.classList.remove('hidden');
-    searchResults.classList.add('hidden');
-
-    noResults.innerHTML = `
-        <div class="text-center">
-            <div class="text-gray-400 dark:text-gray-500 mb-4">
-                <svg class="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                </svg>
-            </div>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No Results Found
-            </h3>
-            <p class="text-gray-600 dark:text-gray-400 mb-4">
-                No Korean companies found matching "${searchTerm}" in the DART registry.
-            </p>
-            <div class="text-sm text-gray-500 dark:text-gray-400">
-                <p>Try:</p>
-                <ul class="list-disc list-inside mt-2 space-y-1">
-                    <li>Using the exact Korean company name</li>
-                    <li>Checking the spelling</li>
-                    <li>Using major companies like "삼성전자", "현대자동차", "SK하이닉스"</li>
-                </ul>
-            </div>
-        </div>
-    `;
-}
-
-function showError(message) {
-    const searchResults = document.getElementById('search-results');
-    const noResults = document.getElementById('no-results');
-
-    noResults.classList.remove('hidden');
-    searchResults.classList.add('hidden');
-
-    noResults.innerHTML = `
-        <div class="text-center">
-            <div class="text-red-400 mb-4">
-                <svg class="mx-auto h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-            </div>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                Search Error
-            </h3>
-            <p class="text-red-600 dark:text-red-400">
-                ${message}
-            </p>
-        </div>
-    `;
-}
-
-function generateCompanyPreview(detailedInfo) {
-    if (!detailedInfo) return '';
-
-    let html = '<div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 space-y-4">';
-
-    // Quick metrics preview
-    if (detailedInfo.shareholders && detailedInfo.shareholders.length > 0) {
-        const totalShareholders = detailedInfo.shareholders.length;
-        const topShareholder = detailedInfo.shareholders[0];
-        const topHolderName = topShareholder.holder || 'N/A';
-        const topHolderRatio = topShareholder.ratio || 'N/A';
-
-        html += `
-            <div>
-                <h5 class="text-sm font-medium text-gray-900 dark:text-white mb-2">👥 Major Shareholders</h5>
-                <div class="space-y-1">
-                    <div class="text-xs text-gray-600 dark:text-gray-300">
-                        ${totalShareholders} total shareholders
-                    </div>
-                    <div class="text-xs text-gray-600 dark:text-gray-300">
-                        Top: ${topHolderName} (${topHolderRatio}%)
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Financial highlights
-    if (detailedInfo.financials && detailedInfo.financials.length > 0) {
-        html += `
-            <div>
-                <h5 class="text-sm font-medium text-gray-900 dark:text-white mb-2">💰 Financial Snapshot</h5>
-                <div class="text-xs text-gray-600 dark:text-gray-300">
-                    ${detailedInfo.financials.length} financial accounts available
-                </div>
-            </div>
-        `;
-    }
-
-    html += `
-        <div class="text-xs text-blue-600 dark:text-blue-400 font-medium">
-            📊 Click "View Full Details" for complete data analysis
-        </div>
-    `;
-
-    html += '</div>';
-    return html;
-}
-
-function populateTabContent(tabName, detailedInfo) {
-    const tabElement = document.getElementById(tabName + '-tab');
-    if (!tabElement || !detailedInfo) return;
-
-    let html = '';
-
-    switch(tabName) {
-        case 'overview':
-            html = generateOverviewContent(detailedInfo);
-            break;
-        case 'basic':
-            html = generateBasicInfoContent(detailedInfo);
-            break;
-        case 'shareholders':
-            html = generateShareholdersContent(detailedInfo);
-            break;
-        case 'executives':
-            html = generateExecutivesContent(detailedInfo);
-            break;
-        case 'financials':
-            html = generateFinancialsContent(detailedInfo);
-            break;
-        case 'filings':
-            html = generateFilingsContent(detailedInfo);
-            break;
-    }
-
-    tabElement.innerHTML = html;
-}
-
-function generateOverviewContent(detailedInfo) {
-    let html = '<div class="space-y-6">';
-
-    // Key metrics cards
-    html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
-
-    if (detailedInfo.shareholders && detailedInfo.shareholders.length > 0) {
-        html += `
-            <div class="data-card text-center">
-                <div class="metric-value text-green-600">${detailedInfo.shareholders.length}</div>
-                <div class="metric-label">Major Shareholders</div>
-            </div>
-        `;
-    }
-
-    if (detailedInfo.executives && detailedInfo.executives.length > 0) {
-        html += `
-            <div class="data-card text-center">
-                <div class="metric-value text-blue-600">${detailedInfo.executives.length}</div>
-                <div class="metric-label">Executives</div>
-            </div>
-        `;
-    }
-
-    if (detailedInfo.financials && detailedInfo.financials.length > 0) {
-        html += `
-            <div class="data-card text-center">
-                <div class="metric-value text-purple-600">${detailedInfo.financials.length}</div>
-                <div class="metric-label">Financial Records</div>
-            </div>
-        `;
-    }
-
-    html += '</div>';
-
-    // Key financial metrics
-    if (detailedInfo.financials && detailedInfo.financials.length > 0) {
-        html += '<div class="data-card"><h4 class="font-semibold text-gray-900 dark:text-white mb-3">💰 Key Financial Metrics</h4>';
-
-        const financials = detailedInfo.financials;
-        let keyMetrics = {};
-
-        financials.forEach(fin => {
-            const accountName = fin.account_nm || '';
-            const amount = fin.thstrm_amount || '0';
-
-            if ('자산총계' in accountName) keyMetrics['Total Assets'] = amount;
-            if ('매출액' in accountName) keyMetrics['Revenue'] = amount;
-            if ('영업이익' in accountName) keyMetrics['Operating Profit'] = amount;
-            if ('당기순이익' in accountName) keyMetrics['Net Income'] = amount;
-        });
-
-        html += '<div class="grid grid-cols-2 gap-4">';
-        Object.entries(keyMetrics).forEach(([metric, amount]) => {
-            if (amount !== '0') {
-                const formattedAmount = formatNumber(amount);
-                html += `<div><strong>${metric}:</strong> ₩${formattedAmount}</div>`;
-            }
-        });
-        html += '</div></div>';
-    }
-
-    html += '</div>';
-    return html;
-}
-
-function generateBasicInfoContent(detailedInfo) {
-    let html = '<div class="space-y-4">';
-
-    if (detailedInfo.basic_info) {
-        const basic = detailedInfo.basic_info;
-        html += '<div class="data-card">';
-        html += '<h4 class="font-semibold text-gray-900 dark:text-white mb-3">🏢 Company Information</h4>';
-        html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
-
-        if (basic.corp_name) html += `<div><strong>Company Name:</strong> ${basic.corp_name}</div>`;
-        if (basic.ceo_nm) html += `<div><strong>CEO:</strong> ${basic.ceo_nm}</div>`;
-        if (basic.est_dt) html += `<div><strong>Established:</strong> ${basic.est_dt}</div>`;
-        if (basic.adr) html += `<div><strong>Address:</strong> ${basic.adr}</div>`;
-        if (basic.hm_url) html += `<div><strong>Website:</strong> <a href="${basic.hm_url}" target="_blank" class="text-blue-600 hover:text-blue-800">${basic.hm_url}</a></div>`;
-        if (basic.phn_no) html += `<div><strong>Phone:</strong> ${basic.phn_no}</div>`;
-
-        html += '</div></div>';
-    }
-
-    html += '</div>';
-    return html;
-}
-
-function generateShareholdersContent(detailedInfo) {
-    let html = '<div class="space-y-4">';
-
-    if (detailedInfo.shareholders && detailedInfo.shareholders.length > 0) {
-        html += '<div class="data-card">';
-        html += '<h4 class="font-semibold text-gray-900 dark:text-white mb-3">👥 Major Shareholders (≥5%)</h4>';
-        html += '<div class="space-y-3">';
-
-        detailedInfo.shareholders.forEach((shareholder, index) => {
-            const holder = shareholder.holder || 'N/A';
-            const ratio = shareholder.ratio || 'N/A';
-            const reportDate = shareholder.report_date || 'N/A';
-            const changeReason = shareholder.change_reason || '';
-
-            html += `
-                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
-                    <div class="flex justify-between items-start mb-2">
-                        <h5 class="font-medium text-gray-900 dark:text-white">${holder}</h5>
-                        <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">${ratio}%</span>
-                    </div>
-                    <div class="text-sm text-gray-600 dark:text-gray-400">
-                        <div>Report Date: ${reportDate}</div>
-                        ${changeReason ? `<div>Reason: ${changeReason}</div>` : ''}
-                    </div>
-                </div>
-            `;
-        });
-
-        html += '</div></div>';
-    } else {
-        html += '<div class="data-card"><p class="text-gray-600 dark:text-gray-400">No shareholder data available</p></div>';
-    }
-
-    html += '</div>';
-    return html;
-}
-
-function generateExecutivesContent(detailedInfo) {
-    let html = '<div class="space-y-4">';
-
-    if (detailedInfo.executives && detailedInfo.executives.length > 0) {
-        html += '<div class="data-card">';
-        html += '<h4 class="font-semibold text-gray-900 dark:text-white mb-3">👨‍💼 Executives & Board Members</h4>';
-        html += '<div class="space-y-3">';
-
-        detailedInfo.executives.forEach((exec, index) => {
-            const name = exec.name || 'N/A';
-            const relation = exec.relation || 'N/A';
-            const changeDate = exec.chg_date || 'N/A';
-            const beforeShares = exec.before || 'N/A';
-            const afterShares = exec.after || 'N/A';
-
-            html += `
-                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
-                    <div class="flex justify-between items-start mb-2">
-                        <h5 class="font-medium text-gray-900 dark:text-white">${name}</h5>
-                        <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">${relation}</span>
-                    </div>
-                    <div class="text-sm text-gray-600 dark:text-gray-400">
-                        <div>Change Date: ${changeDate}</div>
-                        ${beforeShares !== 'N/A' && afterShares !== 'N/A' ? `<div>Shares: ${beforeShares} → ${afterShares}</div>` : ''}
-                    </div>
-                </div>
-            `;
-        });
-
-        html += '</div></div>';
-    } else {
-        html += '<div class="data-card"><p class="text-gray-600 dark:text-gray-400">No executive data available</p></div>';
-    }
-
-    html += '</div>';
-    return html;
-}
-
-function generateFinancialsContent(detailedInfo) {
-    let html = '<div class="space-y-4">';
-
-    if (detailedInfo.financials && detailedInfo.financials.length > 0) {
-        html += '<div class="data-card">';
-        html += '<h4 class="font-semibold text-gray-900 dark:text-white mb-3">💰 Financial Statements</h4>';
-        html += '<div class="space-y-3">';
-
-        detailedInfo.financials.forEach((fin, index) => {
-            const accountName = fin.account_nm || 'N/A';
-            const amount = fin.thstrm_amount || '0';
-            const formattedAmount = amount !== '0' ? formatNumber(amount) : 'N/A';
-
-            html += `
-                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
-                    <div class="flex justify-between items-center">
-                        <span class="font-medium text-gray-900 dark:text-white">${accountName}</span>
-                        <span class="text-lg font-bold text-blue-600">₩${formattedAmount}</span>
-                    </div>
-                </div>
-            `;
-        });
-
-        html += '</div></div>';
-    } else {
-        html += '<div class="data-card"><p class="text-gray-600 dark:text-gray-400">No financial data available</p></div>';
-    }
-
-    html += '</div>';
-    return html;
-}
-
-function generateFilingsContent(detailedInfo) {
-    let html = '<div class="space-y-4">';
-
-    // This would show historical filings if available
-    html += '<div class="data-card">';
-    html += '<h4 class="font-semibold text-gray-900 dark:text-white mb-3">📄 Historical Filings</h4>';
-    html += '<p class="text-gray-600 dark:text-gray-400">Historical filing data would be displayed here. The DART adapter retrieves all available filings for the specified time period.</p>';
-    html += '<div class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">';
-    html += '<p class="text-sm text-blue-800 dark:text-blue-200">💡 <strong>Note:</strong> Complete historical filings are available through the DART adapter but are displayed in the terminal output for performance reasons.</p>';
-    html += '</div></div>';
-
-    html += '</div>';
-    return html;
-}
-
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('company-name').focus();
-});
-
-
-
-
-</script>
-
-{% endblock %}
+    </script>
+</body>
+</html>

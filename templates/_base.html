@@ -1,19 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" x-data="{ theme: localStorage.theme || 'dark' }" 
+<html lang="en" x-data="{ theme: localStorage.theme || 'light' }" 
       x-init="document.documentElement.classList.toggle('dark', theme==='dark'); 
                $watch('theme', v => { localStorage.theme=v; document.documentElement.classList.toggle('dark', v==='dark')})">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Risklytics • {{ env_name }}</title>
+    <title>Risklytics • Professional Risk Intelligence</title>
     
     <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.gstatic.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-    
-    <!-- Styles -->
-    <link href="{{ url_for('static', filename='css/tokens.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -23,8 +20,39 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        'mono': ['JetBrains Mono', 'monospace'],
-                        'sans': ['Inter', 'system-ui', 'sans-serif']
+                        'sans': ['Inter', 'system-ui', 'sans-serif'],
+                        'mono': ['JetBrains Mono', 'monospace']
+                    },
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        },
+                        gray: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a',
+                        }
+                    },
+                    boxShadow: {
+                        'soft': '0 2px 15px 0 rgba(0, 0, 0, 0.08)',
+                        'medium': '0 4px 25px 0 rgba(0, 0, 0, 0.12)',
+                        'strong': '0 8px 40px 0 rgba(0, 0, 0, 0.16)',
                     }
                 }
             }
@@ -34,159 +62,252 @@
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
     <!-- ECharts for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 
-    <meta name="color-scheme" content="light dark">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <script>
-        // Gentle motion + prefers-reduced-motion respect
-        const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        window.__reducedMotion = prefersReduced;
-        // Extend Tailwind theme (keep existing config)
-        tailwind.config.theme = tailwind.config.theme || { extend: {} };
-        tailwind.config.theme.extend = tailwind.config.theme.extend || {};
-        tailwind.config.theme.extend.boxShadow = Object.assign({}, tailwind.config.theme.extend.boxShadow || {}, {
-            xlsoft: '0 10px 30px rgba(2,6,23,0.08)'
-        });
-        tailwind.config.theme.extend.transitionTimingFunction = Object.assign({}, tailwind.config.theme.extend.transitionTimingFunction || {}, {
-            smooth: 'cubic-bezier(0.22, 1, 0.36, 1)'
-        });
-        tailwind.config.theme.extend.keyframes = Object.assign({}, tailwind.config.theme.extend.keyframes || {}, {
-            shimmer: { '0%':{backgroundPosition:'-700px 0'}, '100%':{backgroundPosition:'700px 0'} }
-        });
-        tailwind.config.theme.extend.animation = Object.assign({}, tailwind.config.theme.extend.animation || {}, {
-            shimmer: 'shimmer 1.5s linear infinite'
-        });
-    </script>
     <style>
-        :root { --brand-navy:#0b1220; --brand-ink:#111827; --brand-accent:#f59e0b; }
-        .brand-bar { background: linear-gradient(90deg, #0b1220 0%, #1e3a8a 60%, #0b1220 100%); }
-        .kpi-card { background: white; border:1px solid #e5e7eb; border-radius:14px; box-shadow: var(--kpi-shadow,0 6px 18px rgba(2,6,23,0.06)); }
-        .kpi-value { letter-spacing: -0.02em; }
-        .skeleton { background: linear-gradient(90deg,#f1f5f9 25%, #e5e7eb 37%, #f1f5f9 63%); background-size:1400px 100%; }
-        .sticky-actions { position: sticky; top: 0; z-index: 40; backdrop-filter: saturate(1.2) blur(6px); }
-        .dark body { background-color:#0b1220; color:#e5e7eb; }
-        .dark .professional-card, .dark .kpi-card { background:#0f172a; border-color:#1f2a44; }
-        .dark .tab-professional.active { background:#0b1220; color:#fbbf24; border-bottom-color:#f59e0b; }
-        .btn-primary-tier1 { background:#1e40af; color:white; transition: transform .12s ease; }
-        .btn-primary-tier1:hover { transform: translateY(-1px); }
-        .badge-soft { border-radius:9999px; padding:.25rem .5rem; border:1px solid rgba(0,0,0,0.06); }
-        .dark .badge-soft { border-color:#233055; }
-        .toast { position: fixed; right: 24px; bottom: 24px; z-index: 60; min-width: 280px; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .dark .glass-effect {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .nav-item {
+            @apply flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200;
+        }
+        
+        .nav-item:hover {
+            @apply bg-gray-100 text-gray-900;
+        }
+        
+        .dark .nav-item:hover {
+            @apply bg-gray-800 text-white;
+        }
+        
+        .nav-item.active {
+            @apply bg-primary-50 text-primary-700 border-l-4 border-primary-500;
+        }
+        
+        .dark .nav-item.active {
+            @apply bg-primary-900/20 text-primary-300 border-primary-400;
+        }
+        
+        .metric-card {
+            @apply bg-white rounded-xl border border-gray-200 p-6 transition-all duration-200 hover:shadow-medium;
+        }
+        
+        .dark .metric-card {
+            @apply bg-gray-800 border-gray-700;
+        }
+        
+        .btn-primary {
+            @apply bg-primary-600 hover:bg-primary-700 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 shadow-soft hover:shadow-medium;
+        }
+        
+        .btn-secondary {
+            @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-lg transition-all duration-200;
+        }
+        
+        .dark .btn-secondary {
+            @apply bg-gray-700 hover:bg-gray-600 text-gray-200;
+        }
+        
+        .input-field {
+            @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200;
+        }
+        
+        .dark .input-field {
+            @apply bg-gray-800 border-gray-600 text-white;
+        }
     </style>
 </head>
 
-<body class="bg-[var(--bg-0)] text-[var(--text-0)] min-h-screen">
-    <div class="brand-bar w-full text-white">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <i class="fas fa-circle-notch animate-spin-slow text-gold-500"></i>
-                <span class="text-sm opacity-90">Risklytics TPRM • Tier-1 Visualization</span>
-            </div>
-            <div class="flex items-center gap-3">
-                <button id="themeToggle" class="text-xs px-2 py-1 rounded badge-soft bg-white/10 hover:bg-white/20">Toggle Theme</button>
-                <span class="text-xs opacity-80">⌘/Ctrl + K</span>
-            </div>
-        </div>
-    </div>
-    <!-- Global Top Bar -->
-    <header class="sticky top-0 z-40 backdrop-blur bg-black/20 border-b border-white/10 bg-white/90 sticky-actions shadow-sm border-b border-gray-200 supports-backdrop-blur:bg-white/60">
-        <div class="mx-auto max-w-[1440px] px-6 h-16 flex items-center justify-between">
-            <!-- Left: Brand and Environment -->
-            <div class="flex items-center gap-4">
-                <div class="font-bold text-lg tracking-wide">
-                    <span class="text-[var(--brand-500)]">Risk</span>lytics
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen">
+    <!-- Main Layout -->
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+            <!-- Logo -->
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+                        <i data-lucide="shield-check" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-900 dark:text-white">Risklytics</h1>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Risk Intelligence</p>
+                    </div>
                 </div>
-                <span class="chip hidden md:inline">Env: {{ env_name }}</span>
-                <span class="chip hidden md:inline">v{{ version }}</span>
             </div>
             
-            <!-- Right: Search and Theme -->
-            <div class="flex items-center gap-3">
-                <!-- Global Search -->
-                <div class="hidden md:flex items-center bg-[var(--bg-2)] border border-white/10 rounded-xl px-3 py-2 w-96">
-                    <input id="globalSearch" 
-                           class="bg-transparent outline-none w-full text-sm" 
-                           placeholder="Search entities, cases, datasets (⌘/Ctrl+K)">
-                </div>
+            <!-- Navigation -->
+            <nav class="flex-1 p-4 space-y-1">
+                <a href="{{ url_for('company_screening') }}" class="nav-item">
+                    <i data-lucide="building-2" class="w-4 h-4 mr-3"></i>
+                    Company Screening
+                </a>
+                <a href="{{ url_for('individual_screening') }}" class="nav-item">
+                    <i data-lucide="user-check" class="w-4 h-4 mr-3"></i>
+                    Individual Screening
+                </a>
+                <a href="{{ url_for('dart_search') }}" class="nav-item">
+                    <i data-lucide="search" class="w-4 h-4 mr-3"></i>
+                    DART Registry
+                    <span class="ml-auto text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">KR</span>
+                </a>
+                <a href="{{ url_for('whatsapp_test') }}" class="nav-item">
+                    <i data-lucide="message-circle" class="w-4 h-4 mr-3"></i>
+                    WhatsApp Agent
+                </a>
                 
-                <!-- Theme Toggle -->
-                <button class="btn-ghost" @click="theme = theme==='dark' ? 'light' : 'dark'">
-                    <span x-show="theme==='dark'">☀️</span>
-                    <span x-show="theme==='light'">🌙</span>
-                </button>
-                <button class="btn-ghost text-sm" @click="resetForm && resetForm()">
-                    <span class="mr-1">🔄</span> New Screening
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Layout -->
-    <div class="mx-auto max-w-[1440px] px-6 grid grid-cols-12 gap-6 mt-6">
-        <!-- Left Sidebar Navigation -->
-        <aside class="col-span-12 lg:col-span-2">
-            <nav class="space-y-1">
-                <a href="{{ url_for('company_screening') }}"
-                   class="surface block px-4 py-3 hover:opacity-90 transition-opacity">
-                    🏢 Company Screening
-                </a>
-                <a href="{{ url_for('individual_screening') }}"
-                   class="surface block px-4 py-3 hover:opacity-90 transition-opacity">
-                    👤 Individual Screening
-                </a>
-                <a href="{{ url_for('dart_search') }}"
-                   class="surface block px-4 py-3 hover:opacity-90 transition-opacity">
-                    🇰🇷 DART Registry
-                </a>
-                <a href="{{ url_for('whatsapp_test') }}"
-                   class="surface block px-4 py-3 hover:opacity-90 transition-opacity">
-                    💬 WhatsApp Registry
-                </a>
-                <a href="{{ url_for('debug_page') }}"
-                   class="surface block px-4 py-3 hover:opacity-90 transition-opacity opacity-75">
-                    🔧 Debug Tools
-                </a>
-                <div class="surface px-4 py-3 opacity-60">📁 Cases</div>
-                <div class="surface px-4 py-3 opacity-60">📊 Datasets</div>
-                <div class="surface px-4 py-3 opacity-60">📋 Reports</div>
-                <div class="surface px-4 py-3 opacity-60">🛡️ Risk Management (soon)</div>
-                <div class="surface px-4 py-3 opacity-60">🤖 Risk AI (soon)</div>
+                <div class="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+                    <a href="{{ url_for('debug_page') }}" class="nav-item opacity-60">
+                        <i data-lucide="bug" class="w-4 h-4 mr-3"></i>
+                        Debug Tools
+                    </a>
+                </div>
             </nav>
+            
+            <!-- User Menu -->
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                        <i data-lucide="user" class="w-4 h-4 text-gray-600 dark:text-gray-300"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-gray-900 dark:text-white">Admin User</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ env_name }}</p>
+                    </div>
+                    <button @click="theme = theme === 'dark' ? 'light' : 'dark'" 
+                            class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <i data-lucide="sun" class="w-4 h-4" x-show="theme === 'dark'"></i>
+                        <i data-lucide="moon" class="w-4 h-4" x-show="theme === 'light'"></i>
+                    </button>
+                </div>
+            </div>
         </aside>
 
-        <!-- Main Content Area -->
-        <main class="col-span-12 lg:col-span-10">
-            {% block content %}{% endblock %}
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <!-- Top Header -->
+            <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">
+                            {% block page_title %}Dashboard{% endblock %}
+                        </h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            {% block page_description %}Professional risk intelligence platform{% endblock %}
+                        </p>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4">
+                        <!-- Search -->
+                        <div class="relative">
+                            <input type="text" 
+                                   placeholder="Search entities..." 
+                                   class="w-80 pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white">
+                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-gray-400"></i>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <button class="btn-secondary">
+                            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+                            New Case
+                        </button>
+                        <button class="btn-primary">
+                            <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+                            Export
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="flex-1 overflow-auto p-6">
+                {% block content %}{% endblock %}
+            </div>
         </main>
     </div>
 
     <!-- Toast Container -->
-    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
-    <div x-data="{show:false, text:''}" x-init="window.__toast = (t)=>{ text=t; show=true; setTimeout(()=> show=false, 3000) }" class="toast">
-        <div x-show="show" class="professional-card shadow-xlsoft px-4 py-3 flex items-center gap-3 bg-white">
-            <i class="fas fa-circle-check text-green-600"></i>
-            <span class="text-sm" x-text="text"></span>
-        </div>
-    </div>
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
     <!-- Scripts -->
-    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
     <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.effect(() => requestAnimationFrame(() => lucide.createIcons()));
+        // Initialize Lucide icons
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
         });
-    </script>
-    
-    <!-- Global Search Keyboard Shortcut -->
-    <script>
+
+        // Toast notification system
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgColor = {
+                'success': 'bg-green-500',
+                'error': 'bg-red-500',
+                'warning': 'bg-yellow-500',
+                'info': 'bg-blue-500'
+            }[type] || 'bg-blue-500';
+            
+            toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-strong transform transition-all duration-300 translate-x-full`;
+            toast.textContent = message;
+            
+            container.appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.classList.remove('translate-x-full');
+            }, 100);
+            
+            // Remove after 4 seconds
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, 4000);
+        }
+
+        // Global search functionality
         document.addEventListener('keydown', function(e) {
             if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
                 e.preventDefault();
-                document.getElementById('globalSearch').focus();
+                const searchInput = document.querySelector('input[placeholder="Search entities..."]');
+                if (searchInput) {
+                    searchInput.focus();
+                }
             }
+        });
+
+        // Active navigation highlighting
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('.nav-item');
+            
+            navLinks.forEach(link => {
+                if (link.getAttribute('href') === currentPath) {
+                    link.classList.add('active');
+                }
+            });
         });
     </script>
 </body>
