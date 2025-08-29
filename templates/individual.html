@@ -46,9 +46,25 @@
         </form>
     </div>
 
-    <!-- Results Section -->
+    <!-- Results Section with Tabs -->
     <div class="surface p-6">
-        {% include "partials/_results.html" %}
+        <div class="border-b border-white/10 mb-4">
+            <nav class="flex gap-6">
+                <button type="button" id="tab-details-ind" class="py-2 border-b-2 border-accent-blue text-accent-blue">Details</button>
+                <button type="button" id="tab-overall-ind" class="py-2 text-[var(--text-1)] hover:text-white/90">Overall Results</button>
+            </nav>
+        </div>
+
+        <!-- Details Panel (existing renderer) -->
+        <div id="panel-details-ind">
+            {% include "partials/_results.html" %}
+        </div>
+
+        <!-- Overall Results Panel (aggregated raw response) -->
+        <div id="panel-overall-ind" class="hidden">
+            <div class="text-sm text-[var(--text-1)] mb-2">Complete API Response</div>
+            <pre id="overall-json-ind" class="bg-[var(--bg-2)] p-4 rounded-xl overflow-auto text-sm leading-relaxed">—</pre>
+        </div>
     </div>
 </section>
 
@@ -77,6 +93,16 @@ form.addEventListener('submit', async (e) => {
             return;
         }
         
+        // Save full response and show in Overall tab
+        try {
+            window.__last_api_ind__ = data;
+            const overallEl = document.getElementById('overall-json-ind');
+            if (overallEl) overallEl.textContent = JSON.stringify(data, null, 2);
+            if (typeof window.__showPanelInd === 'function') {
+                window.__showPanelInd('overall');
+            }
+        } catch (_) {}
+
         renderIndividualResults(data);
         toast('Individual screening completed successfully', 'success');
         
@@ -89,5 +115,45 @@ form.addEventListener('submit', async (e) => {
 
 // Export handler
 document.getElementById('btnExport').addEventListener('click', exportReport);
+
+// Simple tabs for Individual Details / Overall Results
+function initIndividualTabs() {
+    const tabDetails = document.getElementById('tab-details-ind');
+    const tabOverall = document.getElementById('tab-overall-ind');
+    const panelDetails = document.getElementById('panel-details-ind');
+    const panelOverall = document.getElementById('panel-overall-ind');
+
+    if (!tabDetails || !tabOverall || !panelDetails || !panelOverall) return;
+
+    function showPanelInd(which) {
+        const isOverall = which === 'overall';
+        panelOverall.classList.toggle('hidden', !isOverall);
+        panelDetails.classList.toggle('hidden', isOverall);
+        // styling
+        if (isOverall) {
+            tabOverall.classList.add('border-b-2','border-accent-blue','text-accent-blue');
+            tabOverall.classList.remove('text-[var(--text-1)]');
+            tabDetails.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
+            tabDetails.classList.add('text-[var(--text-1)]');
+        } else {
+            tabDetails.classList.add('border-b-2','border-accent-blue','text-accent-blue');
+            tabDetails.classList.remove('text-[var(--text-1)]');
+            tabOverall.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
+            tabOverall.classList.add('text-[var(--text-1)]');
+        }
+    }
+
+    tabDetails.addEventListener('click', (e) => { e.preventDefault(); showPanelInd('details'); });
+    tabOverall.addEventListener('click', (e) => { e.preventDefault(); showPanelInd('overall'); });
+
+    // expose for use after API
+    window.__showPanelInd = showPanelInd;
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initIndividualTabs);
+} else {
+    initIndividualTabs();
+}
 </script>
 {% endblock %}
