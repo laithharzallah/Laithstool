@@ -415,8 +415,51 @@ class RealTimeSearchService:
                 return {"intent": intent, "results": schema, "total_found": 0, "providers": ["serper:0"]}
 
             if not self.openai_client:
-                clean = prune_to_schema({}, schema)
-                return {"intent": intent, "results": clean, "total_found": 0, "providers": [f"serper:{len(serper_results)}"]}
+                # Fallback: use raw data instead of null when LLM unavailable
+                fallback_data = {}
+                if intent == "company_profile" and (google_hits or serper_results):
+                    first_hit = (google_hits + serper_results)[0] if (google_hits or serper_results) else {}
+                    fallback_data = {
+                        "company_info": {
+                            "legal_name": company,
+                            "website": first_hit.get("url"),
+                            "business_description": first_hit.get("snippet"),
+                            "founded_year": None,
+                            "headquarters": None,
+                            "industry": None,
+                            "registration_status": None,
+                            "entity_type": None
+                        }
+                    }
+                elif intent == "executives" and (google_hits or serper_results):
+                    fallback_data = {
+                        "executives": [{
+                            "name": f"Executive from {hit.get('source', 'search')}",
+                            "position": "Leadership",
+                            "company": company,
+                            "background": hit.get("snippet"),
+                            "source_url": hit.get("url"),
+                            "source": hit.get("source")
+                        } for hit in (google_hits + serper_results)[:3]]
+                    }
+                elif intent == "adverse_media" and (google_hits or serper_results):
+                    fallback_data = {
+                        "adverse_media": [{
+                            "headline": hit.get("title"),
+                            "summary": hit.get("snippet"),
+                            "date": hit.get("date"),
+                            "source": hit.get("source"),
+                            "severity": "Medium",
+                            "category": "media",
+                            "source_url": hit.get("url")
+                        } for hit in (google_hits + serper_results)[:3]]
+                    }
+                
+                clean = prune_to_schema(fallback_data, schema)
+                providers = []
+                if google_hits: providers.append("google_cse")
+                if serper_results: providers.append("serper")
+                return {"intent": intent, "results": clean, "total_found": len(google_hits + serper_results), "providers": providers}
 
             # 3) Strict prompt with only the real results
             STRICT_SYS = (
