@@ -84,8 +84,8 @@
     <div class="surface p-6">
         <div class="border-b border-white/10 mb-4">
             <nav class="flex gap-6">
-                <button id="tab-details" class="py-2 border-b-2 border-accent-blue text-accent-blue">Details</button>
-                <button id="tab-overall" class="py-2 text-[var(--text-1)] hover:text-white/90">Overall Results</button>
+                <button type="button" id="tab-details" class="py-2 border-b-2 border-accent-blue text-accent-blue">Details</button>
+                <button type="button" id="tab-overall" class="py-2 text-[var(--text-1)] hover:text-white/90">Overall Results</button>
             </nav>
         </div>
 
@@ -203,28 +203,43 @@ document.getElementById('btnQueue').addEventListener('click', () => {
 document.getElementById('btnExport').addEventListener('click', exportReport);
 
 // Simple tabs for Details / Overall Results
-const tabDetails = document.getElementById('tab-details');
-const tabOverall = document.getElementById('tab-overall');
-const panelDetails = document.getElementById('panel-details');
-const panelOverall = document.getElementById('panel-overall');
+function initTabs() {
+    const tabDetails = document.getElementById('tab-details');
+    const tabOverall = document.getElementById('tab-overall');
+    const panelDetails = document.getElementById('panel-details');
+    const panelOverall = document.getElementById('panel-overall');
 
-function showPanel(which) {
-    const isOverall = which === 'overall';
-    panelOverall.classList.toggle('hidden', !isOverall);
-    panelDetails.classList.toggle('hidden', isOverall);
-    // styling
-    if (isOverall) {
-        tabOverall.classList.add('border-b-2','border-accent-blue','text-accent-blue');
-        tabDetails.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
-        tabDetails.classList.add('text-[var(--text-1)]');
-    } else {
-        tabDetails.classList.add('border-b-2','border-accent-blue','text-accent-blue');
-        tabOverall.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
-        tabOverall.classList.add('text-[var(--text-1)]');
+    if (!tabDetails || !tabOverall || !panelDetails || !panelOverall) return;
+
+    function showPanel(which) {
+        const isOverall = which === 'overall';
+        panelOverall.classList.toggle('hidden', !isOverall);
+        panelDetails.classList.toggle('hidden', isOverall);
+        // styling
+        if (isOverall) {
+            tabOverall.classList.add('border-b-2','border-accent-blue','text-accent-blue');
+            tabOverall.classList.remove('text-[var(--text-1)]');
+            tabDetails.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
+            tabDetails.classList.add('text-[var(--text-1)]');
+        } else {
+            tabDetails.classList.add('border-b-2','border-accent-blue','text-accent-blue');
+            tabDetails.classList.remove('text-[var(--text-1)]');
+            tabOverall.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
+            tabOverall.classList.add('text-[var(--text-1)]');
+        }
     }
+
+    tabDetails.addEventListener('click', (e) => { e.preventDefault(); showPanel('details'); });
+    tabOverall.addEventListener('click', (e) => { e.preventDefault(); showPanel('overall'); });
+
+    // expose for use after API
+    window.__showPanel = showPanel;
 }
 
-tabDetails.addEventListener('click', () => showPanel('details'));
-tabOverall.addEventListener('click', () => showPanel('overall'));
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTabs);
+} else {
+    initTabs();
+}
 </script>
 {% endblock %}

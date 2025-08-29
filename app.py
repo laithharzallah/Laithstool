@@ -1180,9 +1180,12 @@ def individual_screening_api():
         except Exception as json_error:
             print(f"❌ JSON parsing failed: {json_error}")
             data = {}
-        name = data.get("name", "").strip()
-        country = data.get("country", "").strip()
-        date_of_birth = data.get("dateOfBirth", "").strip()
+        # Accept multiple frontend variants
+        name = (data.get("name") or data.get("fullName") or data.get("full_name") or "").strip()
+        # Prefer country, fallback to nationality
+        country = (data.get("country") or data.get("nationality") or "").strip()
+        # Prefer dateOfBirth, fallback to dob
+        date_of_birth = (data.get("dateOfBirth") or data.get("dob") or "").strip()
         gender = data.get("gender", "").strip()
         
         if not name:
