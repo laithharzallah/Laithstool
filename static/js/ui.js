@@ -305,8 +305,9 @@ function renderIndividualResults(data) {
     if (re) re.classList.add('hidden');
     if (rw) rw.classList.remove('hidden');
     
-    // Extract metrics
+    // Extract metrics from both direct metrics and dilisense data
     const m = data.metrics || {};
+    const dilisense = data.dilisense || {};
     
     // Update KPI tiles
     setTextById('kpi-overall', formatNum(m.overall_risk, 3));
@@ -317,11 +318,31 @@ function renderIndividualResults(data) {
     // Update secondary KPIs
     setTextById('kpi-matches', m.matches ?? '—');
     setTextById('kpi-alerts', m.alerts ?? '—');
-    setTextById('kpi-last', data.ts ? new Date(data.ts).toLocaleString() : '—');
-    setTextById('kpi-juris', (data.person && data.person.nationality) || '—');
+    setTextById('kpi-last', data.timestamp ? new Date(data.timestamp).toLocaleString() : '—');
+    setTextById('kpi-juris', data.country || '—');
     
-    // Update AI commentary
-    setTextById('ai-comment', 'Individual screening completed. Review results above.');
+    // Update AI commentary with actual findings
+    let commentary = `Individual screening completed for ${data.name || 'Unknown'}.\n\n`;
+    if (dilisense.total_hits > 0) {
+        commentary += `Found ${dilisense.total_hits} total compliance hits:\n`;
+        if (dilisense.sanctions && dilisense.sanctions.total_hits > 0) {
+            commentary += `• Sanctions: ${dilisense.sanctions.total_hits} matches\n`;
+        }
+        if (dilisense.pep && dilisense.pep.total_hits > 0) {
+            commentary += `• PEP: ${dilisense.pep.total_hits} matches\n`;
+        }
+        if (dilisense.criminal && dilisense.criminal.total_hits > 0) {
+            commentary += `• Criminal: ${dilisense.criminal.total_hits} matches\n`;
+        }
+        if (dilisense.other && dilisense.other.total_hits > 0) {
+            commentary += `• Other: ${dilisense.other.total_hits} matches\n`;
+        }
+        commentary += `\nRisk Level: ${data.overall_risk_level || 'Unknown'}`;
+    } else {
+        commentary += 'No compliance issues found in available databases.';
+    }
+    
+    setTextById('ai-comment', commentary);
     
     // Render charts
     renderRiskBar({
@@ -331,6 +352,52 @@ function renderIndividualResults(data) {
         overall_risk: m.overall_risk ?? 0
     });
     renderSparkline();
+    
+    // Render individual-specific results in web sections
+    try {
+        // Show Dilisense findings in the web results area
+        const ciEl = document.getElementById('web-company-info');
+        if (ciEl && dilisense) {
+            ciEl.innerHTML = `
+                <div><strong>Name:</strong> ${data.name || '—'}</div>
+                <div><strong>Country:</strong> ${data.country || '—'}</div>
+                <div><strong>Total Hits:</strong> ${dilisense.total_hits || 0}</div>
+                <div><strong>Risk Level:</strong> ${data.overall_risk_level || '—'}</div>
+            `;
+        }
+
+        const exEl = document.getElementById('web-executives');
+        if (exEl && dilisense.sanctions && dilisense.sanctions.found_records) {
+            const records = dilisense.sanctions.found_records.slice(0, 3);
+            if (records.length === 0) {
+                exEl.textContent = 'No sanctions found';
+            } else {
+                exEl.innerHTML = records.map(r => {
+                    const name = r.name || 'Unknown';
+                    const source = r.source_id || 'Unknown source';
+                    const country = r.source_country || '';
+                    return `<div><strong>${name}</strong> — ${source}${country ? ` (${country})` : ''}</div>`;
+                }).join('');
+            }
+        }
+
+        const adEl = document.getElementById('web-adverse');
+        if (adEl && dilisense.pep && dilisense.pep.found_records) {
+            const records = dilisense.pep.found_records.slice(0, 3);
+            if (records.length === 0) {
+                adEl.textContent = 'No PEP records found';
+            } else {
+                adEl.innerHTML = records.map(r => {
+                    const name = r.name || 'Unknown';
+                    const pepType = r.pep_type || 'PEP';
+                    const source = r.source_id || 'Unknown source';
+                    return `<div><strong>${name}</strong> — ${pepType}<div class="text-xs">${source}</div></div>`;
+                }).join('');
+            }
+        }
+    } catch (e) {
+        console.warn('individual results render skipped:', e);
+    }
 }
 
 // Update provider status indicators
