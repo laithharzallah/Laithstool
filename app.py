@@ -542,6 +542,22 @@ def health_check():
 def healthz():
     return jsonify({"status": "ok"}), 200
 
+# Debug providers route (non-sensitive)
+@app.route("/debug/providers", methods=["GET"])
+def debug_providers():
+    try:
+        from services.real_time_search import real_time_search_service as rt
+        info = {
+            "OPENAI": bool(os.getenv("OPENAI_API_KEY")),
+            "SERPER": bool(os.getenv("SERPER_API_KEY")),
+            "GOOGLE_API": bool(os.getenv("GOOGLE_API_KEY")),
+            "GOOGLE_CSE_ID": bool(os.getenv("GOOGLE_CSE_ID")),
+            "providers": getattr(rt, "search_providers", []),
+        }
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # --- v1 Task API ---
 
 @app.route("/api/v1/screen", methods=["POST"])
@@ -1007,7 +1023,19 @@ def enhanced_company_screening():
         print(f"📊 Request data: {data}")
         
         company_name = (data.get("company_name") or data.get("companyName") or data.get("company") or "").strip()
-        country = data.get("country", "").strip()
+        # Normalize country to ISO2 when possible
+        raw_country = (data.get("country") or "").strip()
+        COUNTRY_MAP = {
+            "SAUDI ARABIA": "SA",
+            "UNITED ARAB EMIRATES": "AE",
+            "UAE": "AE",
+            "UNITED STATES": "US",
+            "USA": "US",
+            "UNITED KINGDOM": "GB",
+            "UK": "GB",
+        }
+        up = raw_country.upper()
+        country = COUNTRY_MAP.get(up, up[:2]) if up else ""
         
         print(f"🏢 Company: '{company_name}', Country: '{country}'")
         

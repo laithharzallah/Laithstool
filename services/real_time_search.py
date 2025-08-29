@@ -277,7 +277,22 @@ class RealTimeSearchService:
             schema = self.INTENT_SCHEMAS.get(intent, {})
             # 1) Build geo+intent-aware query (bias to official site/leadership)
             cc = (country or "").strip()
-            site_hint = f" site:{domain}" if domain else ""
+            # Guard: only add site: when domain is a non-empty hostname
+            def _clean_domain(d: str) -> str:
+                if not d:
+                    return ""
+                d = d.strip()
+                if d.startswith("http://") or d.startswith("https://"):
+                    try:
+                        from urllib.parse import urlparse
+                        d = urlparse(d).netloc
+                    except Exception:
+                        pass
+                # basic sanity: must contain a dot and no spaces
+                return d if (" " not in d and "." in d) else ""
+
+            safe_domain = _clean_domain(domain)
+            site_hint = f" site:{safe_domain}" if safe_domain else ""
             if intent == "company_profile":
                 query = f"{company} {cc} official site about us company profile{site_hint}".strip()
                 if not domain and cc.upper() == "SA":
