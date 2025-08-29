@@ -12,6 +12,12 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from werkzeug.exceptions import HTTPException
 
+try:
+    from whitenoise import WhiteNoise
+    WHITENOISE_AVAILABLE = True
+except ImportError:
+    WHITENOISE_AVAILABLE = False
+
 # Load environment variables only in development or if .env exists locally
 if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
     load_dotenv()
@@ -56,6 +62,12 @@ if not os.environ.get('OPENAI_API_KEY'):
     print("📝 Add OPENAI_API_KEY in Render → Environment")
 
 app = Flask(__name__)
+
+# Add WhiteNoise for robust static file serving in production
+if WHITENOISE_AVAILABLE and os.environ.get('FLASK_ENV') != 'development':
+    app.wsgi_app = WhiteNoise(app.wsgi_app, root='static/', prefix='static/')
+    print("✅ WhiteNoise enabled for static files")
+
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-prod")
 if app.secret_key == "change-me-in-prod":
     print("⚠️ WARNING: Using default SECRET_KEY. Set SECRET_KEY in the environment for production.")
