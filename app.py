@@ -1243,6 +1243,24 @@ def individual_screening_api():
             "risk_factors": screening_results.get("risk_factors", []),
             "data_sources": ["Dilisense API", "Serper + GPT-4o"]
         }
+
+        # Add UI-friendly metrics so the Individual page KPIs populate
+        try:
+            sanc_hits = int(((screening_results or {}).get("sanctions") or {}).get("total_hits", 0))
+            pep_hits = int(((screening_results or {}).get("pep") or {}).get("total_hits", 0))
+            crim_hits = int(((screening_results or {}).get("criminal") or {}).get("total_hits", 0))
+            other_hits = int(((screening_results or {}).get("other") or {}).get("total_hits", 0))
+            total_matches = sanc_hits + pep_hits + crim_hits + other_hits
+            response["metrics"] = {
+                "overall_risk": max(0.0, min(1.0, float(risk_score) / 100.0)),
+                "sanctions": 1 if sanc_hits > 0 else 0,
+                "pep": 1 if pep_hits > 0 else 0,
+                "adverse_media": 1 if (crim_hits + other_hits) > 0 else 0,
+                "matches": total_matches,
+                "alerts": sanc_hits + pep_hits,
+            }
+        except Exception:
+            pass
         
         print(f"✅ Individual screening completed for {name}")
         return jsonify(response)
