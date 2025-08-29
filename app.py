@@ -536,8 +536,8 @@ def whatsapp_simulate():
 @app.route("/api/dart/search", methods=["POST"])
 def api_dart_search():
     """API endpoint for DART company search with complete information"""
-    if 'logged_in' not in session:
-        return jsonify({"error": "Authentication required"}), 401
+    # This endpoint is safe to expose without auth (registry-only, read-only)
+    # Removing session requirement so the DART tab works for unauthenticated users
 
     try:
         data = request.get_json(force=True, silent=True) or {}

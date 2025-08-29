@@ -408,6 +408,7 @@ document.getElementById('dart-search-form').addEventListener('submit', async fun
             headers: {
                 'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: JSON.stringify({
                 company_name: companyName
             })
