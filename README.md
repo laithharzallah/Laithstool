@@ -1,6 +1,6 @@
-# Laith's Tool - GPT-5 Enhanced Company Screener
+# Risklytics - GPT-5 Enhanced Company Screener + WhatsApp Registry Agent
 
-A professional due diligence and company screening platform powered by GPT-5 artificial intelligence with real-time web validation and citations.
+A professional due diligence and company screening platform powered by GPT-5 artificial intelligence with real-time web validation, citations, and WhatsApp-based company registry lookups.
 
 ## 🚀 Features
 
@@ -18,10 +18,18 @@ A professional due diligence and company screening platform powered by GPT-5 art
 - **Risk Assessment**: Bribery/corruption, political exposure, compliance issues
 - **Real-time Data**: Live web scraping and content extraction
 
+### 💬 **WhatsApp Registry Agent**
+- **Natural Language Processing**: Extract company names and countries from WhatsApp messages
+- **Multi-Source Registry Search**: Dilisense, DART (Korea), OpenCorporates (Global)
+- **Intelligent Matching**: Fuzzy matching with confidence scoring
+- **WhatsApp Webhook Integration**: Real-time message processing
+- **Local Simulation**: Test functionality without WhatsApp setup
+
 ### 🎨 **Professional Interface**
 - **Corporate Dashboard**: Clean, professional due diligence layout
 - **Real-time Progress**: Live status updates during screening
 - **Multiple Tabs**: Organized results (Overview, Company, People, Sanctions, etc.)
+- **WhatsApp Test Interface**: Interactive testing of registry lookups
 - **Export Capabilities**: Generate professional PDF reports
 - **Responsive Design**: Works on desktop and mobile
 
@@ -91,6 +99,19 @@ NEWS_API_KEY=your-newsapi-key
 SEARCH_PROVIDER=newsapi
 ```
 
+**WhatsApp Registry Agent:**
+```bash
+# WhatsApp Business API (Meta)
+WHATSAPP_PHONE_ID=your-whatsapp-phone-id
+WHATSAPP_BEARER=your-whatsapp-bearer-token
+WHATSAPP_VERIFY_TOKEN=your-webhook-verify-token
+WHATSAPP_SENDER_E164=+your-whatsapp-number
+
+# Additional Registry APIs
+DART_API_KEY=your-dart-api-key
+OPENCORPORATES_API_KEY=your-opencorporates-api-key
+```
+
 ### Deployment Steps
 
 1. **Connect GitHub**: Link your GitHub repository to Render
@@ -113,6 +134,16 @@ SEARCH_PROVIDER=newsapi
 3. **Start Screening**: Click "Start Screening"
 4. **Monitor Progress**: Watch real-time updates
 5. **Review Results**: Explore detailed findings in multiple tabs
+
+### WhatsApp Registry Testing
+
+1. **Access Test Interface**: Click "💬 WhatsApp Registry" in the sidebar
+2. **Test Messages**: Try natural language queries like:
+   - "Check Samsung Electronics in South Korea"
+   - "Find company Alibaba Group in China"
+   - "Look up Siemens AG in Germany"
+3. **Simulate**: Use the test interface to simulate WhatsApp messages
+4. **Webhook Setup**: Configure Meta WhatsApp Business API for live messaging
 
 ### API Usage
 

@@ -128,13 +128,21 @@
         <!-- Left Sidebar Navigation -->
         <aside class="col-span-12 lg:col-span-2">
             <nav class="space-y-1">
-                <a href="{{ url_for('company_screening') }}" 
+                <a href="{{ url_for('company_screening') }}"
                    class="surface block px-4 py-3 hover:opacity-90 transition-opacity">
                     🏢 Company Screening
                 </a>
-                <a href="{{ url_for('individual_screening') }}" 
+                <a href="{{ url_for('individual_screening') }}"
                    class="surface block px-4 py-3 hover:opacity-90 transition-opacity">
                     👤 Individual Screening
+                </a>
+                <a href="{{ url_for('whatsapp_test') }}"
+                   class="surface block px-4 py-3 hover:opacity-90 transition-opacity">
+                    💬 WhatsApp Registry
+                </a>
+                <a href="{{ url_for('debug_page') }}"
+                   class="surface block px-4 py-3 hover:opacity-90 transition-opacity opacity-75">
+                    🔧 Debug Tools
                 </a>
                 <div class="surface px-4 py-3 opacity-60">📁 Cases</div>
                 <div class="surface px-4 py-3 opacity-60">📊 Datasets</div>

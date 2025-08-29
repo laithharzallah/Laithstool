@@ -18,9 +18,17 @@ try:
 except ImportError:
     WHITENOISE_AVAILABLE = False
 
+# Import WhatsApp Registry Service
+try:
+    from services.whatsapp_registry import whatsapp_registry_service
+    WHATSAPP_AVAILABLE = True
+except ImportError:
+    WHATSAPP_AVAILABLE = False
+    whatsapp_registry_service = None
+
 # Load environment variables only in development or if .env exists locally
 if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
-    load_dotenv()
+load_dotenv()
     print("✅ Environment variables loaded from .env file")
 else:
     print("🌍 Production mode: using system environment variables")
@@ -39,12 +47,12 @@ PORT = int(os.getenv("PORT", "5000"))
 # Initialize OpenAI client only if key is available
 client = None
 if OPENAI_API_KEY:
-    try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
+try:
+    client = OpenAI(api_key=OPENAI_API_KEY)
         print("✅ OpenAI client initialized")
-    except Exception as e:
-        print(f"❌ Failed to initialize OpenAI client: {str(e)}")
-        client = None
+except Exception as e:
+    print(f"❌ Failed to initialize OpenAI client: {str(e)}")
+    client = None
 else:
     print("⚠️ OPENAI_API_KEY not found - some features will be limited")
     print("ℹ️ Set OPENAI_API_KEY in Render → Environment (not in .env)")
@@ -468,6 +476,42 @@ def home():
         return redirect(url_for('login'))
     return redirect(url_for('company_screening'))
 
+# WhatsApp Registry Webhook Routes
+@app.route("/webhook", methods=["GET"])
+def whatsapp_verify():
+    """WhatsApp webhook verification"""
+    if not WHATSAPP_AVAILABLE or not whatsapp_registry_service:
+        return "WhatsApp service not available", 503
+
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    response, status_code = whatsapp_registry_service.verify_webhook(token, challenge)
+    return response, status_code
+
+@app.route("/webhook", methods=["POST"])
+def whatsapp_webhook():
+    """WhatsApp inbound message webhook"""
+    if not WHATSAPP_AVAILABLE or not whatsapp_registry_service:
+        return "WhatsApp service not available", 503
+
+    data = request.get_json(force=True, silent=True) or {}
+    response, status_code = whatsapp_registry_service.handle_inbound_message(data)
+    return response, status_code
+
+@app.route("/simulate", methods=["POST"])
+def whatsapp_simulate():
+    """Local simulation endpoint for testing WhatsApp functionality"""
+    if not WHATSAPP_AVAILABLE or not whatsapp_registry_service:
+        return jsonify({"error": "WhatsApp service not available"}), 503
+
+    payload = request.get_json(force=True)
+    text = payload.get("text", "")
+    wa_from = payload.get("from", "+0000000")
+
+    result = whatsapp_registry_service.simulate_message(text, wa_from)
+    return jsonify(result)
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -506,11 +550,11 @@ def health_check():
         if not OPENAI_API_KEY or not client:
             raise RuntimeError("API key or client missing")
         _ = client.models.list()
-        health_status["components"]["openai"] = {
-            "status": "healthy",
-            "model": OPENAI_MODEL,
-            "message": "API connection successful"
-        }
+            health_status["components"]["openai"] = {
+                "status": "healthy",
+                "model": OPENAI_MODEL,
+                "message": "API connection successful"
+            }
     except Exception as e:
         health_status["components"]["openai"] = {
             "status": "error",
@@ -564,7 +608,15 @@ def debug_providers():
             "SERPER": bool(os.getenv("SERPER_API_KEY")),
             "GOOGLE_API": bool(os.getenv("GOOGLE_API_KEY")),
             "GOOGLE_CSE_ID": bool(os.getenv("GOOGLE_CSE_ID")),
+            "DILISENSE": bool(os.getenv("DILISENSE_API_KEY")),
+            "WHATSAPP_PHONE_ID": bool(os.getenv("WHATSAPP_PHONE_ID")),
+            "WHATSAPP_BEARER": bool(os.getenv("WHATSAPP_BEARER")),
+            "WHATSAPP_VERIFY_TOKEN": bool(os.getenv("WHATSAPP_VERIFY_TOKEN")),
+            "WHATSAPP_SENDER_E164": bool(os.getenv("WHATSAPP_SENDER_E164")),
+            "DART_API_KEY": bool(os.getenv("DART_API_KEY")),
+            "OPENCORPORATES_API_KEY": bool(os.getenv("OPENCORPORATES_API_KEY")),
             "providers": getattr(rt, "search_providers", []),
+            "whatsapp_service": WHATSAPP_AVAILABLE,
         }
         return jsonify(info)
     except Exception as e:
@@ -1018,6 +1070,16 @@ def individual_screening():
     if 'logged_in' not in session:
         return redirect(url_for('login'))
     return render_template("individual.html", env_name=os.environ.get('FLASK_ENV','development').capitalize(), version="2.3.0")
+
+@app.route("/whatsapp-test")
+def whatsapp_test():
+    """WhatsApp Registry Agent test page"""
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    return render_template("whatsapp_test.html",
+                         whatsapp_available=WHATSAPP_AVAILABLE,
+                         env_name=os.environ.get('FLASK_ENV','development').capitalize(),
+                         version="2.3.0")
 
 @app.route("/api/enhanced-screen", methods=["POST"])
 def enhanced_company_screening():
