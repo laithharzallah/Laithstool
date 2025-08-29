@@ -27,12 +27,25 @@ except ImportError:
     WHATSAPP_AVAILABLE = False
     whatsapp_registry_service = None
 
-# Load environment variables only in development or if .env exists locally
+# Load environment variables
 if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
-    load_dotenv()
+load_dotenv()
     print("✅ Environment variables loaded from .env file")
 else:
     print("🌍 Production mode: using system environment variables")
+
+# Validate critical environment variables
+critical_vars = ['DART_API_KEY']
+missing_vars = []
+for var in critical_vars:
+    if not os.getenv(var):
+        missing_vars.append(var)
+
+if missing_vars:
+    print(f"⚠️ WARNING: Missing critical environment variables: {', '.join(missing_vars)}")
+    print("📝 Set these in Render Environment Variables or .env file")
+else:
+    print("✅ All critical environment variables are set")
 
 # Version and configuration
 VERSION = "2.3.0"
@@ -48,12 +61,12 @@ PORT = int(os.getenv("PORT", "5000"))
 # Initialize OpenAI client only if key is available
 client = None
 if OPENAI_API_KEY:
-    try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
+try:
+    client = OpenAI(api_key=OPENAI_API_KEY)
         print("✅ OpenAI client initialized")
-    except Exception as e:
-        print(f"❌ Failed to initialize OpenAI client: {str(e)}")
-        client = None
+except Exception as e:
+    print(f"❌ Failed to initialize OpenAI client: {str(e)}")
+    client = None
 else:
     print("⚠️ OPENAI_API_KEY not found - some features will be limited")
     print("ℹ️ Set OPENAI_API_KEY in Render → Environment (not in .env)")
@@ -605,11 +618,11 @@ def health_check():
         if not OPENAI_API_KEY or not client:
             raise RuntimeError("API key or client missing")
         _ = client.models.list()
-        health_status["components"]["openai"] = {
-            "status": "healthy",
-            "model": OPENAI_MODEL,
-            "message": "API connection successful"
-        }
+            health_status["components"]["openai"] = {
+                "status": "healthy",
+                "model": OPENAI_MODEL,
+                "message": "API connection successful"
+            }
     except Exception as e:
         health_status["components"]["openai"] = {
             "status": "error",
@@ -651,7 +664,49 @@ def health_check():
 
 @app.route("/healthz", methods=["GET"])
 def healthz():
-    return jsonify({"status": "ok"}), 200
+    """Enhanced health check with diagnostic information"""
+    health_status = {
+        "status": "ok",
+        "timestamp": datetime.now().isoformat(),
+        "version": VERSION,
+        "environment": ENV_NAME,
+        "diagnostics": {}
+    }
+
+    # Check environment variables
+    env_checks = {
+        "DART_API_KEY": bool(os.getenv("DART_API_KEY")),
+        "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
+        "SECRET_KEY": bool(os.getenv("SECRET_KEY"))
+    }
+    health_status["diagnostics"]["environment_variables"] = env_checks
+
+    # Check critical services
+    try:
+        from services.adapters.dart import dart_adapter
+        health_status["diagnostics"]["dart_adapter"] = "loaded"
+    except Exception as e:
+        health_status["diagnostics"]["dart_adapter"] = f"error: {str(e)}"
+
+    try:
+        from utils.translate import translate_company_data
+        health_status["diagnostics"]["translation_util"] = "loaded"
+    except Exception as e:
+        health_status["diagnostics"]["translation_util"] = f"error: {str(e)}"
+
+    # If any critical components failed, change status to warning
+    critical_issues = []
+    if not env_checks["DART_API_KEY"]:
+        critical_issues.append("DART_API_KEY missing")
+    if health_status["diagnostics"]["dart_adapter"] != "loaded":
+        critical_issues.append("DART adapter failed to load")
+
+    if critical_issues:
+        health_status["status"] = "warning"
+        health_status["issues"] = critical_issues
+
+    status_code = 200 if health_status["status"] == "ok" else 503
+    return jsonify(health_status), status_code
 
 # Debug providers route (non-sensitive)
 @app.route("/debug/providers", methods=["GET"])
