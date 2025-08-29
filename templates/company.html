@@ -44,27 +44,6 @@
                 <input name="lei" class="input w-full" placeholder="Legal Entity Identifier">
             </div>
             
-            <!-- Jurisdiction Selection -->
-            <div class="md:col-span-2">
-                <label class="text-sm text-[var(--text-1)] mb-2 block">Jurisdictions</label>
-                <div class="flex flex-wrap gap-2 mb-2">
-                    <button type="button" class="jurisdiction-chip" data-jurisdiction="US">🇺🇸 United States</button>
-                    <button type="button" class="jurisdiction-chip" data-jurisdiction="EU">🇪🇺 European Union</button>
-                    <button type="button" class="jurisdiction-chip" data-jurisdiction="UN">🇺🇳 United Nations</button>
-                    <button type="button" class="jurisdiction-chip" data-jurisdiction="UK">🇬🇧 United Kingdom</button>
-                    <button type="button" class="jurisdiction-chip" data-jurisdiction="CA">🇨🇦 Canada</button>
-                    <button type="button" class="jurisdiction-chip" data-jurisdiction="GCC">🏴 Gulf Cooperation Council</button>
-                </div>
-                <input name="jurisdictions" class="input w-full" placeholder="Selected jurisdictions will appear here" readonly>
-            </div>
-            
-            <!-- Fuzzy Threshold -->
-            <div>
-                <label class="text-sm text-[var(--text-1)]">Fuzzy Threshold (0.0–1.0)</label>
-                <input name="fuzzy" type="number" min="0" max="1" step="0.05" value="0.8" class="input w-full">
-                <div class="text-xs text-[var(--text-1)] mt-1">Higher values = more exact matches</div>
-            </div>
-            
             <!-- Action Buttons -->
             <div class="md:col-span-2 flex flex-wrap gap-3 mt-2">
                 <button type="submit" class="btn">
@@ -80,41 +59,125 @@
         </form>
     </div>
 
-    <!-- Results Section with Tabs -->
-    <div class="surface p-6">
-        <div class="border-b border-white/10 mb-4">
+    <!-- Results Section with Simple Tabs -->
+    <div class="surface p-6" id="resultsContainer" style="display: none;">
+        <!-- Tab Navigation -->
+        <div class="border-b border-white/10 mb-6">
             <nav class="flex gap-6">
-                <button type="button" id="tab-details" class="py-2 border-b-2 border-accent-blue text-accent-blue">Details</button>
-                <button type="button" id="tab-overall" class="py-2 text-[var(--text-1)] hover:text-white/90">Overall Results</button>
+                <button type="button" class="tab-btn active" data-tab="summary">
+                    📊 Summary
+                </button>
+                <button type="button" class="tab-btn" data-tab="details">
+                    🔍 Details  
+                </button>
+                <button type="button" class="tab-btn" data-tab="raw">
+                    📄 Raw JSON
+                </button>
             </nav>
         </div>
 
-        <!-- Details Panel (existing renderer) -->
-        <div id="panel-details">
-            {% include "partials/_results.html" %}
+        <!-- Summary Tab -->
+        <div class="tab-content" id="tab-summary">
+            <div class="grid gap-6">
+                <!-- Quick Stats -->
+                <div class="grid md:grid-cols-3 gap-4">
+                    <div class="surface p-4">
+                        <div class="text-sm text-[var(--text-1)] mb-2">Company Info</div>
+                        <div id="summary-company" class="text-[var(--text-0)]">—</div>
+                    </div>
+                    <div class="surface p-4">
+                        <div class="text-sm text-[var(--text-1)] mb-2">Executives Found</div>
+                        <div id="summary-executives" class="text-[var(--text-0)]">—</div>
+                    </div>
+                    <div class="surface p-4">
+                        <div class="text-sm text-[var(--text-1)] mb-2">Risk Assessment</div>
+                        <div id="summary-risk" class="text-[var(--text-0)]">—</div>
+                    </div>
+                </div>
+                
+                <!-- Findings -->
+                <div class="surface p-4">
+                    <div class="text-sm text-[var(--text-1)] mb-2">Key Findings</div>
+                    <div id="summary-findings" class="text-[var(--text-0)]">—</div>
+                </div>
+            </div>
         </div>
 
-        <!-- Overall Results Panel (aggregated raw response) -->
-        <div id="panel-overall" class="hidden">
-            <div class="text-sm text-[var(--text-1)] mb-2">Complete API Response</div>
-            <pre id="overall-json" class="bg-[var(--bg-2)] p-4 rounded-xl overflow-auto text-sm leading-relaxed">—</pre>
+        <!-- Details Tab -->
+        <div class="tab-content hidden" id="tab-details">
+            <div class="grid gap-6">
+                <div class="surface p-4">
+                    <div class="text-sm text-[var(--text-1)] mb-2">Dilisense Results</div>
+                    <div id="details-dilisense" class="text-[var(--text-0)] text-sm">—</div>
+                </div>
+                <div class="surface p-4">
+                    <div class="text-sm text-[var(--text-1)] mb-2">Web Search Results</div>
+                    <div id="details-web" class="text-[var(--text-0)] text-sm">—</div>
+                </div>
+            </div>
         </div>
+
+        <!-- Raw JSON Tab -->
+        <div class="tab-content hidden" id="tab-raw">
+            <div class="surface p-4">
+                <div class="text-sm text-[var(--text-1)] mb-2">Complete API Response</div>
+                <pre id="raw-json" class="bg-[var(--bg-2)] p-4 rounded-xl overflow-auto text-xs leading-relaxed" style="max-height: 600px;">—</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="surface p-6 text-center" style="display: none;">
+        <div class="text-lg">🔍 Screening in progress...</div>
+        <div class="text-sm text-[var(--text-1)] mt-2">This may take up to 60 seconds</div>
     </div>
 </section>
 
-<script>
-// Jurisdiction chip selection
-document.querySelectorAll('.jurisdiction-chip').forEach(chip => {
-    chip.addEventListener('click', function() {
-        this.classList.toggle('selected');
-        updateJurisdictions();
-    });
-});
+<style>
+.tab-btn {
+    padding: 12px 16px;
+    border-bottom: 2px solid transparent;
+    color: var(--text-1);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+.tab-btn:hover {
+    color: var(--text-0);
+}
+.tab-btn.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+}
+</style>
 
-function updateJurisdictions() {
-    const selected = Array.from(document.querySelectorAll('.jurisdiction-chip.selected'))
-        .map(chip => chip.textContent.trim());
-    document.querySelector('input[name="jurisdictions"]').value = selected.join(', ');
+<script>
+// Simple tab system
+function initTabs() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetTab = btn.getAttribute('data-tab');
+            
+            // Update button states
+            tabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Update content visibility
+            tabContents.forEach(content => {
+                if (content.id === `tab-${targetTab}`) {
+                    content.classList.remove('hidden');
+                } else {
+                    content.classList.add('hidden');
+                }
+            });
+        });
+    });
 }
 
 // Form submission
@@ -123,13 +186,21 @@ form.addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const payload = Object.fromEntries(new FormData(form).entries());
-    payload.jurisdictions = (payload.jurisdictions || '').split(',').map(s => s.trim()).filter(Boolean);
-    payload.fuzzy = parseFloat(payload.fuzzy || '0.8');
     
-    showSkeleton(true);
+    // Show loading
+    document.getElementById('resultsContainer').style.display = 'none';
+    document.getElementById('loadingState').style.display = 'block';
     
     try {
-        // Build API payload to match backend expectations
+        // Login first
+        await fetch('/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'username=admin&password=change-me',
+            credentials: 'include'
+        });
+        
+        // Build API payload
         const apiBody = {
             company_name: payload.companyName,
             country: (payload.country || '').trim(),
@@ -147,118 +218,113 @@ form.addEventListener('submit', async (e) => {
         const data = await res.json();
         
         if (!res.ok) {
-            toast('Error: ' + (data.error || 'request failed'), 'error');
+            alert('Error: ' + (data.error || 'request failed'));
             return;
         }
         
-        // Adapt backend response to UI renderer expectations
-        const sancHits = Number(((data.dilisense || {}).sanctions || {}).total_hits || 0);
-        const pepHits  = Number(((data.dilisense || {}).pep || {}).total_hits || 0);
-        // Prefer Dilisense adverse count; fallback to web adverse items count
-        const webCat = (((data.web_search || {}).categorized_results) || {});
-        const webAdvCount = Array.isArray(webCat.adverse_media) ? webCat.adverse_media.length : 0;
-        const webExecCount = Array.isArray(webCat.executives) ? webCat.executives.length : 0;
-        const advHits  = Number(((data.dilisense || {}).adverse_media || {}).total_hits || 0) || webAdvCount;
-        const riskScore = Number(data.risk_score || 0);
-
-        const adapted = {
-            metrics: {
-                overall_risk: Math.max(0, Math.min(1, riskScore / 100)),
-                sanctions: sancHits > 0 ? 1 : 0,
-                pep: pepHits > 0 ? 1 : 0,
-                adverse_media: advHits > 0 ? 1 : 0,
-                // Include web findings to avoid all-zero KPIs when compliance data is empty
-                matches: (sancHits + pepHits + advHits + webExecCount + webAdvCount),
-                alerts: sancHits + pepHits,
-            },
-            entity: { country: data.country || '' },
-            ts: data.timestamp || new Date().toISOString(),
-            ai_summary: { commentary: 'Screening completed.' },
-            providers: { openai: true, dilisense: true },
-        };
-
-        // Save full response and show in Overall tab
-        try {
-            window.__last_api__ = data;
-            const overallEl = document.getElementById('overall-json');
-            if (overallEl) {
-                overallEl.textContent = JSON.stringify(data, null, 2);
-                console.log('Set overall JSON, length:', JSON.stringify(data, null, 2).length);
-            }
-            // Force switch to overall tab immediately
-            const tabOverall = document.getElementById('tab-overall');
-            const panelOverall = document.getElementById('panel-overall');
-            const tabDetails = document.getElementById('tab-details');
-            const panelDetails = document.getElementById('panel-details');
-            
-            if (tabOverall && panelOverall && tabDetails && panelDetails) {
-                panelOverall.classList.remove('hidden');
-                panelDetails.classList.add('hidden');
-                tabOverall.classList.add('border-b-2','border-accent-blue','text-accent-blue');
-                tabOverall.classList.remove('text-[var(--text-1)]');
-                tabDetails.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
-                tabDetails.classList.add('text-[var(--text-1)]');
-                console.log('Switched to overall tab');
-            }
-        } catch (e) {
-            console.error('Overall tab error:', e);
-        }
-
-        renderCompanyResults(adapted);
-        toast('Screening completed successfully', 'success');
+        // Show results and populate
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('resultsContainer').style.display = 'block';
+        
+        // Populate all tabs
+        populateResults(data);
+        
+        // Auto-switch to Raw JSON tab to show data
+        document.querySelector('.tab-btn[data-tab="raw"]').click();
         
     } catch (error) {
-        toast('Network error: ' + error.message, 'error');
+        alert('Network error: ' + error.message);
     } finally {
-        showSkeleton(false);
+        document.getElementById('loadingState').style.display = 'none';
     }
 });
+
+function populateResults(data) {
+    try {
+        // Raw JSON tab
+        document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+        
+        // Summary tab
+        const ws = data.web_search || {};
+        const cat = ws.categorized_results || {};
+        const ci = cat.company_info || {};
+        const execs = cat.executives || [];
+        const adverse = cat.adverse_media || [];
+        
+        document.getElementById('summary-company').innerHTML = `
+            <div><strong>Name:</strong> ${data.company || '—'}</div>
+            <div><strong>Website:</strong> ${ci.website ? `<a href="${ci.website}" target="_blank">${ci.website}</a>` : '—'}</div>
+            <div><strong>Industry:</strong> ${ci.industry || '—'}</div>
+        `;
+        
+        document.getElementById('summary-executives').innerHTML = `
+            <div><strong>Count:</strong> ${execs.length}</div>
+            ${execs.slice(0, 3).map(e => `<div>• ${e.name || 'Unknown'} (${e.position || 'Unknown'})</div>`).join('')}
+        `;
+        
+        document.getElementById('summary-risk').innerHTML = `
+            <div><strong>Score:</strong> ${data.risk_score || 0}</div>
+            <div><strong>Level:</strong> ${data.overall_risk_level || 'Low'}</div>
+            <div><strong>Adverse Items:</strong> ${adverse.length}</div>
+        `;
+        
+        document.getElementById('summary-findings').innerHTML = `
+            <div><strong>Providers:</strong> ${(ws.providers_used || []).join(', ')}</div>
+            <div><strong>Total Results:</strong> ${ws.total_results || 0}</div>
+            <div><strong>Timestamp:</strong> ${data.timestamp || '—'}</div>
+        `;
+        
+        // Details tab
+        document.getElementById('details-dilisense').innerHTML = `
+            <div><strong>Sanctions:</strong> ${(data.dilisense?.sanctions?.total_hits || 0)} hits</div>
+            <div><strong>PEP:</strong> ${(data.dilisense?.pep?.total_hits || 0)} hits</div>
+            <div><strong>Criminal:</strong> ${(data.dilisense?.criminal?.total_hits || 0)} hits</div>
+        `;
+        
+        document.getElementById('details-web').innerHTML = `
+            <div><strong>Company Info:</strong> ${Object.keys(ci).length} fields</div>
+            <div><strong>Executives:</strong> ${execs.length} found</div>
+            <div><strong>Adverse Media:</strong> ${adverse.length} items</div>
+        `;
+        
+        // Update top KPIs
+        const dilisense = data.dilisense || {};
+        const sancHits = (dilisense.sanctions?.total_hits || 0);
+        const pepHits = (dilisense.pep?.total_hits || 0);
+        const crimHits = (dilisense.criminal?.total_hits || 0);
+        
+        document.getElementById('kpi-overall').textContent = data.overall_risk_level || 'Low';
+        document.getElementById('kpi-sanc').textContent = sancHits;
+        document.getElementById('kpi-pep').textContent = pepHits;
+        document.getElementById('kpi-adv').textContent = adverse.length;
+        
+    } catch (error) {
+        console.error('Error populating results:', error);
+        document.getElementById('raw-json').textContent = 'Error: ' + error.message;
+    }
+}
+
+// Initialize tabs when page loads
+document.addEventListener('DOMContentLoaded', initTabs);
 
 // Button handlers
 document.getElementById('btnQueue').addEventListener('click', () => {
-    toast('Queued for processing (demo)', 'info');
+    alert('Queued for processing (demo)');
 });
 
-document.getElementById('btnExport').addEventListener('click', exportReport);
-
-// Simple tabs for Details / Overall Results
-function initTabs() {
-    const tabDetails = document.getElementById('tab-details');
-    const tabOverall = document.getElementById('tab-overall');
-    const panelDetails = document.getElementById('panel-details');
-    const panelOverall = document.getElementById('panel-overall');
-
-    if (!tabDetails || !tabOverall || !panelDetails || !panelOverall) return;
-
-    function showPanel(which) {
-        const isOverall = which === 'overall';
-        panelOverall.classList.toggle('hidden', !isOverall);
-        panelDetails.classList.toggle('hidden', isOverall);
-        // styling
-        if (isOverall) {
-            tabOverall.classList.add('border-b-2','border-accent-blue','text-accent-blue');
-            tabOverall.classList.remove('text-[var(--text-1)]');
-            tabDetails.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
-            tabDetails.classList.add('text-[var(--text-1)]');
-        } else {
-            tabDetails.classList.add('border-b-2','border-accent-blue','text-accent-blue');
-            tabDetails.classList.remove('text-[var(--text-1)]');
-            tabOverall.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
-            tabOverall.classList.add('text-[var(--text-1)]');
-        }
+document.getElementById('btnExport').addEventListener('click', () => {
+    const data = document.getElementById('raw-json').textContent;
+    if (data && data !== '—') {
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `company_screening_${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
-
-    tabDetails.addEventListener('click', (e) => { e.preventDefault(); showPanel('details'); });
-    tabOverall.addEventListener('click', (e) => { e.preventDefault(); showPanel('overall'); });
-
-    // expose for use after API
-    window.__showPanel = showPanel;
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initTabs);
-} else {
-    initTabs();
-}
+});
 </script>
 {% endblock %}

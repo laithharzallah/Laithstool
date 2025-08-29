@@ -2,6 +2,26 @@
 
 {% block content %}
 <section class="grid gap-6">
+    <!-- KPI Dashboard -->
+    <div class="grid md:grid-cols-4 gap-4">
+        <div class="kpi-tile">
+            <div class="text-sm text-[var(--text-1)]">Overall Risk</div>
+            <div class="text-2xl font-bold font-mono" id="kpi-overall">—</div>
+        </div>
+        <div class="kpi-tile">
+            <div class="text-sm text-[var(--text-1)]">Sanctions</div>
+            <div class="text-xl font-mono" id="kpi-sanc">—</div>
+        </div>
+        <div class="kpi-tile">
+            <div class="text-sm text-[var(--text-1)]">PEP</div>
+            <div class="text-xl font-mono" id="kpi-pep">—</div>
+        </div>
+        <div class="kpi-tile">
+            <div class="text-sm text-[var(--text-1)]">Criminal</div>
+            <div class="text-xl font-mono" id="kpi-adv">—</div>
+        </div>
+    </div>
+
     <!-- Individual Screening Form -->
     <div class="surface p-6">
         <div class="text-lg font-semibold mb-4">Individual Screening</div>
@@ -9,7 +29,7 @@
             <!-- Personal Information -->
             <div>
                 <label class="text-sm text-[var(--text-1)]">Full Name *</label>
-                <input name="fullName" class="input w-full" required placeholder="e.g., John Doe">
+                <input name="fullName" class="input w-full" required placeholder="e.g., Boris Johnson">
             </div>
             <div>
                 <label class="text-sm text-[var(--text-1)]">Date of Birth</label>
@@ -17,21 +37,11 @@
             </div>
             <div>
                 <label class="text-sm text-[var(--text-1)]">Nationality</label>
-                <input name="nationality" class="input w-full" placeholder="e.g., Saudi">
+                <input name="nationality" class="input w-full" placeholder="e.g., British">
             </div>
             <div>
                 <label class="text-sm text-[var(--text-1)]">ID Number</label>
                 <input name="idNumber" class="input w-full" placeholder="Passport, National ID, etc.">
-            </div>
-            
-            <!-- Additional Fields -->
-            <div>
-                <label class="text-sm text-[var(--text-1)]">Occupation</label>
-                <input name="occupation" class="input w-full" placeholder="e.g., Business Executive">
-            </div>
-            <div>
-                <label class="text-sm text-[var(--text-1)]">Company</label>
-                <input name="company" class="input w-full" placeholder="Current employer">
             </div>
             
             <!-- Action Buttons -->
@@ -39,46 +49,148 @@
                 <button class="btn" type="submit">
                     <span class="mr-2">🔍</span>Run Screening
                 </button>
-                <button type="button" class="btn-ghost" id="btnExport">
+                <button type="button" class="btn-ghost" id="btnExportInd">
                     <span class="mr-2">📥</span>Export Results
                 </button>
             </div>
         </form>
     </div>
 
-    <!-- Results Section with Tabs -->
-    <div class="surface p-6">
-        <div class="border-b border-white/10 mb-4">
+    <!-- Results Section with Simple Tabs -->
+    <div class="surface p-6" id="resultsContainerInd" style="display: none;">
+        <!-- Tab Navigation -->
+        <div class="border-b border-white/10 mb-6">
             <nav class="flex gap-6">
-                <button type="button" id="tab-details-ind" class="py-2 border-b-2 border-accent-blue text-accent-blue">Details</button>
-                <button type="button" id="tab-overall-ind" class="py-2 text-[var(--text-1)] hover:text-white/90">Overall Results</button>
+                <button type="button" class="tab-btn-ind active" data-tab="summary">
+                    📊 Summary
+                </button>
+                <button type="button" class="tab-btn-ind" data-tab="compliance">
+                    ⚖️ Compliance
+                </button>
+                <button type="button" class="tab-btn-ind" data-tab="raw">
+                    📄 Raw JSON
+                </button>
             </nav>
         </div>
 
-        <!-- Details Panel (existing renderer) -->
-        <div id="panel-details-ind">
-            {% include "partials/_results.html" %}
+        <!-- Summary Tab -->
+        <div class="tab-content-ind" id="tab-summary-ind">
+            <div class="grid gap-6">
+                <!-- Person Info -->
+                <div class="surface p-4">
+                    <div class="text-sm text-[var(--text-1)] mb-2">Person Information</div>
+                    <div id="person-info" class="text-[var(--text-0)]">—</div>
+                </div>
+                
+                <!-- Risk Summary -->
+                <div class="surface p-4">
+                    <div class="text-sm text-[var(--text-1)] mb-2">Risk Summary</div>
+                    <div id="risk-summary" class="text-[var(--text-0)]">—</div>
+                </div>
+            </div>
         </div>
 
-        <!-- Overall Results Panel (aggregated raw response) -->
-        <div id="panel-overall-ind" class="hidden">
-            <div class="text-sm text-[var(--text-1)] mb-2">Complete API Response</div>
-            <pre id="overall-json-ind" class="bg-[var(--bg-2)] p-4 rounded-xl overflow-auto text-sm leading-relaxed">—</pre>
+        <!-- Compliance Tab -->
+        <div class="tab-content-ind hidden" id="tab-compliance-ind">
+            <div class="grid gap-6">
+                <div class="surface p-4">
+                    <div class="text-sm text-[var(--text-1)] mb-2">Sanctions Records</div>
+                    <div id="compliance-sanctions" class="text-[var(--text-0)] text-sm">—</div>
+                </div>
+                <div class="surface p-4">
+                    <div class="text-sm text-[var(--text-1)] mb-2">PEP Records</div>
+                    <div id="compliance-pep" class="text-[var(--text-0)] text-sm">—</div>
+                </div>
+                <div class="surface p-4">
+                    <div class="text-sm text-[var(--text-1)] mb-2">Criminal Records</div>
+                    <div id="compliance-criminal" class="text-[var(--text-0)] text-sm">—</div>
+                </div>
+            </div>
         </div>
+
+        <!-- Raw JSON Tab -->
+        <div class="tab-content-ind hidden" id="tab-raw-ind">
+            <div class="surface p-4">
+                <div class="text-sm text-[var(--text-1)] mb-2">Complete API Response</div>
+                <pre id="raw-json-ind" class="bg-[var(--bg-2)] p-4 rounded-xl overflow-auto text-xs leading-relaxed" style="max-height: 600px;">—</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingStateInd" class="surface p-6 text-center" style="display: none;">
+        <div class="text-lg">🔍 Screening in progress...</div>
+        <div class="text-sm text-[var(--text-1)] mt-2">Checking compliance databases...</div>
     </div>
 </section>
 
-<script>
-const form = document.getElementById('indForm');
+<style>
+.tab-btn-ind {
+    padding: 12px 16px;
+    border-bottom: 2px solid transparent;
+    color: var(--text-1);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+.tab-btn-ind:hover {
+    color: var(--text-0);
+}
+.tab-btn-ind.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+}
+</style>
 
+<script>
+// Simple tab system for individual
+function initIndividualTabs() {
+    const tabBtns = document.querySelectorAll('.tab-btn-ind');
+    const tabContents = document.querySelectorAll('.tab-content-ind');
+    
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetTab = btn.getAttribute('data-tab');
+            
+            // Update button states
+            tabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Update content visibility
+            tabContents.forEach(content => {
+                if (content.id === `tab-${targetTab}-ind`) {
+                    content.classList.remove('hidden');
+                } else {
+                    content.classList.add('hidden');
+                }
+            });
+        });
+    });
+}
+
+// Form submission
+const form = document.getElementById('indForm');
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const payload = Object.fromEntries(new FormData(form).entries());
     
-    showSkeleton(true);
+    // Show loading
+    document.getElementById('resultsContainerInd').style.display = 'none';
+    document.getElementById('loadingStateInd').style.display = 'block';
     
     try {
+        // Login first
+        await fetch('/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'username=admin&password=change-me',
+            credentials: 'include'
+        });
+        
         const res = await fetch('/api/individual-screen', {
             method: 'POST',
             credentials: 'include',
@@ -89,71 +201,107 @@ form.addEventListener('submit', async (e) => {
         const data = await res.json();
         
         if (!res.ok) {
-            toast('Error: ' + (data.error || 'request failed'), 'error');
+            alert('Error: ' + (data.error || 'request failed'));
             return;
         }
         
-        // Save full response and show in Overall tab
-        try {
-            window.__last_api_ind__ = data;
-            const overallEl = document.getElementById('overall-json-ind');
-            if (overallEl) overallEl.textContent = JSON.stringify(data, null, 2);
-            if (typeof window.__showPanelInd === 'function') {
-                window.__showPanelInd('overall');
-            }
-        } catch (_) {}
-
-        renderIndividualResults(data);
-        toast('Individual screening completed successfully', 'success');
+        // Show results and populate
+        document.getElementById('loadingStateInd').style.display = 'none';
+        document.getElementById('resultsContainerInd').style.display = 'block';
+        
+        // Populate all tabs
+        populateIndividualResults(data);
+        
+        // Auto-switch to Raw JSON tab to show data
+        document.querySelector('.tab-btn-ind[data-tab="raw"]').click();
         
     } catch (error) {
-        toast('Network error: ' + error.message, 'error');
+        alert('Network error: ' + error.message);
     } finally {
-        showSkeleton(false);
+        document.getElementById('loadingStateInd').style.display = 'none';
     }
 });
 
-// Export handler
-document.getElementById('btnExport').addEventListener('click', exportReport);
-
-// Simple tabs for Individual Details / Overall Results
-function initIndividualTabs() {
-    const tabDetails = document.getElementById('tab-details-ind');
-    const tabOverall = document.getElementById('tab-overall-ind');
-    const panelDetails = document.getElementById('panel-details-ind');
-    const panelOverall = document.getElementById('panel-overall-ind');
-
-    if (!tabDetails || !tabOverall || !panelDetails || !panelOverall) return;
-
-    function showPanelInd(which) {
-        const isOverall = which === 'overall';
-        panelOverall.classList.toggle('hidden', !isOverall);
-        panelDetails.classList.toggle('hidden', isOverall);
-        // styling
-        if (isOverall) {
-            tabOverall.classList.add('border-b-2','border-accent-blue','text-accent-blue');
-            tabOverall.classList.remove('text-[var(--text-1)]');
-            tabDetails.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
-            tabDetails.classList.add('text-[var(--text-1)]');
-        } else {
-            tabDetails.classList.add('border-b-2','border-accent-blue','text-accent-blue');
-            tabDetails.classList.remove('text-[var(--text-1)]');
-            tabOverall.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
-            tabOverall.classList.add('text-[var(--text-1)]');
-        }
+function populateIndividualResults(data) {
+    try {
+        // Raw JSON tab
+        document.getElementById('raw-json-ind').textContent = JSON.stringify(data, null, 2);
+        
+        // Summary tab
+        const dilisense = data.dilisense || {};
+        
+        document.getElementById('person-info').innerHTML = `
+            <div><strong>Name:</strong> ${data.name || '—'}</div>
+            <div><strong>Country:</strong> ${data.country || '—'}</div>
+            <div><strong>Total Hits:</strong> ${dilisense.total_hits || 0}</div>
+        `;
+        
+        document.getElementById('risk-summary').innerHTML = `
+            <div><strong>Risk Score:</strong> ${data.risk_score || 0}</div>
+            <div><strong>Risk Level:</strong> ${data.overall_risk_level || 'Low'}</div>
+            <div><strong>Risk Factors:</strong> ${(data.risk_factors || []).join(', ') || 'None'}</div>
+        `;
+        
+        // Compliance tab
+        const sanctions = dilisense.sanctions?.found_records || [];
+        const pep = dilisense.pep?.found_records || [];
+        const criminal = dilisense.criminal?.found_records || [];
+        
+        document.getElementById('compliance-sanctions').innerHTML = sanctions.length === 0 ? 'No sanctions found' :
+            sanctions.slice(0, 5).map(r => `
+                <div class="mb-2 p-2 bg-red-900/20 rounded">
+                    <div><strong>${r.name || 'Unknown'}</strong></div>
+                    <div class="text-xs">Source: ${r.source_id || 'Unknown'}</div>
+                    <div class="text-xs">Country: ${r.source_country || 'Unknown'}</div>
+                </div>
+            `).join('');
+        
+        document.getElementById('compliance-pep').innerHTML = pep.length === 0 ? 'No PEP records found' :
+            pep.slice(0, 5).map(r => `
+                <div class="mb-2 p-2 bg-yellow-900/20 rounded">
+                    <div><strong>${r.name || 'Unknown'}</strong></div>
+                    <div class="text-xs">Type: ${r.pep_type || 'PEP'}</div>
+                    <div class="text-xs">Source: ${r.source_id || 'Unknown'}</div>
+                </div>
+            `).join('');
+        
+        document.getElementById('compliance-criminal').innerHTML = criminal.length === 0 ? 'No criminal records found' :
+            criminal.slice(0, 5).map(r => `
+                <div class="mb-2 p-2 bg-red-900/20 rounded">
+                    <div><strong>${r.name || 'Unknown'}</strong></div>
+                    <div class="text-xs">Source: ${r.source_id || 'Unknown'}</div>
+                </div>
+            `).join('');
+        
+        // Update top KPIs
+        document.getElementById('kpi-overall').textContent = data.overall_risk_level || 'Low';
+        document.getElementById('kpi-sanc').textContent = sanctions.length;
+        document.getElementById('kpi-pep').textContent = pep.length;
+        document.getElementById('kpi-adv').textContent = criminal.length;
+        
+    } catch (error) {
+        console.error('Error populating individual results:', error);
+        document.getElementById('raw-json-ind').textContent = 'Error: ' + error.message;
     }
-
-    tabDetails.addEventListener('click', (e) => { e.preventDefault(); showPanelInd('details'); });
-    tabOverall.addEventListener('click', (e) => { e.preventDefault(); showPanelInd('overall'); });
-
-    // expose for use after API
-    window.__showPanelInd = showPanelInd;
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initIndividualTabs);
-} else {
-    initIndividualTabs();
-}
+// Initialize tabs when page loads
+document.addEventListener('DOMContentLoaded', initIndividualTabs);
+
+// Export handler
+document.getElementById('btnExportInd').addEventListener('click', () => {
+    const data = document.getElementById('raw-json-ind').textContent;
+    if (data && data !== '—') {
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `individual_screening_${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+});
 </script>
 {% endblock %}
