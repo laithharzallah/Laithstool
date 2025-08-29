@@ -15,6 +15,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 import re
 from dotenv import load_dotenv
 from services.helpers.json_guard import force_json, prune_to_schema
+from services.google_search import GoogleSearch
 
 # Load environment variables (development or if .env exists)
 if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
@@ -36,6 +37,8 @@ class RealTimeSearchService:
         """Initialize the real-time search service"""
         self.openai_client = None
         self.openai_model = os.getenv("OPENAI_MODEL", "gpt-4o")
+        self.serper_api_key = os.getenv("SERPER_API_KEY") or os.getenv("SERPER_API") or os.getenv("SERPER")
+        self.google = GoogleSearch()
         
         # Initialize OpenAI client if API key is available
         openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -51,6 +54,16 @@ class RealTimeSearchService:
         self.search_providers = self._initialize_search_providers()
         
         print(f"✅ Real-time search service initialized with {len(self.search_providers)} providers")
+        # Provider availability logs
+        try:
+            if getattr(self.google, "api_key", None) and getattr(self.google, "cx", None):
+                print("🔎 Google CSE enabled (GOOGLE_CSE_ID found)")
+        except Exception:
+            pass
+        if self.serper_api_key:
+            print("🔎 Serper enabled")
+        else:
+            print("⚠️ Serper key missing — web/news search will be LLM-only")
 
         # Strict system prompt reused for all intents (LLM extraction only)
         self.STRICT_SYSTEM_PROMPT = (
@@ -147,28 +160,30 @@ class RealTimeSearchService:
             ],
             response_format={"type": "json_object"},
             temperature=0,
+            timeout=20,
         )
         raw = resp.choices[0].message.content or "{}"
         return force_json(raw, schema_example)
 
     def _initialize_search_providers(self) -> List[Dict]:
-        """Configure providers: LLM and Serper if available."""
+        """Enable LLM + Google CSE (if configured) + Serper Google Search"""
         providers: List[Dict[str, Any]] = [{
             "name": "chatgpt4o_live",
             "type": "llm",
             "model": self.openai_model,
         }]
-        if os.getenv("SERPER_API_KEY"):
-            providers.append({
-                "name": "serper",
-                "type": "google_search",
-                "base_url": "https://google.serper.dev/search",
-                "api_key": os.getenv("SERPER_API_KEY")
-            })
+        # Register Google CSE as a provider if keys are configured
+        try:
+            if getattr(self.google, "api_key", None) and getattr(self.google, "cx", None):
+                providers.append({"name": "google_cse", "type": "google_search"})
+        except Exception:
+            pass
+        if self.serper_api_key:
+            providers.append({"name": "serper", "type": "google_search"})
         return providers
 
-    async def comprehensive_search(self, company: str, country: str) -> Dict[str, Any]:
-        """Comprehensive LLM-only extraction across intents, schema-first."""
+    async def comprehensive_search(self, company: str, country: str, domain: str = "") -> Dict[str, Any]:
+        """Comprehensive extraction across intents, schema-first with Serper enrichment."""
         try:
             print(f"🔍 Starting comprehensive extraction for: {company}")
             search_intents = [
@@ -182,7 +197,7 @@ class RealTimeSearchService:
 
             processed_results: Dict[str, Any] = {}
             for intent in search_intents:
-                res = await self._search_intent(company, country, intent)
+                res = await self._search_intent(company, country, intent, domain=domain)
                 processed_results[intent] = res
 
             categorized_results = {
@@ -257,14 +272,76 @@ class RealTimeSearchService:
             }
 
     async def _search_intent(self, company: str, country: str, intent: str, domain: str = "") -> Dict[str, Any]:
-        """Serper-first; pass real results to GPT-4o to structure into schema."""
+        """Serper-first; enrich query for stronger hits, then structure via GPT-4o."""
         try:
             schema = self.INTENT_SCHEMAS.get(intent, {})
-            # 1) Build geo+intent-aware query
-            query = _build_query(company, country, intent, domain or None)
-            # 2) Serper search (web + news)
-            serper_results = await self._serper_search(query, country=country)
-            if not serper_results:
+            # 1) Build geo+intent-aware query (bias to official site/leadership)
+            cc = (country or "").strip()
+            site_hint = f" site:{domain}" if domain else ""
+            if intent == "company_profile":
+                query = f"{company} {cc} official site about us company profile{site_hint}".strip()
+                if not domain and cc.upper() == "SA":
+                    query += " site:*.sa"
+            elif intent == "executives":
+                query = f"{company} {cc} leadership management executives team board{site_hint}".strip()
+                if not domain and cc.upper() == "SA":
+                    query += " site:*.sa"
+            else:
+                query = f"{company} {cc} {intent}".strip()
+
+            # 2) Google first (CSE), then Serper as fallback (tiny retry/backoff)
+            serper_results: List[Dict[str, Any]] = []
+            google_hits: List[Dict[str, Any]] = []
+            try:
+                # Prefer Google if configured
+                gq = query
+                google_hits = await self.google.search(gq, num=10)
+            except Exception as _ge:
+                print(f"⚠️ Google search failed: {_ge}")
+            if self.serper_api_key:
+                max_attempts = 3 if (cc or "").upper() == "SA" else 2
+                for attempt in range(max_attempts):
+                    try:
+                        # adverse_media benefits from news endpoint
+                        if intent == "adverse_media":
+                            news_hits = await self._serper_search(query, country=cc, kind="news")
+                            serper_results.extend(news_hits or [])
+                        web_hits = await self._serper_search(query, country=cc, kind="web")
+                        serper_results.extend(web_hits or [])
+                        if serper_results:
+                            break
+                    except Exception:
+                        pass
+                    if attempt < max_attempts - 1:
+                        await asyncio.sleep(1)
+
+            # 2b) Seed from known domain so website/execs aren't null when search throttles
+            if domain and intent in ("company_profile", "executives"):
+                seed_url = domain if domain.startswith(("http://", "https://")) else f"https://{domain}"
+                host = domain.split("/")[0]
+                serper_results.append({
+                    "title": f"{company} official site",
+                    "url": seed_url,
+                    "snippet": f"Official website for {company}",
+                    "source": host,
+                    "date": None,
+                })
+                serper_results.append({
+                    "title": f"{company} leadership/about",
+                    "url": seed_url.rstrip("/") + "/about-us",
+                    "snippet": "Leadership / About Us",
+                    "source": host,
+                    "date": None,
+                })
+            merged_hits: List[Dict[str, Any]] = []
+            # Merge Google and Serper hits (Google first)
+            if google_hits:
+                merged_hits.extend(self._dedupe_and_cap(google_hits, cap=30))
+            if serper_results:
+                merged_hits.extend(self._dedupe_and_cap(serper_results, cap=30))
+            merged_hits = self._dedupe_and_cap(merged_hits, cap=40)
+
+            if not merged_hits:
                 return {"intent": intent, "results": schema, "total_found": 0, "providers": ["serper:0"]}
 
             if not self.openai_client:
@@ -281,7 +358,7 @@ class RealTimeSearchService:
             user_prompt = (
                 f'Company: "{company}" Country: "{country}" Intent: "{intent}"\n\n'
                 f"WEB RESULTS (use as evidence; cite with source_url fields where applicable):\n"
-                f"{json.dumps(serper_results[:12], ensure_ascii=False, indent=2)}\n\n"
+                f"{json.dumps(merged_hits[:12], ensure_ascii=False, indent=2)}\n\n"
                 f"Return ONLY a JSON object that matches this schema example (same keys, nulls allowed):\n"
                 f"{json.dumps(schema, ensure_ascii=False, indent=2)}\n"
             )
@@ -291,6 +368,7 @@ class RealTimeSearchService:
                     messages=[{"role": "system", "content": STRICT_SYS}, {"role": "user", "content": base + "\n\n" + user_prompt}],
                     response_format={"type": "json_object"},
                     temperature=0,
+                    timeout=20,
                 )
                 raw = resp.choices[0].message.content or "{}"
                 try:
@@ -300,7 +378,11 @@ class RealTimeSearchService:
                 clean = prune_to_schema(data, schema)
                 total_found = self._count_for_intent(intent, clean)
                 print("✅ GPT-4o structured response parsed")
-                return {"intent": intent, "results": clean, "total_found": total_found, "providers": [f"serper:{len(serper_results)}", "gpt-4o"]}
+                providers = []
+                if google_hits: providers.append("google")
+                if serper_results: providers.append(f"serper:{len(serper_results)}")
+                providers.append("gpt-4o")
+                return {"intent": intent, "results": clean, "total_found": total_found, "providers": providers}
             except Exception as e:
                 print(f"⚠️ LLM structuring failed for {intent}: {e}")
                 clean = prune_to_schema({}, schema)
@@ -995,56 +1077,38 @@ Focus on extracting factual information from the real search results provided.""
             print(f"❌ Intent search failed for {intent}: {e}")
             return {"error": f"Intent search failed: {str(e)}"}
 
-    async def _serper_search(self, query: str, country: str = "", num: int = 20) -> List[Dict]:
-        """Query Serper: web + news; geo-aware; de-dup URLs."""
-        api_key = os.getenv("SERPER_API_KEY")
-        if not api_key:
+    async def _serper_search(self, query: str, country: str = "", num: int = 20, kind: str = "web") -> List[Dict]:
+        """Query Serper (web or news) and normalize results."""
+        if not self.serper_api_key:
             return []
-        headers = {"X-API-KEY": api_key, "Content-Type": "application/json"}
-        payload = {"q": query, "gl": _gl_for(country), "num": num}
+        endpoint = "https://google.serper.dev/search" if kind == "web" else "https://google.serper.dev/news"
+        headers = {"X-API-KEY": self.serper_api_key, "Content-Type": "application/json"}
+        body = {"q": query, "num": max(30, num)}
+        # Light geo hint from country code; default to KSA for relevance
+        gl = (country or "sa").strip().lower() or "sa"
+        body["gl"] = gl
+        body["hl"] = "en"
         out: List[Dict[str, Any]] = []
-        try:
-            async with httpx.AsyncClient(timeout=25) as client:
-                r1 = await client.post(f"{SERPER_BASE}/search", headers=headers, json=payload)
-                if r1.status_code == 200:
-                    data = r1.json()
-                    for sec in ["organic", "topStories", "knowledgeGraph", "answerBox"]:
-                        items = data.get(sec) or []
-                        if isinstance(items, dict):
-                            items = [items]
-                        for it in items:
-                            url = it.get("link") or it.get("url") or it.get("website") or ""
-                            src = tldextract.extract(url).registered_domain or "serper"
-                            out.append({
-                                "title": it.get("title") or it.get("name") or it.get("snippet") or "",
-                                "url": url,
-                                "snippet": it.get("snippet") or it.get("description") or "",
-                                "source": src,
-                                "section": sec
-                            })
-                r2 = await client.post(f"{SERPER_BASE}/news", headers=headers, json=payload)
-                if r2.status_code == 200:
-                    news = r2.json().get("news") or []
-                    for n in news:
-                        out.append({
-                            "title": n.get("title", ""),
-                            "url": n.get("link", ""),
-                            "snippet": n.get("snippet", ""),
-                            "source": n.get("source", "news"),
-                            "date": n.get("date"),
-                            "section": "news"
-                        })
-            # de-dupe by URL
-            seen: set = set(); final: List[Dict[str, Any]] = []
-            for r in out:
-                u = r.get("url") or ""
-                if u and u not in seen:
-                    seen.add(u)
-                    final.append(r)
-            return final[:50]
-        except Exception as e:
-            print(f"❌ Serper search error: {e}")
-            return []
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0)) as client:
+            r = await client.post(endpoint, headers=headers, json=body)
+        if r.status_code != 200:
+            raise RuntimeError(f"Serper {kind} HTTP {r.status_code}: {r.text[:200]}")
+        j = r.json() or {}
+        keys = ["organic", "topStories", "knowledgeGraph", "answerBox"] if kind == "web" else ["news"]
+        for sec in keys:
+            items = j.get(sec) or []
+            for it in items:
+                url = it.get("link") or it.get("url") or it.get("website") or ""
+                if not url:
+                    continue
+                out.append({
+                    "title": it.get("title") or it.get("name") or it.get("snippet") or "",
+                    "url": url,
+                    "snippet": it.get("snippet") or it.get("description") or "",
+                    "source": it.get("source") or sec,
+                    "date": it.get("date") or it.get("publishedDate"),
+                })
+        return self._dedupe_and_cap(out, cap=30)
 
 
 

@@ -12,6 +12,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Strict client timeout: total 20s, connect 5s
+HTTP_TIMEOUT = httpx.Timeout(20.0, connect=5.0)
+
 class DilisenseService:
     """Dilisense AML compliance service for individual and company screening"""
     
@@ -85,73 +88,45 @@ class DilisenseService:
     
     def _generate_name_variations(self, name: str) -> list:
         """
-        Generate specific name variations for the individual being screened
-        Focus on finding the exact person, not broad family connections
+        Generate specific, conservative variations. Never emit 1-token names.
+        Handle Arabic 'Al'/'Al-' prefixes sanely.
         """
-        variations = [name]  # Start with original name
-        
-        # Clean and standardize the name
-        clean_name = name.strip().upper()
-        
+        original = name.strip()
+        clean_name = original.upper()
         # Remove common titles and honorifics
         titles_to_remove = ['MR ', 'DR ', 'PROF ', 'SHEIKH ', 'HIS EXCELLENCY ', 'HONORABLE ']
         for title in titles_to_remove:
             if clean_name.startswith(title):
                 clean_name = clean_name[len(title):]
                 break
-        
-        # Split into parts
         parts = clean_name.split()
-        
-        if len(parts) >= 2:
-            # Focus on SPECIFIC individual variations, not family-wide searches
-            specific_variations = []
-            
-            # Handle names with "AL" prefix - focus on the specific person
-            if any(part.startswith('AL') for part in parts):
-                for i, part in enumerate(parts):
-                    if part.startswith('AL'):
-                        first_name = parts[0]
-                        last_name = part
-                        core = part.replace('AL-', '').replace('AL_', '').replace('AL', '').strip()
-                        specific_variations.extend([
-                            f"{first_name} {last_name}",
-                            f"{last_name} {first_name}",
-                            f"{first_name} {core}",
-                            f"{core} {first_name}",
-                        ])
-                        break
-            
-            # Standard meaningful variations for the specific person
-            if len(parts) >= 3:
-                first_name = parts[0]
-                middle_name = parts[1]
-                last_name = parts[-1]
-                
-                specific_variations.extend([
-                    f"{first_name} {last_name}",  # First + Last
-                    f"{last_name} {first_name}",  # Last + First
-                    f"{first_name} {middle_name} {last_name}",  # Full name
-                ])
-            elif len(parts) == 2:
-                first_name = parts[0]
-                last_name = parts[1]
-                specific_variations.extend([
-                    f"{first_name} {last_name}",
-                    f"{last_name} {first_name}",
-                ])
-            
-            # Add specific variations to the list
-            variations.extend(specific_variations)
-        
-        # Remove duplicates and empty strings
-        variations = list(set([v for v in variations if v.strip()]))
-        
-        # Sort by relevance (original name first, then by length)
-        variations.sort(key=lambda x: (x != name, len(x)))
-        
-        # Limit to 4-5 specific variations (not broad family searches)
-        return variations[:5]
+        if len(parts) < 2:
+            return [original]
+        first = parts[0].title()
+        last = parts[-1].title()
+        last_norm = last.replace('Al-', 'Al ').replace('AL-', 'Al ').replace('AL ', 'Al ').replace('AL', 'Al')
+        last_no_al = last_norm.replace('Al ', '')
+        specific_variations = []
+        if len(parts) >= 3:
+            middle = " ".join(p.title() for p in parts[1:-1])
+            specific_variations.append(f"{first} {middle} {last_norm}".strip())
+        specific_variations.extend([
+            f"{first} {last_norm}".strip(),
+            f"{first} {last_no_al}".strip(),
+            f"{last_norm} {first}".strip(),
+        ])
+        seen = set(); out = []
+        for v in [original] + specific_variations:
+            v = " ".join(v.split())
+            if not v or " " not in v:
+                continue
+            key = v.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(v)
+        out.sort(key=lambda x: (x.lower() != original.lower(), len(x)))
+        return out[:5]
     
     async def _check_individual_single(self, name: str, country: str = "", date_of_birth: str = "", gender: str = "") -> dict:
         """
@@ -294,25 +269,44 @@ class DilisenseService:
         
         return base_result
     
-    def _is_relevant_match(self, record: dict, first_name: str, last_name: str) -> bool:
-        """
-        Check if a record is relevant to the specific individual being screened
-        """
-        record_name = record.get('name', '').upper()
-        alias_names = record.get('alias_names') or []
-        if isinstance(alias_names, str):
-            alias_names = [alias_names]
+    def _is_relevant_match(self, record: dict, first_name: str, last_name: str, country_code: str = "") -> bool:
+        """Strict relevance: require last-name match; prefer country alignment if present."""
+        record_name = (record.get('name') or '').upper()
+        aliases = record.get('alias_names') or []
+        if isinstance(aliases, str):
+            aliases = [aliases]
 
-        def _contains(piece: str, target: str) -> bool:
-            return bool(piece) and bool(target) and target in piece
+        def has(piece: str, token: str) -> bool:
+            return bool(piece) and bool(token) and token in piece
 
-        if _contains(record_name, first_name) or _contains(record_name, last_name):
-            return True
-        for alias in alias_names:
-            alias_upper = (alias or '').upper()
-            if _contains(alias_upper, first_name) or _contains(alias_upper, last_name):
-                return True
-        return False
+        # Require last name somewhere (name or aliases)
+        if not has(record_name, last_name):
+            ok = False
+            for a in aliases:
+                if has((a or '').upper(), last_name):
+                    ok = True; break
+            if not ok:
+                return False
+
+        # First name strengthens match
+        if first_name and not has(record_name, first_name):
+            ok = False
+            for a in aliases:
+                au = (a or '').upper()
+                if has(au, first_name) and has(au, last_name):
+                    ok = True; break
+            if not ok:
+                return False
+
+        # Optional country check
+        if country_code:
+            cits = record.get('citizenship') or []
+            if isinstance(cits, str):
+                cits = [cits]
+            cits_u = [c.upper() for c in cits]
+            if cits_u and country_code.upper() not in cits_u:
+                return False
+        return True
 
     def _process_individual_results(self, data: Dict, name: str) -> Dict[str, Any]:
         """Process individual screening results from Dilisense API"""
@@ -442,7 +436,7 @@ class DilisenseService:
 
     async def _http_get(self, url: str, params: dict, retries: int = 1) -> Optional[dict]:
         headers = {"x-api-key": self.api_key, "Content-Type": "application/json"}
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             for attempt in range(retries + 1):
                 resp = await client.get(url, headers=headers, params=params)
                 if resp.status_code == 200:
@@ -548,7 +542,7 @@ class DilisenseService:
                 "includes": "dilisense_sanctions"
             }
             
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
                 response = await client.get(
                     f"{self.base_url}/checkIndividual",  # Companies also use this endpoint
                     headers={
@@ -581,7 +575,7 @@ class DilisenseService:
                 "includes": "dilisense_pep"
             }
             
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
                 response = await client.get(
                     f"{self.base_url}/checkIndividual",  # Companies also use this endpoint
                     headers={
@@ -614,7 +608,7 @@ class DilisenseService:
                 "includes": "dilisense_criminal"
             }
             
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
                 response = await client.get(
                     f"{self.base_url}/checkIndividual",  # Companies also use this endpoint
                     headers={

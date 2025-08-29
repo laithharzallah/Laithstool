@@ -1,6 +1,12 @@
 // Global variables for charts
 let barChart, sparkChart;
 
+// Safe numeric formatter
+function formatNum(value, digits = 3) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(digits) : '—';
+}
+
 // Toast notification system
 function toast(msg, type = 'info') {
     const container = document.getElementById('toast-container');
@@ -205,10 +211,10 @@ function renderCompanyResults(data) {
     const juris = (data.entity && data.entity.country) ? [data.entity.country] : [];
     
     // Update KPI tiles
-    document.getElementById('kpi-overall').textContent = (m.overall_risk ?? '—').toFixed(3);
-    document.getElementById('kpi-sanc').textContent = (m.sanctions ?? '—').toFixed(3);
-    document.getElementById('kpi-pep').textContent = (m.pep ?? '—').toFixed(3);
-    document.getElementById('kpi-adv').textContent = (m.adverse_media ?? '—').toFixed(3);
+    document.getElementById('kpi-overall').textContent = formatNum(m.overall_risk, 3);
+    document.getElementById('kpi-sanc').textContent = formatNum(m.sanctions, 3);
+    document.getElementById('kpi-pep').textContent = formatNum(m.pep, 3);
+    document.getElementById('kpi-adv').textContent = formatNum(m.adverse_media, 3);
     
     // Update secondary KPIs
     document.getElementById('kpi-matches').textContent = m.matches ?? '—';
@@ -231,6 +237,56 @@ function renderCompanyResults(data) {
         overall_risk: m.overall_risk ?? 0
     });
     renderSparkline();
+
+    // Render web results if present (supports both adapted and raw backend fields)
+    try {
+        const ws = data.web_search || data.categorized_results || {};
+        const cat = ws.categorized_results || ws;
+        const ci = (cat.company_info) || {};
+        const execs = Array.isArray(cat.executives) ? cat.executives : [];
+        const adv = Array.isArray(cat.adverse_media) ? cat.adverse_media : [];
+
+        const ciEl = document.getElementById('web-company-info');
+        if (ciEl) {
+            const website = ci.website || '—';
+            const name = ci.legal_name || '—';
+            const industry = ci.industry || '—';
+            const founded = ci.founded_year || '—';
+            ciEl.innerHTML = `
+                <div><strong>Name:</strong> ${name}</div>
+                <div><strong>Website:</strong> <a href="${website}" target="_blank" rel="noopener">${website}</a></div>
+                <div><strong>Industry:</strong> ${industry}</div>
+                <div><strong>Founded:</strong> ${founded}</div>
+            `;
+        }
+
+        const exEl = document.getElementById('web-executives');
+        if (exEl) {
+            if (execs.length === 0) exEl.textContent = '—'; else {
+                exEl.innerHTML = execs.slice(0, 6).map(e => {
+                    const n = e.name || 'Unknown';
+                    const p = e.position || '—';
+                    const u = e.source_url || e.url || '';
+                    return `<div><strong>${n}</strong> — ${p}${u ? ` • <a href="${u}" target="_blank" rel="noopener">source</a>` : ''}</div>`;
+                }).join('');
+            }
+        }
+
+        const adEl = document.getElementById('web-adverse');
+        if (adEl) {
+            if (adv.length === 0) adEl.textContent = '—'; else {
+                adEl.innerHTML = adv.slice(0, 6).map(a => {
+                    const h = a.headline || a.title || '—';
+                    const s = a.source || a.source_name || '';
+                    const d = a.date || a.published_date || '';
+                    const u = a.source_url || a.url || '';
+                    return `<div><strong>${h}</strong><div class="text-xs">${[s,d].filter(Boolean).join(' • ')}${u ? ` • <a href="${u}" target="_blank" rel="noopener">source</a>` : ''}</div></div>`;
+                }).join('');
+            }
+        }
+    } catch (e) {
+        console.warn('web results render skipped:', e);
+    }
 }
 
 // Render individual screening results
@@ -243,10 +299,10 @@ function renderIndividualResults(data) {
     const m = data.metrics || {};
     
     // Update KPI tiles
-    document.getElementById('kpi-overall').textContent = (m.overall_risk ?? '—').toFixed(3);
-    document.getElementById('kpi-sanc').textContent = (m.sanctions ?? '—').toFixed(3);
-    document.getElementById('kpi-pep').textContent = (m.pep ?? '—').toFixed(3);
-    document.getElementById('kpi-adv').textContent = (m.adverse_media ?? '—').toFixed(3);
+    document.getElementById('kpi-overall').textContent = formatNum(m.overall_risk, 3);
+    document.getElementById('kpi-sanc').textContent = formatNum(m.sanctions, 3);
+    document.getElementById('kpi-pep').textContent = formatNum(m.pep, 3);
+    document.getElementById('kpi-adv').textContent = formatNum(m.adverse_media, 3);
     
     // Update secondary KPIs
     document.getElementById('kpi-matches').textContent = m.matches ?? '—';
@@ -271,13 +327,16 @@ function renderIndividualResults(data) {
 function updateProviderStatus(providers) {
     const openaiStatus = document.getElementById('status-openai');
     const dilisenseStatus = document.getElementById('status-dilisense');
-    
+    if (!providers) return;
     if (openaiStatus) {
-        openaiStatus.style.background = providers.openai ? 'var(--success-500)' : 'var(--danger-500)';
+        const ok = (typeof providers === 'object' && providers.openai === true) ||
+                   (Array.isArray(providers) && providers.includes('openai'));
+        openaiStatus.style.background = ok ? 'var(--success-500)' : 'var(--danger-500)';
     }
-    
     if (dilisenseStatus) {
-        dilisenseStatus.style.background = providers.dilisense ? 'var(--success-500)' : 'var(--danger-500)';
+        const ok = (typeof providers === 'object' && providers.dilisense === true) ||
+                   (Array.isArray(providers) && providers.includes('dilisense'));
+        dilisenseStatus.style.background = ok ? 'var(--success-500)' : 'var(--danger-500)';
     }
 }
 

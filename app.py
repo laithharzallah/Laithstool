@@ -1044,7 +1044,7 @@ def enhanced_company_screening():
 
         # Run both services
         dilisense_results = run_async(dilisense_service.screen_company(company_name, country))
-        web_search_results = run_async(real_time_search_service.comprehensive_search(company=company_name, country=country))
+        web_search_results = run_async(real_time_search_service.comprehensive_search(company=company_name, country=country, domain=data.get("domain","")))
         
         # Merge and prefer Dilisense risk
         risk_score = dilisense_results.get("risk_score")
@@ -1072,6 +1072,34 @@ def enhanced_company_screening():
             "risk_score": risk_score,
             "risk_factors": dilisense_results.get("risk_factors", [])
         }
+
+        # Curated overrides merge (company-level safety net)
+        try:
+            from services.curated_overrides import CURATED_COMPANIES
+
+            def _norm(s: str) -> str:
+                return (s or "").strip().lower()
+
+            def _deep_merge(a, b):
+                if isinstance(a, dict) and isinstance(b, dict):
+                    out = dict(a)
+                    for k, v in b.items():
+                        out[k] = _deep_merge(out.get(k), v)
+                    return out
+                return b if b is not None else a
+
+            ck = (_norm(combined_results.get("company")), (combined_results.get("country") or "").upper())
+            if ck in CURATED_COMPANIES:
+                combined_results = _deep_merge(combined_results, CURATED_COMPANIES[ck])
+                ws = combined_results.setdefault("web_search", {})
+                meta = ws.setdefault("metadata", {})
+                prov_ws = ws.get("providers_used") or []
+                prov_meta = meta.get("providers_used") or []
+                prov = list(dict.fromkeys(["Curated"] + prov_ws + prov_meta))
+                ws["providers_used"] = prov
+                meta["providers_used"] = prov
+        except Exception as _cur_e:
+            print(f"⚠️ Curated merge skipped: {_cur_e}")
         
         # Persist a copy for inspection
         try:

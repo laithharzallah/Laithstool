@@ -80,9 +80,25 @@
         </form>
     </div>
 
-    <!-- Results Section -->
+    <!-- Results Section with Tabs -->
     <div class="surface p-6">
-        {% include "partials/_results.html" %}
+        <div class="border-b border-white/10 mb-4">
+            <nav class="flex gap-6">
+                <button id="tab-details" class="py-2 border-b-2 border-accent-blue text-accent-blue">Details</button>
+                <button id="tab-overall" class="py-2 text-[var(--text-1)] hover:text-white/90">Overall Results</button>
+            </nav>
+        </div>
+
+        <!-- Details Panel (existing renderer) -->
+        <div id="panel-details">
+            {% include "partials/_results.html" %}
+        </div>
+
+        <!-- Overall Results Panel (aggregated raw response) -->
+        <div id="panel-overall" class="hidden">
+            <div class="text-sm text-[var(--text-1)] mb-2">Complete API Response</div>
+            <pre id="overall-json" class="bg-[var(--bg-2)] p-4 rounded-xl overflow-auto text-sm leading-relaxed">—</pre>
+        </div>
     </div>
 </section>
 
@@ -113,10 +129,19 @@ form.addEventListener('submit', async (e) => {
     showSkeleton(true);
     
     try {
-        const res = await fetch('/api/screening/company', {
+        // Build API payload to match backend expectations
+        const apiBody = {
+            company_name: payload.companyName,
+            country: (payload.country || '').trim(),
+            domain: (payload.domain || '').trim(),
+            screening_level: 'advanced'
+        };
+
+        const res = await fetch('/api/enhanced-screen', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
+            credentials: 'include',
+            body: JSON.stringify(apiBody)
         });
         
         const data = await res.json();
@@ -126,7 +151,41 @@ form.addEventListener('submit', async (e) => {
             return;
         }
         
-        renderCompanyResults(data);
+        // Adapt backend response to UI renderer expectations
+        const sancHits = Number(((data.dilisense || {}).sanctions || {}).total_hits || 0);
+        const pepHits  = Number(((data.dilisense || {}).pep || {}).total_hits || 0);
+        // Prefer Dilisense adverse count; fallback to web adverse items count
+        const webCat = (((data.web_search || {}).categorized_results) || {});
+        const webAdvCount = Array.isArray(webCat.adverse_media) ? webCat.adverse_media.length : 0;
+        const webExecCount = Array.isArray(webCat.executives) ? webCat.executives.length : 0;
+        const advHits  = Number(((data.dilisense || {}).adverse_media || {}).total_hits || 0) || webAdvCount;
+        const riskScore = Number(data.risk_score || 0);
+
+        const adapted = {
+            metrics: {
+                overall_risk: Math.max(0, Math.min(1, riskScore / 100)),
+                sanctions: sancHits > 0 ? 1 : 0,
+                pep: pepHits > 0 ? 1 : 0,
+                adverse_media: advHits > 0 ? 1 : 0,
+                // Include web findings to avoid all-zero KPIs when compliance data is empty
+                matches: (sancHits + pepHits + advHits + webExecCount + webAdvCount),
+                alerts: sancHits + pepHits,
+            },
+            entity: { country: data.country || '' },
+            ts: data.timestamp || new Date().toISOString(),
+            ai_summary: { commentary: 'Screening completed.' },
+            providers: { openai: true, dilisense: true },
+        };
+
+        // Save full response and show in Overall tab
+        try {
+            window.__last_api__ = data;
+            const overallEl = document.getElementById('overall-json');
+            if (overallEl) overallEl.textContent = JSON.stringify(data, null, 2);
+            showPanel('overall');
+        } catch (_) {}
+
+        renderCompanyResults(adapted);
         toast('Screening completed successfully', 'success');
         
     } catch (error) {
@@ -142,5 +201,30 @@ document.getElementById('btnQueue').addEventListener('click', () => {
 });
 
 document.getElementById('btnExport').addEventListener('click', exportReport);
+
+// Simple tabs for Details / Overall Results
+const tabDetails = document.getElementById('tab-details');
+const tabOverall = document.getElementById('tab-overall');
+const panelDetails = document.getElementById('panel-details');
+const panelOverall = document.getElementById('panel-overall');
+
+function showPanel(which) {
+    const isOverall = which === 'overall';
+    panelOverall.classList.toggle('hidden', !isOverall);
+    panelDetails.classList.toggle('hidden', isOverall);
+    // styling
+    if (isOverall) {
+        tabOverall.classList.add('border-b-2','border-accent-blue','text-accent-blue');
+        tabDetails.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
+        tabDetails.classList.add('text-[var(--text-1)]');
+    } else {
+        tabDetails.classList.add('border-b-2','border-accent-blue','text-accent-blue');
+        tabOverall.classList.remove('border-b-2','border-accent-blue','text-accent-blue');
+        tabOverall.classList.add('text-[var(--text-1)]');
+    }
+}
+
+tabDetails.addEventListener('click', () => showPanel('details'));
+tabOverall.addEventListener('click', () => showPanel('overall'));
 </script>
 {% endblock %}

@@ -1,3 +1,6 @@
+
+
+
 {% extends "intelligence_base.html" %}
 
 {% block content %}
@@ -543,6 +546,15 @@
                             <div class="mb-8">
                                 <h5 class="font-medium text-gray-400 mb-4 text-lg border-b border-gray-400/30 pb-2">Data Sources & Methodology</h5>
                                 <div class="space-y-3">
+                                    <!-- Live Google Search (CSE) -->
+                                    <div class="mb-6">
+                                        <h6 class="font-medium text-white/70 mb-2">Live Google Search</h6>
+                                        <div class="glass-panel p-4">
+                                            <script async src="https://cse.google.com/cse.js?cx=877f37933f2584660"></script>
+                                            <div class="gcse-search"></div>
+                                        </div>
+                                    </div>
+
                                     <div><strong class="text-white/80">Data Sources Used:</strong></div>
                                     <div class="flex flex-wrap gap-2">
                                         <template x-for="source in results.data_sources" :key="source">
@@ -884,17 +896,20 @@ function companyScreening() {
             });
             
             try {
-                // Start the screening process
+                // Start the screening process with credentials and a hard timeout
+                const controller = new AbortController();
+                const t = setTimeout(() => controller.abort(), 60000);
                 const response = await fetch('/api/enhanced-screen', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({
                         company_name: this.form.companyName,
                         country: this.form.country,
+                        domain: this.form.domain,
                         screening_level: 'advanced'
-                    })
+                    }),
+                    signal: controller.signal
                 });
                 
                 if (!response.ok) {
@@ -912,6 +927,8 @@ function companyScreening() {
                 alert('Screening failed: ' + error.message);
             } finally {
                 this.isScreening = false;
+                // ensure any timeout is cleared
+                try { clearTimeout(t); } catch (e) {}
             }
         },
         
@@ -944,7 +961,7 @@ function companyScreening() {
                 
                 // Risk assessment
                 overall_risk_level: data.overall_risk_level || 'Low',
-                risk_score: data.risk_score || 0,
+                risk_score: Number.isFinite(Number(data.risk_score)) ? Number(data.risk_score) : 0,
                 risk_factors: data.risk_factors || []
             };
             
