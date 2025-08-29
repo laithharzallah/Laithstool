@@ -490,6 +490,14 @@ class RealTimeSearchService:
                     data = {}
                 clean = prune_to_schema(data, schema)
                 total_found = self._count_for_intent(intent, clean)
+                
+                # If LLM returned mostly nulls, use fallback data
+                if self._is_mostly_null(clean) and (google_hits or serper_results):
+                    print(f"⚠️ LLM returned nulls for {intent}, using fallback data")
+                    fallback_data = self._create_fallback_data(intent, company, google_hits + serper_results)
+                    clean = prune_to_schema(fallback_data, schema)
+                    total_found = self._count_for_intent(intent, clean)
+                
                 print("✅ GPT-4o structured response parsed")
                 providers = []
                 if google_hits: providers.append("google_cse")
@@ -498,8 +506,17 @@ class RealTimeSearchService:
                 return {"intent": intent, "results": clean, "total_found": total_found, "providers": providers}
             except Exception as e:
                 print(f"⚠️ LLM structuring failed for {intent}: {e}")
-                clean = prune_to_schema({}, schema)
-                return {"intent": intent, "results": clean, "total_found": 0, "providers": [f"serper:{len(serper_results)}"]}
+                # Use fallback data instead of empty schema
+                if google_hits or serper_results:
+                    fallback_data = self._create_fallback_data(intent, company, google_hits + serper_results)
+                    clean = prune_to_schema(fallback_data, schema)
+                    providers = []
+                    if google_hits: providers.append("google_cse")
+                    if serper_results: providers.append("serper")
+                    return {"intent": intent, "results": clean, "total_found": len(google_hits + serper_results), "providers": providers}
+                else:
+                    clean = prune_to_schema({}, schema)
+                    return {"intent": intent, "results": clean, "total_found": 0, "providers": []}
 
             # Create ChatGPT-5 search prompt for this intent
             if intent == "company_profile":
@@ -1475,6 +1492,102 @@ Return your response in JSON format.
         if intent == "ownership":
             return 1 if clean.get("ownership_structure") else 0
         return 0
+
+    def _is_mostly_null(self, data: Dict[str, Any]) -> bool:
+        """Check if LLM response is mostly null/empty"""
+        def count_nulls(obj):
+            if isinstance(obj, dict):
+                return sum(1 for v in obj.values() if v is None) + sum(count_nulls(v) for v in obj.values() if v is not None)
+            elif isinstance(obj, list):
+                return sum(count_nulls(item) for item in obj)
+            else:
+                return 1 if obj is None else 0
+        
+        def count_total(obj):
+            if isinstance(obj, dict):
+                return len(obj) + sum(count_total(v) for v in obj.values() if v is not None)
+            elif isinstance(obj, list):
+                return len(obj) + sum(count_total(item) for item in obj)
+            else:
+                return 1
+        
+        total = count_total(data)
+        nulls = count_nulls(data)
+        return total > 0 and (nulls / total) > 0.7  # 70% null = mostly null
+
+    def _create_fallback_data(self, intent: str, company: str, hits: List[Dict]) -> Dict[str, Any]:
+        """Create fallback structured data from raw search hits"""
+        if intent == "company_profile" and hits:
+            first_hit = hits[0]
+            return {
+                "company_info": {
+                    "legal_name": company,
+                    "website": first_hit.get("url"),
+                    "business_description": first_hit.get("snippet"),
+                    "founded_year": None,
+                    "headquarters": None,
+                    "industry": None,
+                    "registration_status": None,
+                    "entity_type": None
+                }
+            }
+        elif intent == "executives" and hits:
+            return {
+                "executives": [{
+                    "name": f"Executive from {hit.get('source', 'search')}",
+                    "position": "Leadership",
+                    "company": company,
+                    "background": hit.get("snippet"),
+                    "source_url": hit.get("url"),
+                    "source": hit.get("source")
+                } for hit in hits[:5]]
+            }
+        elif intent == "adverse_media" and hits:
+            return {
+                "adverse_media": [{
+                    "headline": hit.get("title"),
+                    "summary": hit.get("snippet"),
+                    "date": hit.get("date"),
+                    "source": hit.get("source"),
+                    "severity": "Medium",
+                    "category": "media",
+                    "source_url": hit.get("url")
+                } for hit in hits[:5]]
+            }
+        elif intent == "financials" and hits:
+            return {
+                "financial_data": {
+                    "revenue": None,
+                    "profit": None,
+                    "assets": None,
+                    "employees": None,
+                    "market_cap": None,
+                    "financial_year": None
+                },
+                "performance": {
+                    "growth_rate": None,
+                    "profitability": None,
+                    "financial_health": None
+                }
+            }
+        elif intent == "sanctions" and hits:
+            return {
+                "sanctions_status": {
+                    "ofac_status": None,
+                    "eu_status": None,
+                    "un_status": None,
+                    "overall_status": None
+                }
+            }
+        elif intent == "ownership" and hits:
+            return {
+                "ownership_structure": {
+                    "parent_company": None,
+                    "subsidiaries": [],
+                    "ownership_type": None
+                }
+            }
+        return {}
 
     async def quick_search(self, company: str, country: str = "") -> Dict[str, Any]:
         """Quick search for basic company information using real internet data + ChatGPT-5 analysis"""
