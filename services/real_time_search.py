@@ -16,6 +16,7 @@ import re
 from dotenv import load_dotenv
 from services.helpers.json_guard import force_json, prune_to_schema
 from services.google_search import GoogleSearch
+from services.google_cse import google_cse_search, GoogleCSEError, map_cse_items_to_adverse_media, map_cse_items_to_executives, map_cse_items_to_company_info
 
 # Load environment variables (development or if .env exists)
 if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
@@ -308,17 +309,63 @@ class RealTimeSearchService:
             serper_results: List[Dict[str, Any]] = []
             google_hits: List[Dict[str, Any]] = []
             try:
-                # Prefer Google if configured and query is valid
+                # Use new robust Google CSE client
                 gq = query.strip()
-                if len(gq) >= 3 and getattr(self.google, "api_key", None) and getattr(self.google, "cx", None):
+                if len(gq) >= 3:
                     print(f"🔍 Google CSE query: '{gq[:50]}...'")
-                    google_hits = await self.google.search(gq, num=10)
-                    if google_hits:
-                        print(f"✅ Google CSE returned {len(google_hits)} results")
-                    else:
-                        print("⚠️ Google CSE returned 0 results")
+                    
+                    # Try multiple query variations for better coverage
+                    cse_queries = [gq]
+                    if intent == "executives":
+                        cse_queries.append(f"{company} leadership team executives")
+                    elif intent == "adverse_media":
+                        cse_queries.append(f"{company} controversy scandal lawsuit")
+                    
+                    for cse_query in cse_queries:
+                        try:
+                            cse_data = google_cse_search(
+                                cse_query,
+                                num=10,
+                                gl=cc.lower() if cc else "sa",
+                                lr="lang_en"
+                            )
+                            items = cse_data.get("items", [])
+                            if items:
+                                # Map to our format based on intent
+                                if intent == "adverse_media":
+                                    google_hits.extend(map_cse_items_to_adverse_media(items))
+                                elif intent == "executives":
+                                    google_hits.extend(map_cse_items_to_executives(items))
+                                elif intent == "company_profile":
+                                    mapped_info = map_cse_items_to_company_info(items)
+                                    # Convert to search result format
+                                    google_hits.append({
+                                        "title": f"{company} Company Profile",
+                                        "url": mapped_info.get("website", ""),
+                                        "snippet": mapped_info.get("business_description", ""),
+                                        "source": "google_cse",
+                                        "date": None
+                                    })
+                                else:
+                                    # Generic mapping
+                                    for item in items:
+                                        google_hits.append({
+                                            "title": item.get("title", ""),
+                                            "url": item.get("link", ""),
+                                            "snippet": item.get("snippet", ""),
+                                            "source": "google_cse",
+                                            "date": None
+                                        })
+                                print(f"✅ Google CSE returned {len(items)} results for '{cse_query[:30]}...'")
+                                break  # Stop after first successful query
+                        except GoogleCSEError as e:
+                            print(f"⚠️ Google CSE query '{cse_query[:30]}...' failed: {e}")
+                            continue
+                    
+                    if not google_hits:
+                        print("⚠️ All Google CSE queries failed")
                 else:
-                    print(f"⚠️ Google CSE skipped: query too short or keys missing")
+                    print(f"⚠️ Google CSE skipped: query too short")
             except Exception as _ge:
                 print(f"⚠️ Google CSE failed (falling back to Serper): {_ge}")
             if self.serper_api_key:
@@ -402,8 +449,8 @@ class RealTimeSearchService:
                 total_found = self._count_for_intent(intent, clean)
                 print("✅ GPT-4o structured response parsed")
                 providers = []
-                if google_hits: providers.append("google")
-                if serper_results: providers.append(f"serper:{len(serper_results)}")
+                if google_hits: providers.append("google_cse")
+                if serper_results: providers.append("serper")
                 providers.append("gpt-4o")
                 return {"intent": intent, "results": clean, "total_found": total_found, "providers": providers}
             except Exception as e:
