@@ -155,13 +155,32 @@ class DARTAdapter:
         if not (self.api_key and corp_code):
             return {"error": "API key or corp_code missing"}
 
-        # basics
+        # basics - try company.json endpoint
         basic_js = self._get("company.json", corp_code=corp_code)
+        logger.info(f"Company.json response: {basic_js}")
+
         basic_row = {}
         if isinstance(basic_js.get("list"), list) and basic_js["list"]:
             basic_row = basic_js["list"][0]
+            logger.info(f"Found basic info from list[0]: {basic_row}")
         elif isinstance(basic_js.get("company"), dict):
             basic_row = basic_js["company"]
+            logger.info(f"Found basic info from company: {basic_row}")
+        else:
+            logger.warning(f"No basic info found in response: {basic_js}")
+
+        # If basic info is empty, try getting it from the list endpoint
+        if not basic_row or not any(basic_row.values()):
+            logger.info("Basic info empty, trying to get from list.json...")
+            list_js = self._get("list.json", corp_code=corp_code, bgn_de="20240101", end_de="20241231", page_no=1, page_count=1)
+            if list_js.get("list") and len(list_js["list"]) > 0:
+                list_item = list_js["list"][0]
+                basic_row = {
+                    "corp_name": list_item.get("corp_name"),
+                    "stock_code": list_item.get("stock_code"),
+                    "corp_code": corp_code
+                }
+                logger.info(f"Using basic info from list.json: {basic_row}")
 
         # ≥5% holders
         major_js = self._get("majorstock.json", corp_code=corp_code)

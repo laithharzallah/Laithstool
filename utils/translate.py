@@ -39,25 +39,34 @@ def translate_company_data(info: dict) -> dict:
 
     # Translate basic info fields
     basic = translated_info.get("basic_info", {})
+    print(f"DEBUG: Translating basic info: {basic}")
     if basic.get("corp_name"):
         basic["corp_name_eng"] = tr(basic["corp_name"])
+        print(f"Translated corp_name: {basic['corp_name']} -> {basic['corp_name_eng']}")
     if basic.get("ceo_nm"):
         basic["ceo_nm_eng"] = tr(basic["ceo_nm"])
+        print(f"Translated ceo_nm: {basic['ceo_nm']} -> {basic['ceo_nm_eng']}")
     if basic.get("adr"):
         basic["adr_eng"] = tr(basic["adr"])
+        print(f"Translated adr: {basic['adr']} -> {basic['adr_eng']}")
 
     # Translate shareholders
     shareholders = translated_info.get("shareholders", [])
+    print(f"DEBUG: Translating {len(shareholders)} shareholders")
     for sh in shareholders:
         if sh.get("holder"):
             sh["holder_eng"] = tr(sh["holder"])
+            print(f"Translated shareholder: {sh['holder']} -> {sh['holder_eng']}")
 
     # Translate executives
     executives = translated_info.get("executives", [])
+    print(f"DEBUG: Translating {len(executives)} executives")
     for exec in executives:
         if exec.get("name"):
             exec["name_eng"] = tr(exec["name"])
+            print(f"Translated executive name: {exec['name']} -> {exec['name_eng']}")
         if exec.get("relation"):
             exec["relation_eng"] = tr(exec["relation"])
+            print(f"Translated executive relation: {exec['relation']} -> {exec['relation_eng']}")
 
     return translated_info

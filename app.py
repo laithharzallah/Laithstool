@@ -547,7 +547,11 @@ def api_dart_search():
                 # Get complete company information
                 complete_info = dart_adapter.get_complete_company_info(corp_code)
                 if complete_info and 'error' not in complete_info:
-                    company['detailed_info'] = complete_info
+                    # Translate Korean fields to English
+                    from utils.translate import translate_company_data
+                    translated_info = translate_company_data(complete_info)
+                    logger.info(f"Translation completed for {corp_code}")
+                    company['detailed_info'] = translated_info
 
             detailed_results.append(company)
 
