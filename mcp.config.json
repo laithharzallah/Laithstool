@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "risklytics": {
+      "command": "python",
+      "args": ["-m", "risklytics_mcp.server"],
+      "env": {
+        "DILISENSE_API_KEY": "${env:DILISENSE_API_KEY}",
+        "DILISENSE_BASE_URL": "${env:DILISENSE_BASE_URL}",
+        "ORBIS_API_KEY": "${env:ORBIS_API_KEY}",
+        "DART_API_KEY": "${env:DART_API_KEY}",
+        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}",
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}
+
+
