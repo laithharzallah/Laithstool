@@ -7,6 +7,7 @@ import os
 import requests
 import logging
 from typing import List, Dict, Any, Optional
+import io, zipfile, xml.etree.ElementTree as ET
 
 logger = logging.getLogger("dart-adapter")
 
@@ -61,10 +62,67 @@ class DARTAdapter:
                          path, js.get("status"), js.get("message"), params)
         return js
 
+    def _lookup_corp_codes_via_zip(self, query: str) -> List[Dict[str, Any]]:
+        """Fallback: download corpCode.xml ZIP once and search locally.
+
+        Matches by partial corp_name (ko/en) or stock_code tokens.
+        """
+        if not self.api_key or not query.strip():
+            return []
+
+        try:
+            r = requests.get(f"{self.base_url}/corpCode.xml", params={"crtfc_key": self.api_key}, timeout=20)
+            r.raise_for_status()
+            with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+                xml_name = zf.namelist()[0]
+                xml_bytes = zf.read(xml_name)
+            root = ET.fromstring(xml_bytes)
+        except Exception as e:
+            logger.error("Failed downloading/parsing corpCode.zip: %s", e)
+            return []
+
+        q = query.strip().lower().replace(" ", "")
+        # Common aliases for SK hynix
+        aliases = {q}
+        if "sk" in q and "hynix" in q:
+            aliases.update(["skhynix", "에스케이하이닉스", "하이닉스", "sk하이닉스"]) 
+
+        results: List[Dict[str, Any]] = []
+        for corp in root.findall('.//list'):
+            cc = (corp.findtext('corp_code') or '').strip()
+            name_ko = (corp.findtext('corp_name') or '').strip()
+            name_en = (corp.findtext('corp_name_eng') or '').strip()
+            stock = (corp.findtext('stock_code') or '').strip()
+            key_ko = name_ko.lower().replace(" ", "")
+            key_en = name_en.lower().replace(" ", "")
+            if not cc:
+                continue
+            match = False
+            if any(a in key_ko for a in aliases) or any(a in key_en for a in aliases):
+                match = True
+            if q and stock and q in stock:
+                match = True
+            if match:
+                results.append({
+                    "name": name_ko or name_en or "Unknown",
+                    "corp_code": cc,
+                    "stock_code": stock,
+                    "country": "KR",
+                    "source": "DART",
+                    "entity_type": "COMPANY",
+                    "match_type": "corpCode.xml"
+                })
+                if len(results) >= 5:
+                    break
+        return results
+
     def search_company(self, company_name: str) -> List[Dict[str, Any]]:
         """Targeted search via filings; retries in Korean if first pass empty."""
         if not (self.api_key and company_name.strip()):
             return []
+
+        def _norm(s: str) -> str:
+            return (s or "").lower().replace(" ", "").replace(".", "").replace("-", "")
 
         def _search_once(name: str) -> List[Dict[str, Any]]:
             from datetime import datetime, timedelta
@@ -99,16 +157,28 @@ class DARTAdapter:
                     break
             return out
 
-        # 1) First try as-is (works if you already used Korean)
+        # 1) First try as-is (works if you already used Korean). If low-quality, fall back.
         out = _search_once(company_name)
         if out:
-            return out
+            qn = _norm(company_name)
+            has_good = any(qn in _norm(item.get("name")) for item in out)
+            if has_good:
+                return out
 
         # 2) If empty and the name looks English/Arabic/etc., translate to Korean and retry
         ko = _translate_to_korean(company_name)
         if ko and ko != company_name:
             logger.info("Retrying DART search with Korean name: %s", ko)
             out = _search_once(ko)
+            if out:
+                qn = _norm(ko)
+                has_good = any(qn in _norm(item.get("name")) for item in out)
+                if has_good:
+                    return out
+
+        # 3) Final fallback: corpCode.zip directory search
+        logger.info("Falling back to corpCode.xml lookup for: %s", company_name)
+        out = self._lookup_corp_codes_via_zip(company_name)
         return out
 
     def search_filings(self, corp_code: str, years_back: int = 5) -> List[Dict[str, Any]]:
@@ -217,25 +287,25 @@ class DARTAdapter:
                 "after": it.get("sp_stock_lmp_cnt"),              # shares after change
             })
 
-        # financials (single-account, latest full year report)
-        # OPTIMIZATION: Try current year first, then fallback to previous years
+        # financials: fetch multiple years to avoid 3-month artifact
         financials = []
-        years_to_try = [year] + [str(int(year) - i) for i in range(1, 3)]  # Current year + 2 previous
+        try:
+            current = int(year)
+        except Exception:
+            from datetime import datetime
+            current = datetime.now().year
 
-        for try_year in years_to_try:
-            logger.info(f"Trying financials for year {try_year}...")
+        # collect up to 5 years (current -> current-4)
+        for try_year in range(current, current - 5, -1):
             fin_js = self._get(
                 "fnlttSinglAcnt.json",
                 corp_code=corp_code,
-                bsns_year=try_year,
-                reprt_code="11011"   # 11011 = business report (annual)
+                bsns_year=str(try_year),
+                reprt_code="11011"
             )
-            financials = fin_js.get("list") or []
-            if financials:
-                logger.info(f"✅ Found financials for year {try_year}")
-                break
-            else:
-                logger.info(f"❌ No financials for year {try_year}, trying next year...")
+            rows = fin_js.get("list") or []
+            if rows:
+                financials.extend(rows)
 
         return {
             "basic_info": {
