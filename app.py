@@ -552,17 +552,40 @@ def api_dart_search():
         # Search Korean companies using DART registry
         companies = dart_adapter.search_company(company_name)
 
-        # If we found companies, get complete data (keep it fast: only first result, no translation)
+        # If we found companies, fetch complete data concurrently (fast, partial ok)
         detailed_results = []
-        for company in companies[:1]:  # Keep response fast: only top 1 result
-            corp_code = company.get('corp_code')
-            if corp_code:
-                # Get complete company information
-                complete_info = dart_adapter.get_complete_company_info(corp_code)
-                if complete_info and 'error' not in complete_info:
-                    company['detailed_info'] = complete_info
+        try:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            max_items = min(3, len(companies))
+            with ThreadPoolExecutor(max_workers=max_items) as pool:
+                future_map = {}
+                for c in companies[:max_items]:
+                    cc = c.get('corp_code')
+                    if not cc:
+                        detailed_results.append(c)
+                        continue
+                    fut = pool.submit(dart_adapter.get_complete_company_info, cc)
+                    future_map[fut] = c
 
-            detailed_results.append(company)
+                for fut in as_completed(future_map, timeout=10):
+                    base_company = future_map[fut]
+                    try:
+                        info = fut.result(timeout=1)
+                        if info and 'error' not in info:
+                            # Optional: translate concise fields without blocking
+                            try:
+                                from utils.translate import translate_company_data
+                                info = translate_company_data(info)
+                            except Exception:
+                                pass
+                            base_company['detailed_info'] = info
+                    except Exception as _e:
+                        # Keep basic company if details failed/slow
+                        pass
+                    detailed_results.append(base_company)
+        except Exception:
+            # Fallback to basic list if threading fails
+            detailed_results = companies[:3]
 
         return jsonify({
             "success": True,

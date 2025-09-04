@@ -424,7 +424,8 @@ document.getElementById('dart-search-form').addEventListener('submit', async fun
         if (response.ok && data.companies && data.companies.length > 0) {
             displayResults(data.companies, companyName);
         } else {
-            showNoResults(companyName);
+            const reason = (data && data.error) ? ` — ${data.error}` : '';
+            showError(`No results${reason}`);
         }
 
     } catch (error) {
