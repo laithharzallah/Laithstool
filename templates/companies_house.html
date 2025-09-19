@@ -24,10 +24,71 @@
     <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 p-4 rounded-lg" x-text="error"></div>
   </template>
 
-  <div class="metric-card">
-    <h3 class="font-semibold mb-2">Results</h3>
-    <pre class="text-xs overflow-auto max-h-[60vh]" x-text="json"></pre>
-  </div>
+  <template x-if="mode==='search'">
+    <div class="metric-card">
+      <h3 class="font-semibold mb-3">Matches</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <template x-for="it in searchItems" :key="it.company_number">
+          <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <div class="font-medium" x-text="it.title"></div>
+            <div class="text-xs text-gray-500 mt-1">Company No: <span x-text="it.company_number"></span></div>
+            <button class="btn-secondary mt-3" @click="companyNumber=it.company_number; run()">Open</button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <template x-if="mode==='detail'">
+    <div class="space-y-6">
+      <div class="metric-card">
+        <h3 class="font-semibold mb-2">Company Profile</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div><span class="text-gray-500">Name:</span> <span x-text="profile?.company_name || '—'"></span></div>
+          <div><span class="text-gray-500">Status:</span> <span x-text="profile?.company_status || '—'"></span></div>
+          <div><span class="text-gray-500">Type:</span> <span x-text="profile?.type || '—'"></span></div>
+          <div class="md:col-span-3"><span class="text-gray-500">Address:</span> <span x-text="(profile?.registered_office_address && Object.values(profile.registered_office_address).filter(Boolean).join(', ')) || '—'"></span></div>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">Key Executives (Officers)</h3>
+          <span class="text-xs text-gray-500" x-text="officers.length + ' total'"></span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <template x-for="o in officers" :key="o?.links?.officer?.appointments">
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <div class="font-medium" x-text="o?.name || '—'"></div>
+              <div class="text-xs text-gray-500 mt-1" x-text="o?.officer_role || '—'"></div>
+              <div class="text-xs text-gray-400" x-text="(o?.appointed_on ? ('Appointed: ' + o.appointed_on) : '')"></div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">Persons with Significant Control (Shareholders/UBOs)</h3>
+          <span class="text-xs text-gray-500" x-text="psc.length + ' total'"></span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <template x-for="p in psc" :key="p?.etag">
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <div class="font-medium" x-text="p?.name || p?.ceased?.name || p?.natures_of_control?.join(', ') || '—'"></div>
+              <div class="text-xs text-gray-500 mt-1" x-text="(p?.natures_of_control || []).join(', ')"></div>
+              <div class="text-xs text-gray-400" x-text="p?.notified_on ? ('Notified: ' + p.notified_on) : ''"></div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <h3 class="font-semibold mb-2">Raw</h3>
+        <pre class="text-xs overflow-auto max-h-[40vh]" x-text="json"></pre>
+      </div>
+    </div>
+  </template>
 </div>
 
 <script>
@@ -37,9 +98,19 @@ function ukch() {
     companyNumber: '',
     error: '',
     json: '',
+    mode: '',
+    searchItems: [],
+    profile: null,
+    officers: [],
+    psc: [],
     async run() {
       this.error = '';
       this.json = '';
+      this.mode = '';
+      this.searchItems = [];
+      this.profile = null;
+      this.officers = [];
+      this.psc = [];
       try {
         const body = {};
         if (this.companyNumber.trim()) body.company_number = this.companyNumber.trim();
@@ -53,6 +124,15 @@ function ukch() {
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error || 'Request failed');
         this.json = JSON.stringify(data, null, 2);
+        if (data.mode === 'search') {
+          this.mode = 'search';
+          this.searchItems = data.items || [];
+        } else {
+          this.mode = 'detail';
+          this.profile = data.profile || {};
+          this.officers = (data.officers && data.officers.items) || [];
+          this.psc = (data.psc && data.psc.items) || [];
+        }
       } catch (e) {
         this.error = e.message;
       }
