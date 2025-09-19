@@ -27,12 +27,17 @@ except ImportError:
     WHATSAPP_AVAILABLE = False
     whatsapp_registry_service = None
 
-# Load environment variables
-if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
-load_dotenv()
-    print("✅ Environment variables loaded from .env file")
-else:
-    print("🌍 Production mode: using system environment variables")
+# Load environment variables (robust to avoid indentation issues in prod)
+try:
+    _env_mode = os.environ.get('FLASK_ENV', '').lower()
+    _use_dotenv = (_env_mode == 'development') or os.path.exists('.env')
+    if _use_dotenv:
+        load_dotenv()
+        print("✅ Environment variables loaded from .env file")
+    else:
+        print("🌍 Production mode: using system environment variables")
+except Exception as _e:
+    print(f"⚠️ Env setup warning: {_e}")
 
 # Validate critical environment variables
 critical_vars = ['DART_API_KEY']
