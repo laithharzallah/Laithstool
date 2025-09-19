@@ -11,3 +11,8 @@ try:
 except Exception:
     # Optional until created
     pass
+
+try:
+    from .sec_edgar import SecEdgarAdapter  # noqa: F401
+except Exception:
+    pass
