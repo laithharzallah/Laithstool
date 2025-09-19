@@ -1,0 +1,56 @@
+{% extends "_base.html" %}
+{% block page_title %}SEC EDGAR{% endblock %}
+{% block page_description %}Pull submissions and latest DEF 14A index{% endblock %}
+{% block content %}
+<div x-data="sec()" class="space-y-6">
+  <div class="metric-card">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="text-sm text-gray-500">CIK (10 digits)</label>
+        <input x-model="cik" class="input-field" placeholder="0000320193" />
+      </div>
+      <div class="flex items-end">
+        <button @click="run()" class="btn-primary w-full">Fetch</button>
+      </div>
+    </div>
+    <div class="mt-3 text-xs text-gray-500">Set SEC_USER_AGENT (e.g., "Risklytics/1.0 (you@example.com)").</div>
+  </div>
+
+  <template x-if="error">
+    <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 p-4 rounded-lg" x-text="error"></div>
+  </template>
+
+  <div class="metric-card">
+    <h3 class="font-semibold mb-2">Results</h3>
+    <pre class="text-xs overflow-auto max-h-[60vh]" x-text="json"></pre>
+  </div>
+</div>
+
+<script>
+function sec() {
+  return {
+    cik: '',
+    error: '',
+    json: '',
+    async run() {
+      this.error = '';
+      this.json = '';
+      try {
+        const body = { cik: this.cik.trim() };
+        const res = await fetch('/api/sec/company', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'Request failed');
+        this.json = JSON.stringify(data, null, 2);
+      } catch (e) {
+        this.error = e.message;
+      }
+    }
+  }
+}
+</script>
+{% endblock %}

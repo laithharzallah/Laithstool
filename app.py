@@ -29,7 +29,7 @@ except ImportError:
 
 # Load environment variables
 if os.environ.get('FLASK_ENV', '').lower() == 'development' or os.path.exists('.env'):
-    load_dotenv()
+load_dotenv()
     print("✅ Environment variables loaded from .env file")
 else:
     print("🌍 Production mode: using system environment variables")
@@ -61,12 +61,12 @@ PORT = int(os.getenv("PORT", "5000"))
 # Initialize OpenAI client only if key is available
 client = None
 if OPENAI_API_KEY:
-    try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
+try:
+    client = OpenAI(api_key=OPENAI_API_KEY)
         print("✅ OpenAI client initialized")
-    except Exception as e:
-        print(f"❌ Failed to initialize OpenAI client: {str(e)}")
-        client = None
+except Exception as e:
+    print(f"❌ Failed to initialize OpenAI client: {str(e)}")
+    client = None
 else:
     print("⚠️ OPENAI_API_KEY not found - some features will be limited")
     print("ℹ️ Set OPENAI_API_KEY in Render → Environment (not in .env)")
@@ -556,7 +556,7 @@ def api_dart_search():
         detailed_results = []
         try:
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            max_items = min(3, len(companies))
+            max_items = min(2, len(companies))
             with ThreadPoolExecutor(max_workers=max_items) as pool:
                 future_map = {}
                 for c in companies[:max_items]:
@@ -567,7 +567,7 @@ def api_dart_search():
                     fut = pool.submit(dart_adapter.get_complete_company_info, cc)
                     future_map[fut] = c
 
-                for fut in as_completed(future_map, timeout=10):
+                for fut in as_completed(future_map, timeout=6):
                     base_company = future_map[fut]
                     try:
                         info = fut.result(timeout=1)
@@ -638,11 +638,11 @@ def health_check():
         if not OPENAI_API_KEY or not client:
             raise RuntimeError("API key or client missing")
         _ = client.models.list()
-        health_status["components"]["openai"] = {
-            "status": "healthy",
-            "model": OPENAI_MODEL,
-            "message": "API connection successful"
-        }
+            health_status["components"]["openai"] = {
+                "status": "healthy",
+                "model": OPENAI_MODEL,
+                "message": "API connection successful"
+            }
     except Exception as e:
         health_status["components"]["openai"] = {
             "status": "error",
@@ -1209,6 +1209,107 @@ def dart_search():
     return render_template("dart_search.html",
                          env_name=os.environ.get('FLASK_ENV','development').capitalize(),
                          version="2.3.0")
+
+# ---------------- UK COMPANIES HOUSE ----------------
+@app.route("/companies-house")
+def companies_house_page():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    return render_template("companies_house.html",
+                          env_name=os.environ.get('FLASK_ENV','development').capitalize(),
+                          version="2.3.0")
+
+@app.route("/api/ukch/search", methods=["POST"])
+def api_ukch_search():
+    """Companies House: search by query or fetch by company number."""
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        query = (data.get('query') or '').strip()
+        company_number = (data.get('company_number') or '').strip()
+        include = data.get('include') or {}
+
+        from services.adapters.companies_house import CompaniesHouseAdapter
+        try:
+            ch = CompaniesHouseAdapter()
+        except Exception as e:
+            return jsonify({"error": f"Companies House init failed: {e}"}), 500
+
+        if query and not company_number:
+            res = ch.search_companies(query)
+            return jsonify({"success": True, "mode": "search", "items": res.get('items', []), "raw": res})
+
+        if not company_number:
+            return jsonify({"error": "Provide company_number or query"}), 400
+
+        out = {"company_number": company_number}
+        # Profile
+        if include.get('profile', True):
+            out['profile'] = ch.get_company_profile(company_number)
+        # Officers
+        if include.get('officers', True):
+            out['officers'] = ch.get_company_officers(company_number)
+        # PSC
+        if include.get('psc', True):
+            out['psc'] = ch.get_psc_list(company_number)
+            try:
+                out['psc_statements'] = ch.get_psc_statements(company_number)
+            except Exception:
+                pass
+
+        return jsonify({"success": True, **out})
+    except Exception as e:
+        logger.exception(f"UKCH API error: {e}")
+        return jsonify({"error": f"UK Companies House failed: {e}"}), 500
+
+
+# ---------------- US SEC EDGAR ----------------
+@app.route("/sec")
+def sec_page():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    return render_template("sec_edgar.html",
+                          env_name=os.environ.get('FLASK_ENV','development').capitalize(),
+                          version="2.3.0")
+
+@app.route("/api/sec/company", methods=["POST"])
+def api_sec_company():
+    """SEC EDGAR: fetch submissions and latest DEF 14A index if available."""
+    try:
+        payload = request.get_json(force=True, silent=True) or {}
+        cik = (payload.get('cik') or '').strip()
+        if not cik:
+            return jsonify({"error": "cik is required (10-digit, leading zeros ok)"}), 400
+
+        from services.adapters.sec_edgar import SecEdgarAdapter
+        edgar = SecEdgarAdapter()
+        subs = edgar.get_company_submissions(cik)
+        recent = (subs.get('filings') or {}).get('recent') or {}
+        forms = recent.get('form') or []
+        latest_def14a = None
+        filing_index = None
+        if 'DEF 14A' in forms:
+            try:
+                idx = forms.index('DEF 14A')
+                accession = (recent.get('accessionNumber') or [])[idx].replace('-', '')
+                filing_index = edgar.get_filing_index(cik, accession)
+                latest_def14a = {
+                    'accession': accession,
+                    'filingDate': (recent.get('filingDate') or [None])[idx],
+                    'primaryDoc': (recent.get('primaryDocument') or [None])[idx],
+                }
+            except Exception:
+                pass
+
+        return jsonify({
+            "success": True,
+            "cik": edgar.normalize_cik(cik),
+            "submissions": subs,
+            "latest_def14a": latest_def14a,
+            "filing_index": filing_index,
+        })
+    except Exception as e:
+        logger.exception(f"SEC API error: {e}")
+        return jsonify({"error": f"SEC EDGAR failed: {e}"}), 500
 
 @app.route("/whatsapp-test")
 def whatsapp_test():
