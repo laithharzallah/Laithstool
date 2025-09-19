@@ -4,7 +4,11 @@
 {% block content %}
 <div x-data="sec()" class="space-y-6">
   <div class="metric-card">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="md:col-span-2">
+        <label class="text-sm text-gray-500">Company name or ticker</label>
+        <input x-model="query" class="input-field" placeholder="Apple or AAPL" />
+      </div>
       <div>
         <label class="text-sm text-gray-500">CIK (10 digits)</label>
         <input x-model="cik" class="input-field" placeholder="0000320193" />
@@ -20,14 +24,29 @@
     <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 p-4 rounded-lg" x-text="error"></div>
   </template>
 
-  <template x-if="latest">
+  <template x-if="mode==='search'">
+    <div class="metric-card">
+      <h3 class="font-semibold mb-3">Matches</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <template x-for="it in items" :key="it.cik">
+          <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <div class="font-medium" x-text="it.title"></div>
+            <div class="text-xs text-gray-500">Ticker: <span x-text="it.ticker"></span> · CIK: <span x-text="it.cik"></span></div>
+            <button class="btn-secondary mt-3" @click="cik=it.cik; run()">Open</button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <template x-if="mode==='detail'">
     <div class="metric-card">
       <h3 class="font-semibold mb-2">Latest DEF 14A (Proxy)</h3>
-      <div class="text-sm">Accession: <span x-text="latest.accession"></span> · Date: <span x-text="latest.filingDate || '—'"></span></div>
+      <div class="text-sm">Accession: <span x-text="latest?.accession"></span> · Date: <span x-text="latest?.filingDate || '—'"></span></div>
       <div class="mt-2">
         <template x-if="index && index.directory">
           <div class="text-sm">
-            Primary document: <span x-text="latest.primaryDoc"></span>
+            Primary document: <span x-text="latest?.primaryDoc"></span>
             <div class="mt-2">
               <a class="text-primary-600 underline" :href="archiveUrl(cik, latest.accession, latest.primaryDoc)" target="_blank">Open DEF 14A document</a>
             </div>
@@ -47,9 +66,12 @@
 <script>
 function sec() {
   return {
+    query: '',
     cik: '',
     error: '',
     json: '',
+    mode: '',
+    items: [],
     latest: null,
     index: null,
     archiveUrl(cik, accession, filename) {
@@ -59,10 +81,14 @@ function sec() {
     async run() {
       this.error = '';
       this.json = '';
+      this.mode = '';
+      this.items = [];
       this.latest = null;
       this.index = null;
       try {
-        const body = { cik: this.cik.trim() };
+        const body = {};
+        if (this.cik.trim()) body.cik = this.cik.trim();
+        if (this.query.trim()) body.query = this.query.trim();
         const res = await fetch('/api/sec/company', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -72,8 +98,14 @@ function sec() {
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error || 'Request failed');
         this.json = JSON.stringify(data, null, 2);
-        this.latest = data.latest_def14a || null;
-        this.index = data.filing_index || null;
+        if (data.mode === 'search') {
+          this.mode = 'search';
+          this.items = data.items || [];
+        } else {
+          this.mode = 'detail';
+          this.latest = data.latest_def14a || null;
+          this.index = data.filing_index || null;
+        }
       } catch (e) {
         this.error = e.message;
       }

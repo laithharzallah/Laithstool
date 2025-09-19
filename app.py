@@ -1282,8 +1282,55 @@ def api_sec_company():
     try:
         payload = request.get_json(force=True, silent=True) or {}
         cik = (payload.get('cik') or '').strip()
+        query = (payload.get('query') or '').strip()
+
+        # Allow name/ticker search → map to CIK via SEC public tickers list
+        def _normalize_cik(val: str) -> str:
+            try:
+                return str(int(val)).zfill(10)
+            except Exception:
+                return ""
+
+        if not cik and query:
+            import time as _t
+            import requests as _rq
+            # simple in-memory cache
+            global _SEC_TICKERS_CACHE
+            try:
+                _SEC_TICKERS_CACHE
+            except NameError:
+                _SEC_TICKERS_CACHE = {"data": None, "ts": 0}
+            if not _SEC_TICKERS_CACHE["data"] or (_t.time() - _SEC_TICKERS_CACHE["ts"]) > 12*3600:
+                r = _rq.get("https://www.sec.gov/files/company_tickers.json", headers={"User-Agent": "Risklytics/1.0 (sec-lookup@risklytics.local)"}, timeout=12)
+                r.raise_for_status()
+                _SEC_TICKERS_CACHE = {"data": r.json(), "ts": _t.time()}
+            data = _SEC_TICKERS_CACHE["data"] or {}
+            q = query.lower()
+            items = []
+            try:
+                for obj in (data.values() if isinstance(data, dict) else data):
+                    title = (obj.get("title") or "").lower()
+                    ticker = (obj.get("ticker") or "").lower()
+                    if q in title or q == ticker:
+                        items.append({
+                            "title": obj.get("title"),
+                            "ticker": obj.get("ticker"),
+                            "cik": _normalize_cik(str(obj.get("cik_str")))
+                        })
+                        if len(items) >= 25:
+                            break
+            except Exception:
+                pass
+            if not items:
+                return jsonify({"success": True, "mode": "search", "items": []})
+            # If multiple, return matches for user to choose
+            if len(items) > 1:
+                return jsonify({"success": True, "mode": "search", "items": items})
+            # single match → proceed as detail using mapped cik
+            cik = items[0]["cik"]
+        
         if not cik:
-            return jsonify({"error": "cik is required (10-digit, leading zeros ok)"}), 400
+            return jsonify({"error": "Provide cik (10-digit) or query (name/ticker)"}), 400
 
         from services.adapters.sec_edgar import SecEdgarAdapter
         edgar = SecEdgarAdapter()
@@ -1307,6 +1354,7 @@ def api_sec_company():
 
         return jsonify({
             "success": True,
+            "mode": "detail",
             "cik": edgar.normalize_cik(cik),
             "submissions": subs,
             "latest_def14a": latest_def14a,
