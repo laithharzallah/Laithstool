@@ -643,11 +643,11 @@ def health_check():
         if not OPENAI_API_KEY or not client:
             raise RuntimeError("API key or client missing")
         _ = client.models.list()
-            health_status["components"]["openai"] = {
-                "status": "healthy",
-                "model": OPENAI_MODEL,
-                "message": "API connection successful"
-            }
+        health_status["components"]["openai"] = {
+            "status": "healthy",
+            "model": OPENAI_MODEL,
+            "message": "API connection successful"
+        }
     except Exception as e:
         health_status["components"]["openai"] = {
             "status": "error",
