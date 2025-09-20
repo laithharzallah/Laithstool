@@ -85,7 +85,10 @@
         </div>
       </div>
 
-      <div class="metric-card">
+      <div class="text-right">
+        <button class="btn-secondary text-xs" @click="showRaw=!showRaw">Toggle raw JSON</button>
+      </div>
+      <div class="metric-card" x-show="showRaw" x-cloak>
         <h3 class="font-semibold mb-2">Raw</h3>
         <pre class="text-xs overflow-auto max-h-[40vh]" x-text="json"></pre>
       </div>
@@ -100,6 +103,7 @@ function ukch() {
     companyNumber: '',
     error: '',
     json: '',
+    showRaw: false,
     mode: '',
     searchItems: [],
     profile: null,

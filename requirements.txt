@@ -21,3 +21,7 @@ pydantic==2.8.2
 tenacity==8.5.0
 tldextract>=5.1.2
 # rapidfuzz==3.9.7  # Commented out - heavy dependency, uncomment if needed
+
+# Parsing for SEC proxy extraction
+beautifulsoup4==4.12.3
+lxml==5.3.0

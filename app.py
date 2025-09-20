@@ -1353,6 +1353,15 @@ def api_sec_company():
                     'filingDate': (recent.get('filingDate') or [None])[idx],
                     'primaryDoc': (recent.get('primaryDocument') or [None])[idx],
                 }
+                # Try quick extraction of executives and major holders
+                try:
+                    primary_doc = latest_def14a['primaryDoc']
+                    if primary_doc:
+                        quick = edgar.extract_major_holders_and_executives_from_proxy(cik, accession, primary_doc)
+                    else:
+                        quick = {"executives": [], "holders": []}
+                except Exception:
+                    quick = {"executives": [], "holders": []}
             except Exception:
                 pass
 
@@ -1363,6 +1372,7 @@ def api_sec_company():
             "submissions": subs,
             "latest_def14a": latest_def14a,
             "filing_index": filing_index,
+            "quick_extract": quick if 'quick' in locals() else {"executives": [], "holders": []},
         })
     except Exception as e:
         logger.exception(f"SEC API error: {e}")

@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import requests
 
@@ -77,6 +77,68 @@ class SecEdgarAdapter:
     def get_archive_document(self, cik: str, accession_no_nohyphen: str, filename: str) -> Dict[str, Any]:
         cik_int = int(cik)
         return self._get(f"/Archives/edgar/data/{cik_int}/{accession_no_nohyphen}/{filename}")
+
+    def extract_major_holders_and_executives_from_proxy(self, cik: str, accession: str, primary_doc: str) -> Dict[str, List[Dict[str, str]]]:
+        """Best-effort parse of DEF 14A HTML to extract names and potential ownership lines.
+        This is heuristic and may miss cases; intended to surface key info quickly.
+        """
+        import re
+        from bs4 import BeautifulSoup
+        # Fetch raw HTML
+        cik_int = int(cik)
+        url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{primary_doc}"
+        import requests
+        r = requests.get(url, headers=self.headers, timeout=self.timeout)
+        r.raise_for_status()
+        html = r.text
+        soup = BeautifulSoup(html, "lxml")
+        text = soup.get_text("\n")
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+        executives: List[Dict[str, str]] = []
+        holders: List[Dict[str, str]] = []
+
+        # Heuristics: look for sections containing "Directors and Executive Officers" and "Security Ownership"
+        joined = "\n".join(lines)
+
+        # Extract ownership percentages like '5.4%' near a name
+        pct_pat = re.compile(r"(\d{1,2}(?:\.\d{1,2})?)\s*%")
+        name_pat = re.compile(r"([A-Z][a-z]+\s+(?:[A-Z][a-z]+\s+){0,3}[A-Z][a-z]+)")
+
+        # Scan blocks likely to be ownership tables
+        for i, ln in enumerate(lines):
+            low = ln.lower()
+            if "security ownership" in low or "beneficial ownership" in low:
+                block = " ".join(lines[i:i+80])
+                for m in pct_pat.finditer(block):
+                    span = block[max(0, m.start()-80):m.end()+80]
+                    nm = name_pat.search(span)
+                    if nm:
+                        holders.append({"name": nm.group(1), "ownership": m.group(1) + "%"})
+
+        # Scan for director/executive list patterns
+        exec_keywords = ["chief executive", "chief financial", "chief operating", "director", "chair", "president"]
+        for i, ln in enumerate(lines):
+            low = ln.lower()
+            if any(k in low for k in exec_keywords):
+                nm = name_pat.search(ln)
+                if nm:
+                    executives.append({"name": nm.group(1), "title": ln})
+
+        # Deduplicate
+        def dedup(items, key):
+            seen = set()
+            out = []
+            for it in items:
+                k = it.get(key)
+                if k and k not in seen:
+                    seen.add(k)
+                    out.append(it)
+            return out
+
+        executives = dedup(executives, "name")[:20]
+        holders = dedup(holders, "name")[:20]
+        return {"executives": executives, "holders": holders}
 
 
 sec_edgar_adapter: Optional[SecEdgarAdapter] = None
