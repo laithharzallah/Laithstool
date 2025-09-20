@@ -1337,7 +1337,9 @@ def api_sec_company():
             return jsonify({"error": "Provide cik (10-digit) or query (name/ticker)"}), 400
 
         from services.adapters.sec_edgar import SecEdgarAdapter
-        edgar = SecEdgarAdapter()
+        # Surface UA used so frontend can display diagnostics similar to company screening
+        ua = os.getenv("SEC_USER_AGENT") or os.getenv("EDGAR_USER_AGENT") or ""
+        edgar = SecEdgarAdapter(user_agent=ua or None)
         subs = edgar.get_company_submissions(cik)
         recent = (subs.get('filings') or {}).get('recent') or {}
         forms = recent.get('form') or []
@@ -1385,6 +1387,11 @@ def api_sec_company():
             "latest_def14a": latest_def14a,
             "filing_index": filing_index,
             "quick_extract": quick if 'quick' in locals() else {"executives": [], "holders": []},
+            "diagnostics": {
+                "sec_user_agent_present": bool(ua),
+                "sec_user_agent": (ua[:60] + ("…" if len(ua) > 60 else "")) if ua else None,
+                "timeout_s": 20
+            }
         })
     except Exception as e:
         logger.exception(f"SEC API error: {e}")
