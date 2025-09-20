@@ -24,7 +24,8 @@ tldextract>=5.1.2
 
 # Parsing for SEC proxy extraction
 beautifulsoup4==4.12.3
-lxml==5.3.0
+# Align with trafilatura's constraint (<5.2.0 and >=4.9.4 on Linux)
+lxml==5.1.0
 
 # Web extraction helpers used by crawl/extract/real_data services
 trafilatura==1.9.0
