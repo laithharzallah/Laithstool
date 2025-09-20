@@ -1250,6 +1250,10 @@ def api_ukch_search():
         # Profile
         if include.get('profile', True):
             out['profile'] = ch.get_company_profile(company_number)
+            try:
+                out['registered_office_address'] = ch.get_registered_office_address(company_number)
+            except Exception:
+                pass
         # Officers
         if include.get('officers', True):
             out['officers'] = ch.get_company_officers(company_number)
@@ -1261,7 +1265,7 @@ def api_ukch_search():
             except Exception:
                 pass
 
-        return jsonify({"success": True, **out})
+        return jsonify({"success": True, "mode": "detail", **out})
     except Exception as e:
         logger.exception(f"UKCH API error: {e}")
         return jsonify({"error": f"UK Companies House failed: {e}"}), 500

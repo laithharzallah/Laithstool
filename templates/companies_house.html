@@ -47,7 +47,9 @@
           <div><span class="text-gray-500">Name:</span> <span x-text="profile?.company_name || '—'"></span></div>
           <div><span class="text-gray-500">Status:</span> <span x-text="profile?.company_status || '—'"></span></div>
           <div><span class="text-gray-500">Type:</span> <span x-text="profile?.type || '—'"></span></div>
-          <div class="md:col-span-3"><span class="text-gray-500">Address:</span> <span x-text="(profile?.registered_office_address && Object.values(profile.registered_office_address).filter(Boolean).join(', ')) || '—'"></span></div>
+          <div class="md:col-span-3"><span class="text-gray-500">Address:</span>
+            <span x-text="fullAddress()"></span>
+          </div>
         </div>
       </div>
 
@@ -75,7 +77,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <template x-for="p in psc" :key="p?.etag">
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <div class="font-medium" x-text="p?.name || p?.ceased?.name || p?.natures_of_control?.join(', ') || '—'"></div>
+              <div class="font-medium" x-text="p?.name || p?.ceased?.name || (p?.natures_of_control || []).join(', ') || '—'"></div>
               <div class="text-xs text-gray-500 mt-1" x-text="(p?.natures_of_control || []).join(', ')"></div>
               <div class="text-xs text-gray-400" x-text="p?.notified_on ? ('Notified: ' + p.notified_on) : ''"></div>
             </div>
@@ -101,14 +103,21 @@ function ukch() {
     mode: '',
     searchItems: [],
     profile: null,
+    roAddress: null,
     officers: [],
     psc: [],
+    fullAddress() {
+      const a = this.roAddress || this.profile?.registered_office_address;
+      if (!a) return '—';
+      return [a.address_line_1, a.address_line_2, a.locality, a.region, a.postal_code, a.country].filter(Boolean).join(', ');
+    },
     async run() {
       this.error = '';
       this.json = '';
       this.mode = '';
       this.searchItems = [];
       this.profile = null;
+      this.roAddress = null;
       this.officers = [];
       this.psc = [];
       try {
@@ -130,6 +139,7 @@ function ukch() {
         } else {
           this.mode = 'detail';
           this.profile = data.profile || {};
+          this.roAddress = data.registered_office_address || null;
           this.officers = (data.officers && data.officers.items) || [];
           this.psc = (data.psc && data.psc.items) || [];
         }
