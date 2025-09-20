@@ -1343,19 +1343,34 @@ def api_sec_company():
         forms = recent.get('form') or []
         latest_def14a = None
         filing_index = None
-        if 'DEF 14A' in forms:
+        # Accept both DEF 14A and DEFA14A (additional definitive proxy materials)
+        proxy_forms = ['DEF 14A', 'DEFA14A']
+        proxy_idx = -1
+        for pf in proxy_forms:
+            if pf in forms:
+                proxy_idx = forms.index(pf)
+                break
+        if proxy_idx != -1:
             try:
-                idx = forms.index('DEF 14A')
-                accession = (recent.get('accessionNumber') or [])[idx].replace('-', '')
+                accession = (recent.get('accessionNumber') or [])[proxy_idx].replace('-', '')
                 filing_index = edgar.get_filing_index(cik, accession)
+                primary_doc = (recent.get('primaryDocument') or [None])[proxy_idx]
+                # Fallback: choose an HTML document from index if primary_doc missing
+                if (not primary_doc) and filing_index and isinstance(filing_index, dict):
+                    try:
+                        items = ((filing_index.get('directory') or {}).get('item')) or []
+                        htmls = [it.get('name') for it in items if isinstance(it, dict) and str(it.get('name','')).lower().endswith(('.htm', '.html'))]
+                        if htmls:
+                            primary_doc = htmls[0]
+                    except Exception:
+                        pass
                 latest_def14a = {
                     'accession': accession,
-                    'filingDate': (recent.get('filingDate') or [None])[idx],
-                    'primaryDoc': (recent.get('primaryDocument') or [None])[idx],
+                    'filingDate': (recent.get('filingDate') or [None])[proxy_idx],
+                    'primaryDoc': primary_doc,
                 }
                 # Try quick extraction of executives and major holders
                 try:
-                    primary_doc = latest_def14a['primaryDoc']
                     if primary_doc:
                         quick = edgar.extract_major_holders_and_executives_from_proxy(cik, accession, primary_doc)
                     else:
