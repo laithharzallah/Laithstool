@@ -19,12 +19,16 @@ class SecEdgarAdapter:
     - Be polite: ~10 req/s. This adapter includes minimal sleep between retries.
     """
 
-    def __init__(self, user_agent: Optional[str] = None, timeout: float = 12.0):
+    def __init__(self, user_agent: Optional[str] = None, timeout: float = 20.0):
         ua = user_agent or os.getenv("SEC_USER_AGENT") or os.getenv("EDGAR_USER_AGENT")
         if not ua:
             # Default safe UA; recommend setting SEC_USER_AGENT in env for production
             ua = "Risklytics/1.0 (risklytics@example.com)"
-        self.headers = {"User-Agent": ua, "Accept": "application/json"}
+        self.headers = {
+            "User-Agent": ua,
+            "Accept": "application/json,text/html,application/xhtml+xml",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
         self.timeout = max(5.0, float(timeout))
 
     def _get(self, path: str, params: Optional[Dict[str, Any]] = None, retries: int = 2) -> Dict[str, Any]:
