@@ -91,8 +91,25 @@ class SecEdgarAdapter:
 
         # Regex patterns
         pct_pat = re.compile(r"(\d{1,2}(?:\.\d{1,2})?)\s*%")
-        # Support middle initials and multi-word surnames
-        name_pat = re.compile(r"([A-Z][a-z]+(?:\s+[A-Z]\.)?(?:\s+[A-Z][a-z]+){1,3})")
+        # Support mixed-case personal names with optional middle initial
+        person_pat = re.compile(r"([A-Z][a-z]+(?:\s+[A-Z]\.)?(?:\s+[A-Z][a-z]+){1,3})")
+        # Uppercase institution names (captures GROUP/CAPITAL/etc.)
+        inst_keywords = [
+            'GROUP','CAPITAL','ADVISORS','ADVISERS','MANAGEMENT','TRUST','LLC','INC','INC.','LP','HOLDINGS','PARTNERS',
+            'BLACKROCK','VANGUARD','STATE STREET','T. ROWE','FIDELITY','GEODE','BERKSHIRE','MORGAN STANLEY','GOLDMAN'
+        ]
+        inst_pat = re.compile(r"([A-Z][A-Z&.,\- ]{3,})")
+
+        def pick_name(span: str) -> Optional[str]:
+            m = person_pat.search(span)
+            if m:
+                return m.group(1)
+            # Try uppercase institution blocks and keep ones with known keywords
+            for m2 in inst_pat.finditer(span):
+                raw = m2.group(1).strip(' ,.-')
+                if any(k in raw for k in inst_keywords) and len(raw) <= 80:
+                    return raw
+            return None
 
         # 1) Ownership sections
         for i, ln in enumerate(lines):
@@ -100,10 +117,10 @@ class SecEdgarAdapter:
             if ("security ownership" in low) or ("beneficial ownership" in low) or ("principal shareholders" in low):
                 block = " ".join(lines[i:i+200])
                 for m in pct_pat.finditer(block):
-                    span = block[max(0, m.start()-140):m.end()+140]
-                    nm = name_pat.search(span)
+                    span = block[max(0, m.start()-160):m.end()+160]
+                    nm = pick_name(span)
                     if nm:
-                        holders.append({"name": nm.group(1), "ownership": m.group(1) + "%"})
+                        holders.append({"name": nm, "ownership": m.group(1) + "%"})
 
         # 2) Table-based ownership parsing
         for table in soup.find_all("table"):
@@ -113,22 +130,22 @@ class SecEdgarAdapter:
             low = txt.lower()
             if ("ownership" in low or "%" in low or "beneficial" in low) and ("name" in low or "holder" in low):
                 for m in pct_pat.finditer(txt):
-                    span = txt[max(0, m.start()-140):m.end()+140]
-                    nm = name_pat.search(span)
+                    span = txt[max(0, m.start()-160):m.end()+160]
+                    nm = pick_name(span)
                     if nm:
-                        holders.append({"name": nm.group(1), "ownership": m.group(1) + "%"})
+                        holders.append({"name": nm, "ownership": m.group(1) + "%"})
 
         # 3) Executives by titles keywords
         exec_keywords = [
-            "chief executive", "chief financial", "chief operating", "chair", "director", "president",
-            "senior vice president", "executive vice president", "general counsel"
+            "chief executive", "chief financial", "chief operating", "ceo", "cfo", "coo",
+            "chair", "director", "president", "senior vice president", "executive vice president", "general counsel"
         ]
         for ln in lines:
             low = ln.lower()
             if any(k in low for k in exec_keywords):
-                nm = name_pat.search(ln)
+                nm = person_pat.search(ln) or inst_pat.search(ln)
                 if nm:
-                    executives.append({"name": nm.group(1), "title": ln})
+                    executives.append({"name": nm.group(1).strip(' ,.-'), "title": ln})
 
         # Deduplicate and cap
         def dedup(items, key):
