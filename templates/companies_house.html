@@ -42,18 +42,6 @@
   <template x-if="mode==='detail'">
     <div class="space-y-6">
       <div class="metric-card">
-        <h3 class="font-semibold mb-2">Company Profile</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div><span class="text-gray-500">Name:</span> <span x-text="profile?.company_name || '—'"></span></div>
-          <div><span class="text-gray-500">Status:</span> <span x-text="profile?.company_status || '—'"></span></div>
-          <div><span class="text-gray-500">Type:</span> <span x-text="profile?.type || '—'"></span></div>
-          <div class="md:col-span-3"><span class="text-gray-500">Address:</span>
-            <span x-text="fullAddress()"></span>
-          </div>
-        </div>
-      </div>
-
-      <div class="metric-card">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-semibold">Key Executives (Officers)</h3>
           <span class="text-xs text-gray-500" x-text="officers.length + ' total'"></span>
@@ -85,13 +73,6 @@
         </div>
       </div>
 
-      <div class="text-right">
-        <button class="btn-secondary text-xs" @click="showRaw=!showRaw">Toggle raw JSON</button>
-      </div>
-      <div class="metric-card" x-show="showRaw" x-cloak>
-        <h3 class="font-semibold mb-2">Raw</h3>
-        <pre class="text-xs overflow-auto max-h-[40vh]" x-text="json"></pre>
-      </div>
     </div>
   </template>
 </div>

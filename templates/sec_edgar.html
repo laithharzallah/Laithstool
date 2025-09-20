@@ -41,21 +41,6 @@
 
   <template x-if="mode==='detail'">
     <div class="space-y-6">
-      <div class="metric-card">
-        <h3 class="font-semibold mb-2">Latest DEF 14A (Proxy)</h3>
-        <div class="text-sm">Accession: <span x-text="latest?.accession"></span> · Date: <span x-text="latest?.filingDate || '—'"></span></div>
-        <div class="mt-2">
-          <template x-if="index && index.directory">
-            <div class="text-sm">
-              Primary document: <span x-text="latest?.primaryDoc"></span>
-              <div class="mt-2">
-                <a class="text-primary-600 underline" :href="archiveUrl(cik, latest.accession, latest.primaryDoc)" target="_blank">Open DEF 14A document</a>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="metric-card">
           <div class="flex items-center justify-between mb-2">
@@ -95,14 +80,6 @@
       </div>
     </div>
   </template>
-
-  <div class="text-right">
-    <button class="btn-secondary text-xs" @click="showRaw=!showRaw">Toggle raw JSON</button>
-  </div>
-  <div class="metric-card" x-show="showRaw" x-cloak>
-    <h3 class="font-semibold mb-2">Raw</h3>
-    <pre class="text-xs overflow-auto max-h-[50vh]" x-text="json"></pre>
-  </div>
 </div>
 
 <script>

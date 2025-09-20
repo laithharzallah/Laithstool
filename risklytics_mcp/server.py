@@ -14,6 +14,21 @@ except Exception as e:
 
 app = MCP(name="risklytics-mcp", version="0.1.0")
 
+# Import in-repo adapters/services
+_DILI_AVAILABLE = False
+_DART_AVAILABLE = False
+try:
+    from services.dilisense import dilisense_service  # type: ignore
+    _DILI_AVAILABLE = True
+except Exception:
+    pass
+
+try:
+    from services.adapters.dart import dart_adapter  # type: ignore
+    _DART_AVAILABLE = True
+except Exception:
+    pass
+
 
 # --------------------- Models ---------------------
 
@@ -48,27 +63,22 @@ HTTP_TIMEOUT = httpx.Timeout(20.0, connect=5.0)
 
 
 async def call_dilisense(name: str) -> SanctionResult:
-    api_key = os.getenv("DILISENSE_API_KEY")
-    base = os.getenv("DILISENSE_BASE_URL", "https://api.dilisense.com/v1")
-    if not api_key:
-        raise ToolError("DILISENSE_API_KEY is not set")
-
-    url = f"{base}/screening"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {"name": name, "type": "auto"}
-
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        r = await client.post(url, headers=headers, json=payload)
-        r.raise_for_status()
-        data = r.json()
+    if not _DILI_AVAILABLE:
+        raise ToolError("dilisense_service not available in this environment")
+    # dilisense_service.screen_company is async in our app integration
+    try:
+        data = await dilisense_service.screen_company(name, "")
+    except TypeError:
+        # If implemented sync, fall back
+        data = dilisense_service.screen_company(name, "")
 
     return SanctionResult(
         query=name,
-        matched_name=(data.get("matched") or {}).get("name"),
-        pep=(data.get("risk") or {}).get("pep", False),
-        sanctioned=(data.get("risk") or {}).get("sanctioned", False),
-        sources=[(s or {}).get("source") for s in (data.get("hits") or []) if (s or {}).get("source")],
-        raw=data,
+        matched_name=((data or {}).get("matched") or {}).get("name") if isinstance(data, dict) else None,
+        pep=((data or {}).get("risk") or {}).get("pep", False) if isinstance(data, dict) else False,
+        sanctioned=((data or {}).get("risk") or {}).get("sanctioned", False) if isinstance(data, dict) else False,
+        sources=[(s or {}).get("source") for s in ((data or {}).get("hits") or []) if (s or {}).get("source")] if isinstance(data, dict) else [],
+        raw=data if isinstance(data, dict) else {"result": data},
     )
 
 
@@ -87,31 +97,24 @@ async def call_orbis(query: str, country: Optional[str]) -> OwnershipResult:
 
 
 async def call_korean_dart(query: str) -> DartResult:
-    api_key = os.getenv("DART_API_KEY")
-    if not api_key:
-        raise ToolError("DART_API_KEY is not set")
-
-    # Minimal search using list.json (3‑month window required without corp_code)
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        params = {
-            "crtfc_key": api_key,
-            "corp_name": query,
-            "bgn_de": "20240601",
-            "end_de": "20240830",
-            "page_no": 1,
-            "page_count": 5
-        }
-        r = await client.get("https://opendart.fss.or.kr/api/list.json", params=params)
-        r.raise_for_status()
-        data = r.json()
-
-    first = (data.get("list") or [{}])[0] if data.get("status") == "000" else {}
-    out = {
-        "company_legal_name_ko": first.get("corp_name"),
-        "corp_code": first.get("corp_code"),
-        "filings": data.get("list") or []
-    }
-    return DartResult(query=query, **out, raw=data)
+    if not _DART_AVAILABLE:
+        raise ToolError("dart_adapter not available in this environment")
+    companies = dart_adapter.search_company(query)
+    first = companies[0] if companies else {}
+    corp_code = first.get("corp_code") if isinstance(first, dict) else None
+    filings = []
+    if corp_code:
+        try:
+            filings = dart_adapter.search_filings(corp_code, years_back=2)
+        except Exception:
+            filings = []
+    return DartResult(
+        query=query,
+        company_legal_name_ko=(first.get("name") if isinstance(first, dict) else None),
+        corp_code=corp_code,
+        filings=filings,
+        raw={"companies": companies}
+    )
 
 
 # --------------------- Tools ---------------------

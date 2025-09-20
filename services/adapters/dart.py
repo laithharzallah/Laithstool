@@ -8,8 +8,18 @@ import requests
 import logging
 from typing import List, Dict, Any, Optional
 import io, zipfile, xml.etree.ElementTree as ET
+import time
 
 logger = logging.getLogger("dart-adapter")
+
+# -------------------- Simple in-memory caches --------------------
+_CORP_LIST_CACHE: Optional[List[Dict[str, Any]]] = None
+_CORP_LIST_FETCHED_AT: float = 0.0
+_SEARCH_CACHE: Dict[str, List[Dict[str, Any]]] = {}
+_SEARCH_CACHE_TTL = 1800.0  # 30 minutes
+
+def _now() -> float:
+    return time.time()
 
 def _translate_to_korean(text: str) -> str:
     """Translate company name to Korean legal/company name form for better DART search."""
@@ -45,7 +55,7 @@ class DARTAdapter:
         """Minimal HTTP helper for DART API calls (strict - surfaces errors)."""
         params = {"crtfc_key": self.api_key, **params}
         try:
-            r = requests.get(f"{self.base_url}/{path}", params=params, timeout=12)
+            r = requests.get(f"{self.base_url}/{path}", params=params, timeout=8)
         except requests.Timeout:
             logger.error("DART %s timed out with params=%s", path, params)
             return {"status": "408", "message": "DART request timed out"}
@@ -62,13 +72,11 @@ class DARTAdapter:
                          path, js.get("status"), js.get("message"), params)
         return js
 
-    def _lookup_corp_codes_via_zip(self, query: str) -> List[Dict[str, Any]]:
-        """Fallback: download corpCode.xml ZIP once and search locally.
-
-        Matches by partial corp_name (ko/en) or stock_code tokens.
-        """
-        if not self.api_key or not query.strip():
-            return []
+    def _ensure_corp_list_cache(self) -> List[Dict[str, Any]]:
+        global _CORP_LIST_CACHE, _CORP_LIST_FETCHED_AT
+        # Reuse for 24h
+        if _CORP_LIST_CACHE and (_now() - _CORP_LIST_FETCHED_AT) < 86400:
+            return _CORP_LIST_CACHE
 
         try:
             r = requests.get(f"{self.base_url}/corpCode.xml", params={"crtfc_key": self.api_key}, timeout=20)
@@ -79,8 +87,32 @@ class DARTAdapter:
             root = ET.fromstring(xml_bytes)
         except Exception as e:
             logger.error("Failed downloading/parsing corpCode.zip: %s", e)
+            return _CORP_LIST_CACHE or []
+
+        items: List[Dict[str, Any]] = []
+        for corp in root.findall('.//list'):
+            items.append({
+                "corp_code": (corp.findtext('corp_code') or '').strip(),
+                "corp_name": (corp.findtext('corp_name') or '').strip(),
+                "corp_name_eng": (corp.findtext('corp_name_eng') or '').strip(),
+                "stock_code": (corp.findtext('stock_code') or '').strip(),
+            })
+        _CORP_LIST_CACHE = items
+        _CORP_LIST_FETCHED_AT = _now()
+        logger.info("Cached %d corp entries from corpCode.xml", len(items))
+        return items
+
+    def _lookup_corp_codes_via_zip(self, query: str) -> List[Dict[str, Any]]:
+        """Fallback: download corpCode.xml ZIP once and search locally.
+
+        Matches by partial corp_name (ko/en) or stock_code tokens.
+        """
+        if not self.api_key or not query.strip():
             return []
 
+        items = self._ensure_corp_list_cache()
+        if not items:
+            return []
         q = query.strip().lower().replace(" ", "")
         # Common aliases for SK hynix
         aliases = {q}
@@ -88,11 +120,11 @@ class DARTAdapter:
             aliases.update(["skhynix", "에스케이하이닉스", "하이닉스", "sk하이닉스"]) 
 
         results: List[Dict[str, Any]] = []
-        for corp in root.findall('.//list'):
-            cc = (corp.findtext('corp_code') or '').strip()
-            name_ko = (corp.findtext('corp_name') or '').strip()
-            name_en = (corp.findtext('corp_name_eng') or '').strip()
-            stock = (corp.findtext('stock_code') or '').strip()
+        for corp in items:
+            cc = corp.get('corp_code', '')
+            name_ko = corp.get('corp_name', '')
+            name_en = corp.get('corp_name_eng', '')
+            stock = corp.get('stock_code', '')
             key_ko = name_ko.lower().replace(" ", "")
             key_en = name_en.lower().replace(" ", "")
             if not cc:
@@ -123,6 +155,12 @@ class DARTAdapter:
 
         def _norm(s: str) -> str:
             return (s or "").lower().replace(" ", "").replace(".", "").replace("-", "")
+
+        # Cache hot queries to avoid repeated network/zip work
+        key = _norm(company_name)
+        cached = _SEARCH_CACHE.get(key)
+        if cached and (_now() - _CORP_LIST_FETCHED_AT) < _SEARCH_CACHE_TTL:
+            return cached
 
         def _search_once(name: str) -> List[Dict[str, Any]]:
             from datetime import datetime, timedelta
@@ -179,6 +217,7 @@ class DARTAdapter:
         # 3) Final fallback: corpCode.zip directory search
         logger.info("Falling back to corpCode.xml lookup for: %s", company_name)
         out = self._lookup_corp_codes_via_zip(company_name)
+        _SEARCH_CACHE[key] = out
         return out
 
     def search_filings(self, corp_code: str, years_back: int = 5) -> List[Dict[str, Any]]:

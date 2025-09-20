@@ -126,3 +126,4 @@ def get_companies_house_adapter() -> CompaniesHouseAdapter:
     if companies_house_adapter is None:
         companies_house_adapter = CompaniesHouseAdapter()
     return companies_house_adapter
+
