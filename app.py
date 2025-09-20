@@ -1369,12 +1369,9 @@ def api_sec_company():
                     'filingDate': (recent.get('filingDate') or [None])[proxy_idx],
                     'primaryDoc': primary_doc,
                 }
-                # Try quick extraction of executives and major holders
+                # Try quick extraction (best effort: primary + fallback scan)
                 try:
-                    if primary_doc:
-                        quick = edgar.extract_major_holders_and_executives_from_proxy(cik, accession, primary_doc)
-                    else:
-                        quick = {"executives": [], "holders": []}
+                    quick = edgar.extract_from_proxy_best_effort(cik, accession, primary_doc)
                 except Exception:
                     quick = {"executives": [], "holders": []}
             except Exception:

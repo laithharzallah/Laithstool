@@ -78,19 +78,10 @@ class SecEdgarAdapter:
         cik_int = int(cik)
         return self._get(f"/Archives/edgar/data/{cik_int}/{accession_no_nohyphen}/{filename}")
 
-    def extract_major_holders_and_executives_from_proxy(self, cik: str, accession: str, primary_doc: str) -> Dict[str, List[Dict[str, str]]]:
-        """Best-effort parse of DEF 14A HTML to extract names and potential ownership lines.
-        This is heuristic and may miss cases; intended to surface key info quickly.
-        """
+    def _parse_proxy_html(self, html: str) -> Dict[str, List[Dict[str, str]]]:
+        """Parse proxy HTML to extract executives and major holders with multiple heuristics."""
         import re
         from bs4 import BeautifulSoup
-        # Fetch raw HTML
-        cik_int = int(cik)
-        url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{primary_doc}"
-        import requests
-        r = requests.get(url, headers=self.headers, timeout=self.timeout)
-        r.raise_for_status()
-        html = r.text
         soup = BeautifulSoup(html, "lxml")
         text = soup.get_text("\n")
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
@@ -98,34 +89,48 @@ class SecEdgarAdapter:
         executives: List[Dict[str, str]] = []
         holders: List[Dict[str, str]] = []
 
-        # Heuristics: look for sections containing "Directors and Executive Officers" and "Security Ownership"
-        joined = "\n".join(lines)
-
-        # Extract ownership percentages like '5.4%' near a name
+        # Regex patterns
         pct_pat = re.compile(r"(\d{1,2}(?:\.\d{1,2})?)\s*%")
-        name_pat = re.compile(r"([A-Z][a-z]+\s+(?:[A-Z][a-z]+\s+){0,3}[A-Z][a-z]+)")
+        # Support middle initials and multi-word surnames
+        name_pat = re.compile(r"([A-Z][a-z]+(?:\s+[A-Z]\.)?(?:\s+[A-Z][a-z]+){1,3})")
 
-        # Scan blocks likely to be ownership tables
+        # 1) Ownership sections
         for i, ln in enumerate(lines):
             low = ln.lower()
-            if "security ownership" in low or "beneficial ownership" in low:
-                block = " ".join(lines[i:i+80])
+            if ("security ownership" in low) or ("beneficial ownership" in low) or ("principal shareholders" in low):
+                block = " ".join(lines[i:i+200])
                 for m in pct_pat.finditer(block):
-                    span = block[max(0, m.start()-80):m.end()+80]
+                    span = block[max(0, m.start()-140):m.end()+140]
                     nm = name_pat.search(span)
                     if nm:
                         holders.append({"name": nm.group(1), "ownership": m.group(1) + "%"})
 
-        # Scan for director/executive list patterns
-        exec_keywords = ["chief executive", "chief financial", "chief operating", "director", "chair", "president"]
-        for i, ln in enumerate(lines):
+        # 2) Table-based ownership parsing
+        for table in soup.find_all("table"):
+            txt = table.get_text(" ", strip=True)
+            if not txt:
+                continue
+            low = txt.lower()
+            if ("ownership" in low or "%" in low or "beneficial" in low) and ("name" in low or "holder" in low):
+                for m in pct_pat.finditer(txt):
+                    span = txt[max(0, m.start()-140):m.end()+140]
+                    nm = name_pat.search(span)
+                    if nm:
+                        holders.append({"name": nm.group(1), "ownership": m.group(1) + "%"})
+
+        # 3) Executives by titles keywords
+        exec_keywords = [
+            "chief executive", "chief financial", "chief operating", "chair", "director", "president",
+            "senior vice president", "executive vice president", "general counsel"
+        ]
+        for ln in lines:
             low = ln.lower()
             if any(k in low for k in exec_keywords):
                 nm = name_pat.search(ln)
                 if nm:
                     executives.append({"name": nm.group(1), "title": ln})
 
-        # Deduplicate
+        # Deduplicate and cap
         def dedup(items, key):
             seen = set()
             out = []
@@ -136,9 +141,86 @@ class SecEdgarAdapter:
                     out.append(it)
             return out
 
-        executives = dedup(executives, "name")[:20]
-        holders = dedup(holders, "name")[:20]
-        return {"executives": executives, "holders": holders}
+        return {
+            "executives": dedup(executives, "name")[:30],
+            "holders": dedup(holders, "name")[:30],
+        }
+
+    def extract_major_holders_and_executives_from_proxy(self, cik: str, accession: str, primary_doc: str) -> Dict[str, List[Dict[str, str]]]:
+        """Parse a specific proxy HTML document."""
+        import requests
+        cik_int = int(cik)
+        url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{primary_doc}"
+        r = requests.get(url, headers=self.headers, timeout=self.timeout)
+        r.raise_for_status()
+        return self._parse_proxy_html(r.text)
+
+    def extract_from_proxy_best_effort(self, cik: str, accession: str, primary_doc: Optional[str] = None, max_files: int = 6) -> Dict[str, List[Dict[str, str]]]:
+        """Try primary document, then fall back to scanning several HTML files from index.json."""
+        import requests
+        results = {"executives": [], "holders": []}
+        cik_int = int(cik)
+
+        def merge(a, b):
+            return {
+                "executives": (a.get("executives") or []) + (b.get("executives") or []),
+                "holders": (a.get("holders") or []) + (b.get("holders") or []),
+            }
+
+        # 1) Try primary document first
+        if primary_doc:
+            try:
+                url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{primary_doc}"
+                r = requests.get(url, headers=self.headers, timeout=self.timeout)
+                r.raise_for_status()
+                results = merge(results, self._parse_proxy_html(r.text))
+            except Exception:
+                pass
+
+        # 2) If still empty, scan index for other HTML files
+        if not results["executives"] and not results["holders"]:
+            try:
+                idx = self.get_filing_index(cik, accession)
+                items = ((idx.get("directory") or {}).get("item")) or []
+                # Prefer likely proxy HTMLs: contain 'def', 'proxy', then by size desc
+                def score(it):
+                    name = str(it.get("name", "")).lower()
+                    size = int(it.get("size", 0) or 0)
+                    prio = 2 if ("def" in name or "proxy" in name) else 1
+                    return (prio, size)
+                htmls = [it for it in items if str(it.get("name", "")).lower().endswith((".htm", ".html"))]
+                htmls.sort(key=score, reverse=True)
+                for it in htmls[:max_files]:
+                    name = it.get("name")
+                    if not name or name == primary_doc:
+                        continue
+                    try:
+                        url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{name}"
+                        r = requests.get(url, headers=self.headers, timeout=self.timeout)
+                        r.raise_for_status()
+                        parsed = self._parse_proxy_html(r.text)
+                        # Merge and break early if we found enough
+                        results = merge(results, parsed)
+                        if len(results["executives"]) >= 5 and len(results["holders"]) >= 3:
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+        # Final dedup
+        def dedup(items, key):
+            seen = set()
+            out = []
+            for it in items:
+                k = it.get(key)
+                if k and k not in seen:
+                    seen.add(k)
+                    out.append(it)
+            return out
+        results["executives"] = dedup(results.get("executives", []), "name")[:30]
+        results["holders"] = dedup(results.get("holders", []), "name")[:30]
+        return results
 
 
 sec_edgar_adapter: Optional[SecEdgarAdapter] = None
