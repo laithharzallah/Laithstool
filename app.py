@@ -847,8 +847,8 @@ def screen():
     print(f"🔍 Session check - session keys: {list(session.keys())}")
     print(f"🔍 Logged in status: {'logged_in' in session}")
     
-    if 'logged_in' not in session:
-        print("❌ Authentication failed - no logged_in in session")
+    if 'logged_in' not in session and not os.getenv("PUBLIC_APIS", "").strip():
+        print("❌ Authentication failed - no logged_in in session (set PUBLIC_APIS=1 to allow public)")
         return jsonify({"error": "Authentication required"}), 401
     
     print(f"✅ Authentication successful for user: {session.get('username', 'unknown')}")
@@ -876,15 +876,18 @@ def screen():
     country_hint = f" in {country}" if country else ""
     
     try:
-        # Skip web data gathering temporarily for debugging
-        print(f"🔍 Skipping web data gathering for debugging...")
-        web_data = {
-            "website_info": {"official_website": f"https://{company.lower().replace(' ', '')}.com"},
-            "executives": [{"name": "Test Executive", "position": "CEO", "background": "Test info"}],
-            "adverse_media": [],
-            "financial_highlights": {"industry": "Technology", "founded": "2020", "employees": "50"},
-            "sanctions_check": {"matches": []}
-        }
+        # Gather real web data (Google/SERPER/OpenAI orchestrated)
+        from services.real_time_search import real_time_search_service
+        print("🌐 Gathering real-time web data for company screening...")
+        # Run async comprehensive search in a new loop to avoid nested loop errors
+        new_loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(new_loop)
+            web_data = new_loop.run_until_complete(
+                real_time_search_service.comprehensive_search(company=company, country=country)
+            )
+        finally:
+            new_loop.close()
         
         # Refresh session again during long operation
         session.modified = True
