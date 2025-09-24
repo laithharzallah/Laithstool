@@ -191,6 +191,52 @@ def api_dart_lookup():
             "status": "error"
         }), 400
 
+# --- Real DART search endpoint (uses services.adapters.dart) ---
+@app.route('/api/dart/search', methods=['POST'])
+def api_dart_search():
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        company_name = (data.get('company') or data.get('company_name') or '').strip()
+        if not company_name:
+            return jsonify({"error": "company is required"}), 400
+
+        from services.adapters.dart import dart_adapter
+        companies = dart_adapter.search_company(company_name)
+
+        # Optionally fetch detailed info for the first 1-2 companies
+        detailed = []
+        try:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            max_items = min(2, len(companies))
+            with ThreadPoolExecutor(max_workers=max_items) as pool:
+                fut_map = {}
+                for c in companies[:max_items]:
+                    cc = c.get('corp_code')
+                    if not cc:
+                        detailed.append(c)
+                        continue
+                    fut = pool.submit(dart_adapter.get_complete_company_info, cc)
+                    fut_map[fut] = c
+                for fut in as_completed(fut_map, timeout=8):
+                    base = fut_map[fut]
+                    try:
+                        info = fut.result(timeout=2)
+                        if info and 'error' not in info:
+                            base['detailed_info'] = info
+                    except Exception:
+                        pass
+                    detailed.append(base)
+        except Exception:
+            detailed = companies[:3]
+
+        return jsonify({
+            "success": True,
+            "companies": detailed or companies,
+            "total_results": len(companies)
+        })
+    except Exception as e:
+        return jsonify({"error": f"DART search failed: {e}"}), 500
+
 # Setup web routes
 @app.route('/')
 def index():
@@ -211,6 +257,23 @@ def enhanced_individual_screening():
 def enhanced_dart_registry():
     """Enhanced DART registry page"""
     return render_template('enhanced_dart_registry.html')
+
+# Diagnostics to verify providers/keys presence live
+@app.route('/debug/providers', methods=['GET'])
+def debug_providers():
+    try:
+        from services.real_time_search import real_time_search_service as rt
+        info = {
+            "OPENAI": bool(os.getenv("OPENAI_API_KEY")),
+            "SERPER": bool(os.getenv("SERPER_API_KEY")),
+            "GOOGLE_API": bool(os.getenv("GOOGLE_API_KEY")),
+            "GOOGLE_CSE_ID": bool(os.getenv("GOOGLE_CSE_ID")),
+            "DART_API_KEY": bool(os.getenv("DART_API_KEY")),
+            "providers": getattr(rt, "search_providers", []),
+        }
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 def generate_simulated_company_result(company, country, domain, level):
     """Generate a simulated company screening result for testing"""
