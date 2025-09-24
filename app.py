@@ -174,22 +174,71 @@ def api_screen():
 
 @app.route('/api/screen_individual', methods=['POST'])
 def api_screen_individual():
-    """API endpoint for individual screening"""
+    """API endpoint for individual screening (Dilisense-backed)."""
     try:
-        data = request.json
-        name = data.get('name')
-        country = data.get('country')
-        date_of_birth = data.get('date_of_birth')
-        level = data.get('level', 'standard')
-        
-        # Log the request
+        data = request.get_json(force=True, silent=True) or {}
+        name = (data.get('name') or '').strip()
+        country = (data.get('country') or '').strip()
+        date_of_birth = (data.get('date_of_birth') or '').strip()
+        level = (data.get('level') or 'standard').strip()
+
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+
         app.logger.info(f"Individual screening request: {name} ({country})")
-        
-        # Generate simulated response
-        result = generate_simulated_individual_result(name, country, date_of_birth, level)
-        
-        return jsonify(result)
-            
+
+        # Call Dilisense asynchronously with safe loop handling
+        from services.dilisense import dilisense_service
+        try:
+            try:
+                dil = asyncio.run(dilisense_service.screen_individual(name, country, date_of_birth))
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                try:
+                    asyncio.set_event_loop(loop)
+                    dil = loop.run_until_complete(dilisense_service.screen_individual(name, country, date_of_birth))
+                finally:
+                    loop.close()
+        except Exception as se:
+            app.logger.error(f"Dilisense screening failed: {se}")
+            return jsonify({"error": "Screening failed", "details": str(se)}), 500
+
+        # Map to legacy-friendly structure used by UI
+        sanctions_hits = int(((dil or {}).get('sanctions') or {}).get('total_hits', 0))
+        pep_hits = int(((dil or {}).get('pep') or {}).get('total_hits', 0))
+        criminal_hits = int(((dil or {}).get('criminal') or {}).get('total_hits', 0))
+        total_hits = int(dil.get('total_hits', sanctions_hits + pep_hits + criminal_hits)) if isinstance(dil, dict) else 0
+        overall = (dil or {}).get('overall_risk_level') or (
+            'High' if sanctions_hits > 0 or criminal_hits > 0 else 'Medium' if pep_hits > 0 else 'Low')
+
+        executive_summary = f"{name} is an individual based in {country or 'Unknown'}. " \
+                            f"Total matches: {total_hits}. Risk: {overall.lower()}."
+        risk_assessment = "; ".join((dil or {}).get('risk_factors', [])) or (
+            'Sanctions listed' if sanctions_hits else 'No significant risk factors identified'
+        )
+
+        response = {
+            "name": name,
+            "country": country,
+            "date_of_birth": date_of_birth or None,
+            "overall_risk_level": overall,
+            "pep_status": pep_hits > 0,
+            "pep_details": None,
+            "aliases": [],
+            "metrics": {
+                "sanctions": sanctions_hits,
+                "adverse_media": int(((dil or {}).get('other') or {}).get('total_hits', 0)),
+                "pep": pep_hits,
+            },
+            "citations": [],
+            "executive_summary": executive_summary,
+            "risk_assessment": risk_assessment,
+            "timestamp": datetime.now().isoformat(),
+            "raw": dil,
+        }
+
+        return jsonify(response)
+
     except Exception as e:
         app.logger.error(f"API error: {str(e)}")
         return jsonify({
