@@ -3,6 +3,7 @@ Enhanced TPRM Tool with Professional JSON Visualization
 """
 import os
 import json
+import asyncio
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from dotenv import load_dotenv
@@ -25,22 +26,108 @@ logging.basicConfig(level=logging.INFO)
 # Setup API routes
 @app.route('/api/screen', methods=['POST'])
 def api_screen():
-    """API endpoint for company screening"""
+    """API endpoint for company screening (Google CSE + OpenAI backed)."""
     try:
-        data = request.json
-        company = data.get('company')
-        country = data.get('country')
-        domain = data.get('domain')
-        level = data.get('level', 'standard')
-        
-        # Log the request
+        data = request.json or {}
+        company = (data.get('company') or '').strip()
+        country = (data.get('country') or '').strip()
+        domain = (data.get('domain') or '').strip()
+        level = (data.get('level') or 'standard').strip()
+
+        if not company:
+            return jsonify({"error": "company is required"}), 400
+
         app.logger.info(f"Company screening request: {company} ({country})")
-        
-        # Generate simulated response
-        result = generate_simulated_company_result(company, country, domain, level)
-        
+
+        # Use the real-time search service (uses Google CSE when keys set, and OpenAI for structuring)
+        from services.real_time_search import real_time_search_service
+        try:
+            try:
+                web = asyncio.run(
+                    real_time_search_service.comprehensive_search(company=company, country=country, domain=domain)
+                )
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                try:
+                    asyncio.set_event_loop(loop)
+                    web = loop.run_until_complete(
+                        real_time_search_service.comprehensive_search(company=company, country=country, domain=domain)
+                    )
+                finally:
+                    loop.close()
+        except Exception as se:
+            app.logger.error(f"Real-time search failed: {se}")
+            web = {"categorized_results": {}, "error": str(se)}
+
+        cat = (web or {}).get('categorized_results') or {}
+        ci = (cat.get('company_info') or {})
+        ex = (cat.get('executives') or [])
+        am = (cat.get('adverse_media') or [])
+        sanc = (cat.get('sanctions') or {})
+        fin = (cat.get('financials') or {})
+
+        website = ci.get('website') if isinstance(ci, dict) else None
+        industry = ci.get('industry') if isinstance(ci, dict) else None
+        founded_year = ci.get('founded_year') if isinstance(ci, dict) else None
+
+        # Executives mapping
+        execs = []
+        for it in (ex if isinstance(ex, list) else []):
+            execs.append({
+                "name": it.get("name"),
+                "position": it.get("position") or "Executive",
+                "risk_level": "Low"
+            })
+
+        # Metrics and simple risk derivation
+        sanctions_flag = 1 if any(v for v in (sanc or {}).values() if v) else 0
+        adverse_count = len(am if isinstance(am, list) else [])
+        alerts = sanctions_flag + (1 if adverse_count > 0 else 0)
+        overall = "Low"
+        if sanctions_flag or adverse_count >= 6:
+            overall = "High"
+        elif adverse_count > 0:
+            overall = "Medium"
+
+        # Citations from adverse media
+        citations = []
+        for it in (am if isinstance(am, list) else [])[:10]:
+            citations.append({
+                "title": it.get("headline") or it.get("title") or "Source",
+                "url": it.get("source_url") or it.get("url")
+            })
+
+        # Executive summary and risk assessment (brief)
+        executive_summary = f"{company} screening completed. Website: {website or 'N/A'}. " \
+                             f"Executives: {len(execs)}. Adverse media: {adverse_count}."
+        risk_assessment = (
+            f"Overall risk is {overall.lower()} based on {adverse_count} adverse media"
+            f"{', sanctions present' if sanctions_flag else ''}."
+        )
+
+        result = {
+            "company_name": company,
+            "country": country,
+            "domain": domain or website,
+            "overall_risk_level": overall,
+            "industry": industry,
+            "founded_year": founded_year,
+            "executives": execs,
+            "metrics": {
+                "sanctions": sanctions_flag,
+                "adverse_media": adverse_count,
+                "alerts": alerts
+            },
+            "citations": citations,
+            "executive_summary": executive_summary,
+            "risk_assessment": risk_assessment,
+            "website": website,
+            "timestamp": datetime.now().isoformat(),
+            "real_data": cat
+        }
+
         return jsonify(result)
-            
+
     except Exception as e:
         app.logger.error(f"API error: {str(e)}")
         return jsonify({
