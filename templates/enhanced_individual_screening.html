@@ -486,7 +486,7 @@
                         }
                     }, 1500);
                     
-                    // Make API call
+                    // Make API call (robust JSON handling)
                     fetch('/api/screen_individual', {
                         method: 'POST',
                         headers: {
@@ -494,9 +494,42 @@
                         },
                         body: JSON.stringify(this.formData)
                     })
-                    .then(response => response.json())
+                    .then(async (response) => {
+                        const text = await response.text();
+                        let data = {};
+                        try {
+                            data = text ? JSON.parse(text) : {};
+                        } catch (e) {
+                            throw new Error(`Bad JSON (HTTP ${response.status})`);
+                        }
+                        if (!response.ok) {
+                            const msg = (data && (data.details || data.error)) || `HTTP ${response.status}`;
+                            throw new Error(msg);
+                        }
+                        return data;
+                    })
                     .then(data => {
                         clearInterval(this.loadingInterval);
+                        // Derive aliases/pep details from raw if not mapped
+                        try {
+                            const pepRecords = (data && data.raw && data.raw.pep && data.raw.pep.found_records) ? data.raw.pep.found_records : [];
+                            if ((!data.aliases || !data.aliases.length) && pepRecords && pepRecords.length) {
+                                const aliasSet = new Set();
+                                pepRecords.forEach(r => {
+                                    (r.alias_names || []).forEach(a => aliasSet.add(a));
+                                });
+                                data.aliases = Array.from(aliasSet).slice(0, 20);
+                            }
+                            if (!data.pep_details && pepRecords && pepRecords.length) {
+                                const r0 = pepRecords[0] || {};
+                                data.pep_details = {
+                                    position: r0.pep_type || r0.position || 'PEP',
+                                    country: data.country || null,
+                                    since: (r0.since || r0.start_date || null),
+                                    source: r0.source || r0.source_type || null
+                                };
+                            }
+                        } catch (e) { /* noop */ }
                         this.results = data;
                         this.isLoading = false;
                         this.activeTab = 'overview';
@@ -517,7 +550,8 @@
                     .catch(error => {
                         clearInterval(this.loadingInterval);
                         this.isLoading = false;
-                        alert('Error: ' + error.message);
+                        try { console.error('Individual screening error:', error); } catch(e) {}
+                        alert('Individual screening failed: ' + (error && error.message ? error.message : 'Unknown error'));
                     });
                 },
                 
