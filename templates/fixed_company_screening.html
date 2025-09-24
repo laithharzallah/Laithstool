@@ -1,0 +1,507 @@
+{% extends "fixed_base.html" %}
+
+{% block title %}Company Screening - Risklytics{% endblock %}
+
+{% block page_title %}Company Screening{% endblock %}
+{% block page_description %}Comprehensive due diligence and risk assessment{% endblock %}
+
+{% block content %}
+<div x-data="companyScreening()">
+    <!-- Screening Form -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 mb-6">
+        <h3 class="text-lg font-semibold mb-4 flex items-center">
+            Screening Parameters
+            <span class="ml-auto text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 px-2 py-1 rounded-full flex items-center">
+                <i data-lucide="check-circle" class="w-3 h-3 mr-1"></i>
+                GPT-5 Ready
+            </span>
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Company Name -->
+            <div>
+                <label for="company_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Company Name *
+                </label>
+                <input type="text" 
+                       id="company_name" 
+                       x-model="formData.company" 
+                       placeholder="e.g., Rawabi Holding Company" 
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white">
+            </div>
+            
+            <!-- Country -->
+            <div>
+                <label for="country" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Country/Jurisdiction
+                </label>
+                <input type="text" 
+                       id="country" 
+                       x-model="formData.country" 
+                       placeholder="e.g., Saudi Arabia" 
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white">
+            </div>
+            
+            <!-- Domain -->
+            <div>
+                <label for="domain" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Domain (Optional)
+                </label>
+                <input type="text" 
+                       id="domain" 
+                       x-model="formData.domain" 
+                       placeholder="e.g., company.com" 
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white">
+            </div>
+            
+            <!-- Screening Level -->
+            <div>
+                <label for="level" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Screening Level
+                </label>
+                <select id="level" 
+                        x-model="formData.level" 
+                        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white">
+                    <option value="standard">Standard Screening</option>
+                    <option value="enhanced">Enhanced Due Diligence</option>
+                    <option value="comprehensive">Comprehensive Analysis</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Options -->
+        <div class="flex flex-wrap gap-6 mt-6">
+            <label class="inline-flex items-center">
+                <input type="checkbox" 
+                       x-model="formData.include_sanctions" 
+                       class="form-checkbox h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500">
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include sanctions screening</span>
+            </label>
+            
+            <label class="inline-flex items-center">
+                <input type="checkbox" 
+                       x-model="formData.include_adverse_media" 
+                       class="form-checkbox h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500">
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include adverse media</span>
+            </label>
+        </div>
+        
+        <!-- Submit Button -->
+        <div class="mt-6 text-right">
+            <button @click="startScreening" 
+                    class="btn-primary" 
+                    :disabled="!formData.company || isLoading" 
+                    :class="{'opacity-50 cursor-not-allowed': !formData.company || isLoading}">
+                <template x-if="isLoading">
+                    <i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>
+                </template>
+                <template x-if="!isLoading">
+                    <i data-lucide="search" class="w-4 h-4 mr-2"></i>
+                </template>
+                Start Screening
+            </button>
+        </div>
+    </div>
+    
+    <!-- Results Section -->
+    <template x-if="!results">
+        <div class="flex flex-col items-center justify-center py-16 text-center text-gray-500 dark:text-gray-400">
+            <div class="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-6">
+                <i data-lucide="search" class="w-12 h-12"></i>
+            </div>
+            <h3 class="text-xl font-medium mb-2">No screening results yet</h3>
+            <p class="max-w-md">
+                Enter company details and start a screening to see<br>
+                comprehensive risk intelligence results.
+            </p>
+        </div>
+    </template>
+    
+    <template x-if="results">
+        <div>
+            <!-- Risk Overview Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                <!-- Overall Risk -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Overall Risk</h4>
+                            <p class="text-2xl font-bold mt-1" :class="{
+                                'text-green-600 dark:text-green-400': results.overall_risk_level === 'Low',
+                                'text-yellow-600 dark:text-yellow-400': results.overall_risk_level === 'Medium',
+                                'text-red-600 dark:text-red-400': results.overall_risk_level === 'High'
+                            }" x-text="results.overall_risk_level">Low</p>
+                        </div>
+                        <div :class="{
+                            'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400': results.overall_risk_level === 'Low',
+                            'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400': results.overall_risk_level === 'Medium',
+                            'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400': results.overall_risk_level === 'High'
+                        }" class="p-2 rounded-full">
+                            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sanctions -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Sanctions</h4>
+                            <p class="text-2xl font-bold mt-1" x-text="results.sanctions ? results.sanctions.length : 0">0</p>
+                        </div>
+                        <div class="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 p-2 rounded-full">
+                            <i data-lucide="shield-alert" class="w-5 h-5"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Adverse Media -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Adverse Media</h4>
+                            <p class="text-2xl font-bold mt-1" x-text="results.adverse_media ? results.adverse_media.length : 0">0</p>
+                        </div>
+                        <div class="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 p-2 rounded-full">
+                            <i data-lucide="newspaper" class="w-5 h-5"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Citations -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Citations</h4>
+                            <p class="text-2xl font-bold mt-1" x-text="results.citations ? results.citations.length : 0">0</p>
+                        </div>
+                        <div class="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 p-2 rounded-full">
+                            <i data-lucide="link" class="w-5 h-5"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex overflow-x-auto">
+                        <button @click="activeTab = 'overview'" 
+                                :class="{'border-primary-500 text-primary-600 dark:text-primary-400': activeTab === 'overview', 'border-transparent': activeTab !== 'overview'}" 
+                                class="px-6 py-3 border-b-2 font-medium text-sm">
+                            Overview
+                        </button>
+                        <button @click="activeTab = 'company_profile'" 
+                                :class="{'border-primary-500 text-primary-600 dark:text-primary-400': activeTab === 'company_profile', 'border-transparent': activeTab !== 'company_profile'}" 
+                                class="px-6 py-3 border-b-2 font-medium text-sm">
+                            Company Profile
+                        </button>
+                        <button @click="activeTab = 'key_people'" 
+                                :class="{'border-primary-500 text-primary-600 dark:text-primary-400': activeTab === 'key_people', 'border-transparent': activeTab !== 'key_people'}" 
+                                class="px-6 py-3 border-b-2 font-medium text-sm">
+                            Key People
+                        </button>
+                        <button @click="activeTab = 'risk_factors'" 
+                                :class="{'border-primary-500 text-primary-600 dark:text-primary-400': activeTab === 'risk_factors', 'border-transparent': activeTab !== 'risk_factors'}" 
+                                class="px-6 py-3 border-b-2 font-medium text-sm">
+                            Risk Factors
+                        </button>
+                        <button @click="activeTab = 'raw_data'" 
+                                :class="{'border-primary-500 text-primary-600 dark:text-primary-400': activeTab === 'raw_data', 'border-transparent': activeTab !== 'raw_data'}" 
+                                class="px-6 py-3 border-b-2 font-medium text-sm">
+                            Raw Data
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Tab Content -->
+                <div class="p-6">
+                    <!-- Overview Tab -->
+                    <div x-show="activeTab === 'overview'" class="space-y-6">
+                        <h3 class="text-lg font-semibold">Executive Summary</h3>
+                        <p class="text-gray-700 dark:text-gray-300" x-text="results.executive_summary || 'No summary available'"></p>
+                        
+                        <h3 class="text-lg font-semibold mt-8">Risk Metrics</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <template x-for="(value, key) in results.metrics" :key="key">
+                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                                    <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 capitalize" x-text="key.replace('_', ' ')"></h4>
+                                    <div class="mt-2 flex items-center">
+                                        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5">
+                                            <div class="h-2.5 rounded-full" 
+                                                 :style="`width: ${Math.min(value * 100, 100)}%`"
+                                                 :class="{
+                                                     'bg-green-500': value < 0.3,
+                                                     'bg-yellow-500': value >= 0.3 && value < 0.6,
+                                                     'bg-red-500': value >= 0.6
+                                                 }"></div>
+                                        </div>
+                                        <span class="ml-2 text-sm font-medium" x-text="(value * 100).toFixed(0) + '%'"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- Company Profile Tab -->
+                    <div x-show="activeTab === 'company_profile'" class="space-y-6">
+                        <h3 class="text-lg font-semibold">Company Information</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Name:</p>
+                                <p class="text-gray-700 dark:text-gray-300" x-text="results.company_name || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Website:</p>
+                                <p class="text-gray-700 dark:text-gray-300" x-text="results.website || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Industry:</p>
+                                <p class="text-gray-700 dark:text-gray-300" x-text="results.industry || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Founded:</p>
+                                <p class="text-gray-700 dark:text-gray-300" x-text="results.founded_year || '—'"></p>
+                            </div>
+                        </div>
+                        
+                        <h3 class="text-lg font-semibold mt-8">Business Activities</h3>
+                        <p class="text-gray-700 dark:text-gray-300" x-text="results.business_activities || 'No information available'"></p>
+                    </div>
+                    
+                    <!-- Key People Tab -->
+                    <div x-show="activeTab === 'key_people'" class="space-y-6">
+                        <h3 class="text-lg font-semibold">Key Executives</h3>
+                        
+                        <template x-if="!results.executives || results.executives.length === 0">
+                            <p class="text-gray-500 dark:text-gray-400">No executive information available</p>
+                        </template>
+                        
+                        <template x-if="results.executives && results.executives.length > 0">
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead>
+                                        <tr>
+                                            <th class="px-6 py-3 bg-gray-50 dark:bg-gray-700 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                                            <th class="px-6 py-3 bg-gray-50 dark:bg-gray-700 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Position</th>
+                                            <th class="px-6 py-3 bg-gray-50 dark:bg-gray-700 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Risk Level</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        <template x-for="(executive, index) in results.executives" :key="index">
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white" x-text="executive.name"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300" x-text="executive.position"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                                    <span class="px-2 py-1 text-xs font-medium rounded-full" 
+                                                          :class="{
+                                                              'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400': executive.risk_level === 'Low',
+                                                              'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400': executive.risk_level === 'Medium',
+                                                              'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400': executive.risk_level === 'High'
+                                                          }" 
+                                                          x-text="executive.risk_level"></span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <!-- Risk Factors Tab -->
+                    <div x-show="activeTab === 'risk_factors'" class="space-y-6">
+                        <h3 class="text-lg font-semibold">Risk Assessment</h3>
+                        <p class="text-gray-700 dark:text-gray-300" x-text="results.risk_assessment || 'No risk assessment available'"></p>
+                        
+                        <h3 class="text-lg font-semibold mt-8">Adverse Media</h3>
+                        <template x-if="!results.adverse_media || results.adverse_media.length === 0">
+                            <p class="text-gray-500 dark:text-gray-400">No adverse media found</p>
+                        </template>
+                        
+                        <template x-if="results.adverse_media && results.adverse_media.length > 0">
+                            <div class="space-y-4">
+                                <template x-for="(item, index) in results.adverse_media" :key="index">
+                                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                                        <h4 class="font-medium text-gray-900 dark:text-white" x-text="item.title"></h4>
+                                        <div class="flex items-center mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                            <span x-text="item.source"></span>
+                                            <span class="mx-2">•</span>
+                                            <span x-text="item.date"></span>
+                                        </div>
+                                        <template x-if="item.url">
+                                            <a :href="item.url" target="_blank" class="mt-2 inline-flex items-center text-sm text-primary-600 dark:text-primary-400 hover:underline">
+                                                View source
+                                                <i data-lucide="external-link" class="w-3 h-3 ml-1"></i>
+                                            </a>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <!-- Raw Data Tab -->
+                    <div x-show="activeTab === 'raw_data'" class="space-y-6">
+                        <h3 class="text-lg font-semibold">Raw JSON Data</h3>
+                        <div class="flex justify-end space-x-2 mb-2">
+                            <button @click="copyToClipboard(JSON.stringify(results, null, 2))" class="btn-ghost btn-sm">
+                                <i data-lucide="clipboard" class="w-4 h-4 mr-1"></i>
+                                Copy
+                            </button>
+                            <button @click="downloadJson(results, `${results.company_name || 'company'}_screening.json`)" class="btn-ghost btn-sm">
+                                <i data-lucide="download" class="w-4 h-4 mr-1"></i>
+                                Export
+                            </button>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 overflow-auto max-h-96">
+                            <pre id="json-viewer" class="text-sm font-mono"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function companyScreening() {
+        return {
+            formData: {
+                company: '',
+                country: '',
+                domain: '',
+                level: 'standard',
+                include_sanctions: true,
+                include_adverse_media: true
+            },
+            isLoading: false,
+            results: null,
+            activeTab: 'overview',
+            
+            startScreening() {
+                if (!this.formData.company) return;
+                
+                this.isLoading = true;
+                
+                // Call the API
+                fetch('/api/screen', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.formData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    this.results = data;
+                    this.isLoading = false;
+                    
+                    // Initialize JSON viewer for raw data tab
+                    setTimeout(() => {
+                        if (this.results && document.getElementById('json-viewer')) {
+                            const jsonViewer = new JSONViewer();
+                            document.getElementById('json-viewer').appendChild(jsonViewer.getContainer());
+                            jsonViewer.showJSON(this.results);
+                        }
+                    }, 100);
+                    
+                    // Show success toast
+                    this.showToast('Screening completed successfully', 'success');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    this.isLoading = false;
+                    this.showToast('Error performing screening', 'error');
+                });
+            },
+            
+            copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    this.showToast('Copied to clipboard', 'success');
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                    this.showToast('Failed to copy to clipboard', 'error');
+                });
+            },
+            
+            downloadJson(data, filename) {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                this.showToast('Downloaded JSON file', 'success');
+            },
+            
+            showToast(message, type = 'info') {
+                const toast = document.createElement('div');
+                toast.className = `flex items-center p-4 mb-4 rounded-lg shadow-md transition-all transform translate-x-0 ${
+                    type === 'success' ? 'bg-green-50 text-green-800 dark:bg-green-900/50 dark:text-green-400' :
+                    type === 'error' ? 'bg-red-50 text-red-800 dark:bg-red-900/50 dark:text-red-400' :
+                    'bg-blue-50 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400'
+                }`;
+                
+                const icon = document.createElement('div');
+                icon.className = 'flex-shrink-0 mr-3';
+                icon.innerHTML = `<i data-lucide="${
+                    type === 'success' ? 'check-circle' :
+                    type === 'error' ? 'alert-circle' :
+                    'info'
+                }" class="w-5 h-5"></i>`;
+                
+                const content = document.createElement('div');
+                content.className = 'text-sm font-medium';
+                content.textContent = message;
+                
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'ml-auto -mx-1.5 -my-1.5 rounded-lg p-1.5 inline-flex h-8 w-8 focus:outline-none';
+                closeBtn.innerHTML = '<i data-lucide="x" class="w-4 h-4"></i>';
+                closeBtn.onclick = () => {
+                    toast.classList.add('translate-x-full', 'opacity-0');
+                    setTimeout(() => toast.remove(), 300);
+                };
+                
+                toast.appendChild(icon);
+                toast.appendChild(content);
+                toast.appendChild(closeBtn);
+                
+                document.getElementById('toast-container').appendChild(toast);
+                lucide.createIcons();
+                
+                setTimeout(() => {
+                    toast.classList.add('translate-x-full', 'opacity-0');
+                    setTimeout(() => toast.remove(), 300);
+                }, 5000);
+            },
+            
+            init() {
+                // Check for cached results
+                const cachedResults = localStorage.getItem('companyScreeningResults');
+                if (cachedResults) {
+                    try {
+                        this.results = JSON.parse(cachedResults);
+                        
+                        // Initialize JSON viewer for raw data tab
+                        setTimeout(() => {
+                            if (this.results && document.getElementById('json-viewer')) {
+                                const jsonViewer = new JSONViewer();
+                                document.getElementById('json-viewer').appendChild(jsonViewer.getContainer());
+                                jsonViewer.showJSON(this.results);
+                            }
+                        }, 100);
+                    } catch (e) {
+                        console.error('Error parsing cached results:', e);
+                    }
+                }
+            }
+        };
+    }
+</script>
+{% endblock %}
