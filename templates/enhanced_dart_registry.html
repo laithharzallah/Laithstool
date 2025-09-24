@@ -24,6 +24,12 @@
                 </div>
             </div>
             <p class="text-gray-400 mt-2">Search Korean companies in the official Financial Supervisory Service registry</p>
+            <div class="mt-4 flex flex-wrap gap-2" x-show="results && !error">
+                <button @click="copy(results.company_name)" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs" aria-label="Copy Company Name">Copy Name</button>
+                <button @click="copy(results.registry_id)" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs" aria-label="Copy Registry ID">Copy Registry ID</button>
+                <button x-show="results.website" @click="openSite(results.website)" class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs" aria-label="Open Website">Open Website</button>
+                <button @click="resetForm" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs" aria-label="New Search">New Search</button>
+            </div>
         </header>
 
         <!-- Search Form -->
@@ -111,17 +117,42 @@
                     <button @click="activeTab = 'overview'" 
                         class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
                         :class="activeTab === 'overview' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
-                        Overview
+                        Overview <span class="ml-2 text-xs text-gray-400" x-text="coverageFor('overview').label"></span>
+                    </button>
+                    <button @click="activeTab = 'executives'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'executives' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Executives/Board <span class="ml-2 text-xs text-gray-400" x-text="coverageFor('executives').label"></span>
+                    </button>
+                    <button @click="activeTab = 'shareholders'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'shareholders' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Shareholders <span class="ml-2 text-xs text-gray-400" x-text="coverageFor('shareholders').label"></span>
                     </button>
                     <button @click="activeTab = 'financial'" 
                         class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
                         :class="activeTab === 'financial' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
-                        Financial Summary
+                        Financials <span class="ml-2 text-xs text-gray-400" x-text="coverageFor('financial').label"></span>
                     </button>
                     <button @click="activeTab = 'documents'" 
                         class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
                         :class="activeTab === 'documents' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
-                        Documents
+                        Filings <span class="ml-2 text-xs text-gray-400" x-text="coverageFor('filings').label"></span>
+                    </button>
+                    <button @click="activeTab = 'adverse'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'adverse' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Adverse Media <span class="ml-2 text-xs text-gray-400" x-text="coverageFor('adverse').label"></span>
+                    </button>
+                    <button @click="activeTab = 'compliance'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'compliance' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Sanctions & PEP <span class="ml-2 text-xs text-gray-400" x-text="coverageFor('compliance').label"></span>
+                    </button>
+                    <button @click="activeTab = 'identifiers'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'identifiers' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Identifiers <span class="ml-2 text-xs text-gray-400" x-text="coverageFor('identifiers').label"></span>
                     </button>
                     <button @click="activeTab = 'structure'" 
                         class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
@@ -265,37 +296,43 @@
                     </div>
                 </div>
 
-                <!-- Documents Tab -->
+                <!-- Filings / Documents Tab -->
                 <div x-show="activeTab === 'documents'">
-                    <h3 class="text-lg font-semibold text-green-300 mb-3">Available Documents</h3>
-                    
-                    <div class="bg-gray-700/30 rounded-lg overflow-hidden" x-show="results.documents && results.documents.length > 0">
+                    <div class="mb-2 flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-green-300">Filings / Documents</h3>
+                        <input type="text" placeholder="Filter by title..." class="px-3 py-1 rounded bg-gray-700 border border-gray-600 text-sm" x-model="filingsFilter">
+                    </div>
+                    <div class="bg-gray-700/30 rounded-lg overflow-hidden">
                         <table class="min-w-full divide-y divide-gray-700">
-                            <thead>
+                            <thead class="sticky top-0 bg-gray-800/80 backdrop-blur">
                                 <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Type</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">ID</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Title</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Date</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer" @click="toggleSort('date')">Date</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Action</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-700">
-                                <template x-for="document in results.documents" :key="document.id">
-                                    <tr>
-                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="document.id"></td>
-                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="document.title"></td>
-                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="document.date"></td>
-                                        <td class="px-4 py-3 text-sm">
-                                            <a :href="document.url" target="_blank" class="text-green-400 hover:text-green-300">View</a>
-                                        </td>
+                                <template x-for="doc in pagedFilings" :key="(doc.id||doc.type||doc.title)+ (doc.date||'')">
+                                    <tr class="hover:bg-gray-700/20">
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="doc.type || 'Document'"></td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="doc.id || '—'"></td>
+                                        <td class="px-4 py-3 text-sm text-gray-300 truncate" :title="doc.title" x-text="doc.title"></td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="formatDate(doc.date)"></td>
+                                        <td class="px-4 py-3 text-sm"><a :href="doc.url" target="_blank" class="text-green-400 hover:text-green-300" aria-label="View Filing">View</a></td>
                                     </tr>
                                 </template>
                             </tbody>
                         </table>
+                        <div class="p-4 text-sm text-gray-400" x-show="!(filingsAll && filingsAll.length)">No filings available.</div>
                     </div>
-                    
-                    <div class="bg-gray-700/30 rounded-lg p-4 text-gray-400" x-show="!results.documents || results.documents.length === 0">
-                        No documents available.
+                    <div class="mt-3 flex items-center justify-between" x-show="(filingsAll && filingsAll.length)">
+                        <div class="text-xs text-gray-400">Page <span x-text="filingsPage"></span> / <span x-text="filingsTotalPages"></span></div>
+                        <div class="flex gap-2">
+                            <button @click="prevFilings()" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs" aria-label="Prev Page">Prev</button>
+                            <button @click="nextFilings()" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs" aria-label="Next Page">Next</button>
+                        </div>
                     </div>
                 </div>
 
@@ -373,6 +410,13 @@
                     'Analyzing corporate structure...'
                 ],
                 loadingInterval: null,
+                // Filings helpers
+                filingsAll: [],
+                filingsFilter: '',
+                filingsSortKey: 'date',
+                filingsSortDir: 'desc',
+                filingsPage: 1,
+                filingsPageSize: 10,
                 
                 startLookup() {
                     this.isLoading = true;
@@ -415,6 +459,10 @@
                         
                         this.results = data;
                         this.error = false;
+                        // Prepare filings from either results.filings or results.documents
+                        const docs = (this.results && (this.results.filings || this.results.documents)) || [];
+                        this.filingsAll = Array.isArray(docs) ? docs.slice() : [];
+                        this.filingsPage = 1;
                         
                         // Add timestamp if not present
                         if (!this.results.timestamp) {
@@ -446,6 +494,83 @@
                         try { console.error('DART search error:', error); } catch(e) {}
                     });
                 },
+                // Coverage helpers
+                coverageFor(tab) {
+                    const scope = this._scopeFor(tab);
+                    const known = this._knownKeysFor(tab);
+                    const keys = scope && typeof scope==='object' ? Object.keys(scope) : [];
+                    const covered = keys.filter(k => known.includes(k)).length;
+                    const pct = keys.length ? Math.round((covered/keys.length)*100) : 100;
+                    return { label: `Coverage: ${pct}%`, labelDetail: `${covered}/${keys.length} fields` };
+                },
+                getUncoveredFor(scopeObj, knownKeys) {
+                    if (!scopeObj || typeof scopeObj !== 'object') return { uncoveredKeys: [], uncoveredEntries: [] };
+                    const keys = Object.keys(scopeObj).filter(k => !knownKeys.includes(k));
+                    const entries = keys.map(k => ({ key: k, pretty: JSON.stringify(scopeObj[k], null, 2) }));
+                    return { uncoveredKeys: keys, uncoveredEntries: entries };
+                },
+                _scopeFor(tab) {
+                    if (!this.results) return {};
+                    if (tab==='overview') return this.results;
+                    if (tab==='executives') return { executives: this.results.executives };
+                    if (tab==='shareholders') return { major_shareholders: this.results.major_shareholders };
+                    if (tab==='financial') return this.results.financial_summary || {};
+                    if (tab==='filings' || tab==='documents') return { filings: this.filingsAll };
+                    if (tab==='adverse') return this.results.adverse_media || {};
+                    if (tab==='compliance') return { sanctions_check: this.results.sanctions_check, pep_check: this.results.pep_check };
+                    if (tab==='identifiers') return { identifiers: this.results.identifiers };
+                    return this.results;
+                },
+                _knownKeysFor(tab) {
+                    if (tab==='overview') return ['company_name','registry_id','status','industry_name','industry_code','address','representative','capital','website','identifiers','timestamp'];
+                    if (tab==='executives') return ['executives'];
+                    if (tab==='shareholders') return ['major_shareholders'];
+                    if (tab==='financial') return ['currency','revenue','profit','assets','liabilities','equity'];
+                    if (tab==='filings' || tab==='documents') return ['filings','documents'];
+                    if (tab==='adverse') return ['summary','items'];
+                    if (tab==='compliance') return ['sanctions_check','pep_check'];
+                    if (tab==='identifiers') return ['identifiers'];
+                    return [];
+                },
+                // Utilities
+                parsePercent(v) {
+                    if (v==null) return '—';
+                    const m = String(v).match(/(\d+(?:\.\d+)?)/);
+                    return m ? `${m[1]}%` : '—';
+                },
+                formatDate(v) {
+                    if (!v) return '';
+                    const d = new Date(v);
+                    return isNaN(d.getTime()) ? String(v) : d.toISOString().slice(0,10);
+                },
+                copy(txt) {
+                    if (!txt) return; navigator.clipboard.writeText(String(txt)).catch(()=>{});
+                },
+                openSite(u) {
+                    if (!u) return; window.open(u.startsWith('http')?u:`https://${u}`,'_blank');
+                },
+                // Filings paging/sort
+                get pagedFilings() {
+                    let arr = (this.filingsAll || []).slice();
+                    if (this.filingsFilter) {
+                        const q = this.filingsFilter.toLowerCase();
+                        arr = arr.filter(d => (d.title||'').toLowerCase().includes(q));
+                    }
+                    arr.sort((a,b) => {
+                        const da = new Date(a.date||0).getTime();
+                        const db = new Date(b.date||0).getTime();
+                        return this.filingsSortDir==='asc' ? (da-db) : (db-da);
+                    });
+                    const start = (this.filingsPage-1)*this.filingsPageSize;
+                    return arr.slice(start, start+this.filingsPageSize);
+                },
+                get filingsTotalPages() {
+                    const n = (this.filingsAll||[]).length;
+                    return Math.max(1, Math.ceil(n/this.filingsPageSize));
+                },
+                nextFilings() { if (this.filingsPage < this.filingsTotalPages) this.filingsPage++; },
+                prevFilings() { if (this.filingsPage > 1) this.filingsPage--; },
+                toggleSort(key) { if (key==='date') this.filingsSortDir = this.filingsSortDir==='asc'?'desc':'asc'; },
                 
                 resetForm() {
                     this.results = null;
