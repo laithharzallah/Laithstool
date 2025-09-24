@@ -68,8 +68,17 @@ class DARTAdapter:
             js = {"status": "999", "message": f"invalid json (HTTP {r.status_code})", "raw": r.text[:500]}
         # If not OK, include the raw bits so you can see why
         if js.get("status") != "000":
-            logger.error("DART %s error status=%s msg=%s params=%s",
-                         path, js.get("status"), js.get("message"), params)
+            # Avoid logging secrets
+            safe_params = dict(params)
+            if "crtfc_key" in safe_params:
+                safe_params["crtfc_key"] = "***"
+            logger.error(
+                "DART %s error status=%s msg=%s params=%s",
+                path,
+                js.get("status"),
+                js.get("message"),
+                safe_params,
+            )
         return js
 
     def _ensure_corp_list_cache(self) -> List[Dict[str, Any]]:

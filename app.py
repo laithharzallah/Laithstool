@@ -12,6 +12,12 @@ load_dotenv()
 
 app = Flask(__name__)
 
+# Ensure sessions work by setting a secret key
+app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-dev")
+if app.secret_key == "change-me-in-dev":
+    import logging as _logging
+    _logging.getLogger(__name__).warning("SECRET_KEY not set; using default for development")
+
 # Configure logging
 import logging
 logging.basicConfig(level=logging.INFO)
