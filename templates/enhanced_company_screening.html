@@ -24,6 +24,11 @@
                 </div>
             </div>
             <p class="text-gray-400 mt-2">Screen companies for third-party risk management</p>
+            <div class="mt-4 flex flex-wrap gap-2" x-show="providerStatus">
+                <template x-for="p in providerStatus" :key="p">
+                    <span class="px-2 py-1 rounded-full text-xs bg-gray-700 text-gray-300">Provider: <span class="text-blue-300" x-text="p"></span></span>
+                </template>
+            </div>
         </header>
 
         <!-- Screening Form -->
@@ -56,7 +61,10 @@
                         </select>
                     </div>
                 </div>
-                <div class="flex justify-end mt-6">
+                <div class="flex items-center justify-between mt-6">
+                    <div class="text-xs text-gray-400">
+                        Requires GOOGLE_API_KEY, GOOGLE_CSE_ID, OPENAI_API_KEY
+                    </div>
                     <button type="submit"
                         class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-medium transition-colors duration-200">
                         Start Screening
@@ -83,15 +91,25 @@
                         <h2 class="text-2xl font-bold text-blue-300" x-text="results.company_name"></h2>
                         <p class="text-gray-400 mt-1" x-text="results.country"></p>
                     </div>
-                    <div class="flex items-center space-x-2">
-                        <span class="text-sm text-gray-400">Risk Level:</span>
-                        <span class="px-3 py-1 rounded-full text-sm font-medium"
-                            :class="{
-                                'bg-red-900/30 text-red-400': results.overall_risk_level === 'High',
-                                'bg-yellow-900/30 text-yellow-400': results.overall_risk_level === 'Medium',
-                                'bg-green-900/30 text-green-400': results.overall_risk_level === 'Low'
-                            }"
-                            x-text="results.overall_risk_level"></span>
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-400">Risk Level:</span>
+                            <span class="px-3 py-1 rounded-full text-sm font-medium"
+                                :class="{
+                                    'bg-red-900/30 text-red-400': results.overall_risk_level === 'High',
+                                    'bg-yellow-900/30 text-yellow-400': results.overall_risk_level === 'Medium',
+                                    'bg-green-900/30 text-green-400': results.overall_risk_level === 'Low'
+                                }"
+                                x-text="results.overall_risk_level"></span>
+                        </div>
+                        <template x-if="results._providers && results._providers.length">
+                            <div class="hidden md:flex items-center gap-2">
+                                <span class="text-xs text-gray-400">Providers:</span>
+                                <template x-for="p in results._providers" :key="p">
+                                    <span class="px-2 py-1 rounded-full text-xs bg-gray-700 text-gray-300" x-text="p"></span>
+                                </template>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -180,7 +198,14 @@
                                     </tr>
                                     <tr>
                                         <td class="px-4 py-3 text-sm font-medium text-gray-400">Website</td>
-                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.website || 'N/A'"></td>
+                                        <td class="px-4 py-3 text-sm text-blue-300">
+                                            <template x-if="results.website">
+                                                <a :href="results.website" target="_blank" class="hover:underline" x-text="results.website"></a>
+                                            </template>
+                                            <template x-if="!results.website">
+                                                <span class="text-gray-300">N/A</span>
+                                            </template>
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td class="px-4 py-3 text-sm font-medium text-gray-400">Legal Form</td>
@@ -393,6 +418,9 @@
             <div class="p-6 border-t border-gray-700 flex justify-between items-center">
                 <div class="text-sm text-gray-400">
                     Screening completed at <span x-text="formatTimestamp(results.timestamp)"></span>
+                    <template x-if="results._providers && results._providers.length">
+                        <span> • Providers: <span class="text-blue-300" x-text="results._providers.join(', ')"></span></span>
+                    </template>
                 </div>
                 <button @click="resetForm" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors duration-200">
                     New Screening
@@ -419,6 +447,7 @@
                 loadingMessage: 'Initializing screening...',
                 results: null,
                 activeTab: 'overview',
+                providerStatus: null,
                 loadingMessages: [
                     'Searching for company information...',
                     'Analyzing company structure...',
@@ -456,6 +485,7 @@
                         clearInterval(this.loadingInterval);
                         this.results = data;
                         this.isLoading = false;
+                        this.providerStatus = data?._providers || null;
                         this.activeTab = 'overview';
                         
                         // Initialize the enhanced JSON viewer

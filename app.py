@@ -126,6 +126,11 @@ def api_screen():
             "real_data": cat
         }
 
+        # Attach diagnostics so you can verify real providers used
+        result["_providers"] = (web or {}).get("metadata", {}).get("providers_used")
+        result["_search_timestamp"] = (web or {}).get("metadata", {}).get("search_timestamp")
+        result["_errors"] = web.get("error") if isinstance(web, dict) else None
+
         return jsonify(result)
 
     except Exception as e:
