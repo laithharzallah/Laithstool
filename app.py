@@ -26,7 +26,11 @@ logging.basicConfig(level=logging.INFO)
 # Setup API routes
 @app.route('/api/screen', methods=['POST'])
 def api_screen():
-    """API endpoint for company screening (Google CSE + OpenAI backed)."""
+    """API endpoint for company screening (Google CSE + OpenAI backed).
+
+    Feature flag: ENHANCED_SCREENING=1 returns normalized CompanyScreening in
+    addition to legacy fields (non-breaking).
+    """
     try:
         data = request.json or {}
         company = (data.get('company') or '').strip()
@@ -130,6 +134,33 @@ def api_screen():
         result["_providers"] = (web or {}).get("metadata", {}).get("providers_used")
         result["_search_timestamp"] = (web or {}).get("metadata", {}).get("search_timestamp")
         result["_errors"] = web.get("error") if isinstance(web, dict) else None
+
+        # Enhanced normalized output (feature-flagged)
+        enhanced = os.getenv('ENHANCED_SCREENING', '').strip() == '1'
+        if enhanced:
+            try:
+                from services.search.news_search import search_news
+                from services.nlp.news_summarize import summarize_and_classify
+                from services.normalize.company_merge import normalize_company
+                news = search_news(f"{company} {country} adverse news", max_results=20)
+                summary = summarize_and_classify(news)
+                normalized = normalize_company(
+                    name=company,
+                    country=country,
+                    website=website,
+                    executives=execs,
+                    ownership=[],
+                    news_items=summary.get('items', []),
+                    news_summary=summary.get('summary', ''),
+                    sources=(web or {}).get('metadata', {}).get('providers_used', []),
+                    cache_hit=False,
+                    feature_flags={
+                        'enhanced': True,
+                    },
+                )
+                result['normalized'] = normalized
+            except Exception as _e:
+                app.logger.warning(f"Enhanced screening disabled: {_e}")
 
         return jsonify(result)
 

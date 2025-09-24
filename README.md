@@ -39,6 +39,12 @@ Required environment variables:
 - `GOOGLE_CSE_ID` - Google Custom Search Engine ID
 - `OPENAI_API_KEY` - OpenAI API key for data extraction
 
+Optional:
+- `SERPER_API_KEY` - Serper Google wrapper
+- `NEWS_MAX_RESULTS` (default 20)
+- `SCRAPE_TIMEOUT_MS` (default 20000)
+- `CACHE_TTL_MIN` (default 1440)
+
 ## License
 
 © 2025 TPRM Tool. All rights reserved.
