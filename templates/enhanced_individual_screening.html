@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TPRM - Individual Screening</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-json-viewer.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
+    <script src="{{ url_for('static', filename='js/enhanced-json-viewer.js') }}"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8" x-data="individualScreening()">
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex justify-between items-center">
+                <h1 class="text-3xl font-bold text-purple-400">TPRM Individual Screening</h1>
+                <div class="flex space-x-4">
+                    <a href="/" class="text-purple-400 hover:text-purple-300">Home</a>
+                    <a href="/enhanced/company_screening" class="text-purple-400 hover:text-purple-300">Company Screening</a>
+                    <a href="/enhanced/dart_registry" class="text-purple-400 hover:text-purple-300">DART Registry</a>
+                </div>
+            </div>
+            <p class="text-gray-400 mt-2">Screen individuals for third-party risk management</p>
+        </header>
+
+        <!-- Screening Form -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-8 shadow-lg" x-show="!isLoading && !results">
+            <h2 class="text-xl font-semibold mb-4 text-purple-300">Individual Information</h2>
+            <form @submit.prevent="startScreening" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-300 mb-1">Full Name *</label>
+                        <input type="text" id="name" x-model="formData.name" required
+                            class="w-full px-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div>
+                        <label for="country" class="block text-sm font-medium text-gray-300 mb-1">Country</label>
+                        <input type="text" id="country" x-model="formData.country"
+                            class="w-full px-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div>
+                        <label for="date_of_birth" class="block text-sm font-medium text-gray-300 mb-1">Date of Birth</label>
+                        <input type="date" id="date_of_birth" x-model="formData.date_of_birth"
+                            class="w-full px-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div>
+                        <label for="level" class="block text-sm font-medium text-gray-300 mb-1">Screening Level</label>
+                        <select id="level" x-model="formData.level"
+                            class="w-full px-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                            <option value="basic">Basic</option>
+                            <option value="standard" selected>Standard</option>
+                            <option value="enhanced">Enhanced</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end mt-6">
+                    <button type="submit"
+                        class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-md font-medium transition-colors duration-200">
+                        Start Screening
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Loading State -->
+        <div class="bg-gray-800 rounded-lg p-8 mb-8 shadow-lg text-center" x-show="isLoading">
+            <div class="flex flex-col items-center justify-center">
+                <div class="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <h2 class="text-xl font-semibold mb-2 text-purple-300">Screening in Progress</h2>
+                <p class="text-gray-400" x-text="loadingMessage"></p>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="bg-gray-800 rounded-lg shadow-lg" x-show="results" x-cloak>
+            <!-- Results Header -->
+            <div class="p-6 border-b border-gray-700">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold text-purple-300" x-text="results.name"></h2>
+                        <p class="text-gray-400 mt-1" x-text="results.country"></p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm text-gray-400">Risk Level:</span>
+                        <span class="px-3 py-1 rounded-full text-sm font-medium"
+                            :class="{
+                                'bg-red-900/30 text-red-400': results.overall_risk_level === 'High',
+                                'bg-yellow-900/30 text-yellow-400': results.overall_risk_level === 'Medium',
+                                'bg-green-900/30 text-green-400': results.overall_risk_level === 'Low'
+                            }"
+                            x-text="results.overall_risk_level"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="border-b border-gray-700">
+                <nav class="flex overflow-x-auto" aria-label="Tabs">
+                    <button @click="activeTab = 'overview'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'overview' ? 'border-purple-500 text-purple-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Overview
+                    </button>
+                    <button @click="activeTab = 'profile'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'profile' ? 'border-purple-500 text-purple-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Profile
+                    </button>
+                    <button @click="activeTab = 'pep'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'pep' ? 'border-purple-500 text-purple-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        PEP Status
+                    </button>
+                    <button @click="activeTab = 'risk'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'risk' ? 'border-purple-500 text-purple-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Risk Factors
+                    </button>
+                    <button @click="activeTab = 'raw'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'raw' ? 'border-purple-500 text-purple-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Raw Data
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="p-6">
+                <!-- Overview Tab -->
+                <div x-show="activeTab === 'overview'">
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Executive Summary</h3>
+                        <p class="text-gray-300" x-text="results.executive_summary"></p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-gray-700/50 rounded-lg p-4 flex flex-col items-center">
+                            <div class="text-3xl font-bold mb-2" x-text="results.metrics?.sanctions || 0"
+                                :class="{
+                                    'text-red-400': (results.metrics?.sanctions || 0) > 0,
+                                    'text-green-400': (results.metrics?.sanctions || 0) === 0
+                                }"></div>
+                            <div class="text-sm text-gray-400">Sanctions</div>
+                        </div>
+                        <div class="bg-gray-700/50 rounded-lg p-4 flex flex-col items-center">
+                            <div class="text-3xl font-bold mb-2" x-text="results.pep_status ? 'Yes' : 'No'"
+                                :class="{
+                                    'text-yellow-400': results.pep_status,
+                                    'text-green-400': !results.pep_status
+                                }"></div>
+                            <div class="text-sm text-gray-400">PEP Status</div>
+                        </div>
+                        <div class="bg-gray-700/50 rounded-lg p-4 flex flex-col items-center">
+                            <div class="text-3xl font-bold mb-2" x-text="results.metrics?.adverse_media || 0"
+                                :class="{
+                                    'text-red-400': (results.metrics?.adverse_media || 0) > 5,
+                                    'text-yellow-400': (results.metrics?.adverse_media || 0) > 0 && (results.metrics?.adverse_media || 0) <= 5,
+                                    'text-green-400': (results.metrics?.adverse_media || 0) === 0
+                                }"></div>
+                            <div class="text-sm text-gray-400">Adverse Media</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Individual Information</h3>
+                        <div class="bg-gray-700/30 rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-700">
+                                <tbody class="divide-y divide-gray-700">
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Country</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.country || 'N/A'"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Date of Birth</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.date_of_birth || 'N/A'"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">PEP Status</td>
+                                        <td class="px-4 py-3 text-sm">
+                                            <span class="px-2 py-1 rounded-full text-xs font-medium"
+                                                :class="{
+                                                    'bg-yellow-900/30 text-yellow-400': results.pep_status,
+                                                    'bg-green-900/30 text-green-400': !results.pep_status
+                                                }"
+                                                x-text="results.pep_status ? 'Yes' : 'No'"></span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="mb-8" x-show="results.real_data">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Professional Background</h3>
+                        <div class="bg-gray-700/30 rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-700">
+                                <tbody class="divide-y divide-gray-700">
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Current Position</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.real_data?.current_position || 'N/A'"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Organization</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.real_data?.organization || 'N/A'"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Education</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.real_data?.education || 'N/A'"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Risk Assessment</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <p class="text-gray-300" x-text="results.risk_assessment"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile Tab -->
+                <div x-show="activeTab === 'profile'">
+                    <div class="mb-8" x-show="results.real_data && results.real_data.professional_summary">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Professional Summary</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <p class="text-gray-300" x-text="results.real_data.professional_summary"></p>
+                        </div>
+                    </div>
+
+                    <div class="mb-8" x-show="results.aliases && results.aliases.length > 0">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Known Aliases</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <ul class="list-disc pl-5 text-gray-300">
+                                <template x-for="alias in results.aliases" :key="alias">
+                                    <li x-text="alias" class="mb-1"></li>
+                                </template>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mb-8" x-show="results.real_data && results.real_data.previous_positions && results.real_data.previous_positions.length > 0">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Previous Positions</h3>
+                        <div class="bg-gray-700/30 rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-700">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Position</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Organization</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Period</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-700">
+                                    <template x-for="position in results.real_data.previous_positions" :key="position.position">
+                                        <tr>
+                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="position.position"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="position.organization"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="position.period"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div x-show="results.real_data && results.real_data.notable_achievements && results.real_data.notable_achievements.length > 0">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Notable Achievements</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <ul class="list-disc pl-5 text-gray-300">
+                                <template x-for="achievement in results.real_data.notable_achievements" :key="achievement">
+                                    <li x-text="achievement" class="mb-1"></li>
+                                </template>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PEP Status Tab -->
+                <div x-show="activeTab === 'pep'">
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Politically Exposed Person Status</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <div class="flex items-center mb-4">
+                                <div class="w-12 h-12 rounded-full flex items-center justify-center mr-4"
+                                    :class="{
+                                        'bg-yellow-900/30 text-yellow-400': results.pep_status,
+                                        'bg-green-900/30 text-green-400': !results.pep_status
+                                    }">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" x-show="results.pep_status">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" x-show="!results.pep_status">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 class="font-medium text-lg text-gray-200" x-text="results.pep_status ? 'PEP Status Identified' : 'No PEP Status Identified'"></h4>
+                                    <p class="text-gray-400 text-sm" x-text="results.pep_status ? 'This individual is identified as a Politically Exposed Person' : 'This individual is not identified as a Politically Exposed Person'"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-8" x-show="results.pep_status && results.pep_details">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">PEP Details</h3>
+                        <div class="bg-gray-700/30 rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-700">
+                                <tbody class="divide-y divide-gray-700">
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Position</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.pep_details?.position || 'N/A'"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Country</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.pep_details?.country || 'N/A'"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Since</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.pep_details?.since || 'N/A'"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Source</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.pep_details?.source || 'N/A'"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div x-show="results.pep_status">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">PEP Risk Implications</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <p class="text-gray-300">
+                                Politically Exposed Persons (PEPs) require enhanced due diligence measures due to their potential exposure to bribery and corruption risks. 
+                                This individual's PEP status contributes to their overall risk assessment and may require additional monitoring and verification procedures.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risk Factors Tab -->
+                <div x-show="activeTab === 'risk'">
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Sanctions</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <div x-show="results.sanctions && results.sanctions.length > 0">
+                                <table class="min-w-full divide-y divide-gray-700">
+                                    <thead>
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Authority</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Type</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-700">
+                                        <template x-for="sanction in results.sanctions" :key="sanction.id">
+                                            <tr>
+                                                <td class="px-4 py-3 text-sm text-gray-300" x-text="sanction.authority"></td>
+                                                <td class="px-4 py-3 text-sm text-gray-300" x-text="sanction.type"></td>
+                                                <td class="px-4 py-3 text-sm text-gray-300" x-text="sanction.date"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div x-show="!results.sanctions || results.sanctions.length === 0" class="text-gray-400">
+                                No sanctions found.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Adverse Media</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <div x-show="results.adverse_media && results.adverse_media.length > 0">
+                                <div class="space-y-4">
+                                    <template x-for="media in results.adverse_media" :key="media.id">
+                                        <div class="border-b border-gray-700 pb-4 last:border-0 last:pb-0">
+                                            <h4 class="font-medium text-gray-200 mb-1" x-text="media.title"></h4>
+                                            <p class="text-sm text-gray-400 mb-2" x-text="media.date"></p>
+                                            <p class="text-gray-300" x-text="media.summary"></p>
+                                            <a :href="media.url" target="_blank" class="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">Source</a>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            <div x-show="!results.adverse_media || results.adverse_media.length === 0" class="text-gray-400">
+                                No adverse media found.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-lg font-semibold text-purple-300 mb-3">Citations</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <div x-show="results.citations && results.citations.length > 0">
+                                <ul class="space-y-2">
+                                    <template x-for="citation in results.citations" :key="citation.url">
+                                        <li>
+                                            <a :href="citation.url" target="_blank" class="text-purple-400 hover:text-purple-300" x-text="citation.title"></a>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
+                            <div x-show="!results.citations || results.citations.length === 0" class="text-gray-400">
+                                No citations available.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Raw Data Tab -->
+                <div x-show="activeTab === 'raw'">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-purple-300">Raw Data</h3>
+                        <div class="flex space-x-2">
+                            <button @click="copyRawData" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                                Copy
+                            </button>
+                            <button @click="exportRawData" class="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm">
+                                Export
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Enhanced JSON Viewer -->
+                    <div id="json-viewer" class="json-viewer" data-theme="dark"></div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-6 border-t border-gray-700 flex justify-between items-center">
+                <div class="text-sm text-gray-400">
+                    Screening completed at <span x-text="formatTimestamp(results.timestamp)"></span>
+                </div>
+                <button @click="resetForm" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors duration-200">
+                    New Screening
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+            <p>&copy; 2025 TPRM Tool. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        function individualScreening() {
+            return {
+                formData: {
+                    name: '',
+                    country: '',
+                    date_of_birth: '',
+                    level: 'standard'
+                },
+                isLoading: false,
+                loadingMessage: 'Initializing screening...',
+                results: null,
+                activeTab: 'overview',
+                loadingMessages: [
+                    'Searching for individual information...',
+                    'Checking sanctions lists...',
+                    'Verifying PEP status...',
+                    'Scanning for adverse media...',
+                    'Evaluating risk factors...',
+                    'Analyzing background information...',
+                    'Finalizing risk assessment...'
+                ],
+                loadingInterval: null,
+                
+                startScreening() {
+                    this.isLoading = true;
+                    this.loadingMessage = this.loadingMessages[0];
+                    let messageIndex = 1;
+                    
+                    // Simulate loading with changing messages
+                    this.loadingInterval = setInterval(() => {
+                        if (messageIndex < this.loadingMessages.length) {
+                            this.loadingMessage = this.loadingMessages[messageIndex];
+                            messageIndex++;
+                        }
+                    }, 1500);
+                    
+                    // Make API call
+                    fetch('/api/screen_individual', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(this.formData)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        clearInterval(this.loadingInterval);
+                        this.results = data;
+                        this.isLoading = false;
+                        this.activeTab = 'overview';
+                        
+                        // Initialize the enhanced JSON viewer
+                        setTimeout(() => {
+                            const jsonViewer = document.getElementById('json-viewer');
+                            if (jsonViewer) {
+                                jsonViewer.setAttribute('data-json', JSON.stringify(data));
+                                new EnhancedJsonViewer({
+                                    container: jsonViewer,
+                                    data: data,
+                                    theme: 'dark'
+                                });
+                            }
+                        }, 100);
+                    })
+                    .catch(error => {
+                        clearInterval(this.loadingInterval);
+                        this.isLoading = false;
+                        alert('Error: ' + error.message);
+                    });
+                },
+                
+                resetForm() {
+                    this.results = null;
+                    this.formData = {
+                        name: '',
+                        country: '',
+                        date_of_birth: '',
+                        level: 'standard'
+                    };
+                },
+                
+                formatTimestamp(timestamp) {
+                    if (!timestamp) return 'Unknown';
+                    const date = new Date(timestamp);
+                    return date.toLocaleString();
+                },
+                
+                copyRawData() {
+                    navigator.clipboard.writeText(JSON.stringify(this.results, null, 2))
+                        .then(() => alert('Raw data copied to clipboard'))
+                        .catch(err => alert('Failed to copy: ' + err));
+                },
+                
+                exportRawData() {
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.results, null, 2));
+                    const downloadAnchorNode = document.createElement('a');
+                    downloadAnchorNode.setAttribute("href", dataStr);
+                    downloadAnchorNode.setAttribute("download", `${this.results.name.replace(/\s+/g, '_')}_screening.json`);
+                    document.body.appendChild(downloadAnchorNode);
+                    downloadAnchorNode.click();
+                    downloadAnchorNode.remove();
+                }
+            };
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,803 @@
+{% extends "new_base.html" %}
+
+{% block title %}Company Screening - Risklytics{% endblock %}
+
+{% block page_title %}Company Screening{% endblock %}
+{% block page_description %}Comprehensive due diligence and risk assessment{% endblock %}
+
+{% block header_actions %}
+<button id="new-screening-btn" class="btn-ghost" x-show="hasResults" x-cloak>
+    <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+    New Screening
+</button>
+<button id="export-report-btn" class="btn" x-show="hasResults" x-cloak>
+    <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+    Export Report
+</button>
+{% endblock %}
+
+{% block content %}
+<div x-data="companyScreening()" x-init="init()">
+    <!-- Screening Form -->
+    <div class="card mb-6" x-show="!hasResults">
+        <div class="card-header">
+            <h3 class="text-lg font-semibold">Screening Parameters</h3>
+            <div class="flex items-center space-x-2">
+                <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span class="text-sm text-gray-600 dark:text-gray-400">GPT-5 Ready</span>
+            </div>
+        </div>
+        
+        <div class="card-body">
+            <form @submit.prevent="startScreening" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Company Name *</label>
+                        <input type="text" x-model="form.companyName" required
+                               class="input"
+                               placeholder="e.g., Rawabi Holding Company">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Country/Jurisdiction</label>
+                        <input type="text" x-model="form.country"
+                               class="input"
+                               placeholder="e.g., Saudi Arabia">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Domain (Optional)</label>
+                        <input type="text" x-model="form.domain"
+                               class="input"
+                               placeholder="e.g., company.com">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Screening Level</label>
+                        <select x-model="form.screeningLevel"
+                                class="select">
+                            <option value="standard">Standard Screening</option>
+                            <option value="enhanced">Enhanced Due Diligence</option>
+                            <option value="comprehensive">Comprehensive Analysis</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center space-x-6">
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="form.includeSanctions" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">Include sanctions screening</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="form.includeAdverseMedia" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">Include adverse media</span>
+                        </label>
+                    </div>
+                    
+                    <button type="submit" :disabled="isScreening"
+                            class="btn">
+                        <span x-show="!isScreening">Start Screening</span>
+                        <span x-show="isScreening" class="flex items-center">
+                            <i data-lucide="loader-2" class="w-4 h-4 animate-spin mr-2"></i>
+                            Screening...
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Loading Skeleton -->
+    <div id="skeleton" class="space-y-6" x-show="isScreening" x-cloak>
+        <div class="card">
+            <div class="card-body">
+                <div class="skeleton h-8 w-1/3 mb-4"></div>
+                <div class="skeleton h-4 w-full mb-2"></div>
+                <div class="skeleton h-4 w-5/6 mb-2"></div>
+                <div class="skeleton h-4 w-4/6"></div>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="skeleton h-6 w-1/2 mb-2"></div>
+                    <div class="skeleton h-8 w-1/3"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <div class="skeleton h-6 w-1/2 mb-2"></div>
+                    <div class="skeleton h-8 w-1/3"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <div class="skeleton h-6 w-1/2 mb-2"></div>
+                    <div class="skeleton h-8 w-1/3"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <div class="skeleton h-6 w-1/2 mb-2"></div>
+                    <div class="skeleton h-8 w-1/3"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <div class="skeleton h-6 w-1/4"></div>
+            </div>
+            <div class="card-body">
+                <div class="skeleton h-40 w-full"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Empty State -->
+    <div id="resultsEmpty" class="text-center py-12" x-show="!isScreening && !hasResults" x-cloak>
+        <div class="mx-auto w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
+            <i data-lucide="search" class="w-12 h-12 text-gray-400"></i>
+        </div>
+        <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">No screening results yet</h3>
+        <p class="text-gray-600 dark:text-gray-400 max-w-md mx-auto mb-6">
+            Enter company details and start a screening to see comprehensive risk intelligence results.
+        </p>
+    </div>
+    
+    <!-- Results -->
+    <div id="resultsWrap" class="space-y-6" x-show="hasResults" x-cloak>
+        <!-- Risk Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Overall Risk</p>
+                            <p id="kpi-overall" class="text-2xl font-bold text-gray-900 dark:text-gray-100" x-text="results.overall_risk_level || 'Low'"></p>
+                        </div>
+                        <div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center">
+                            <i data-lucide="alert-triangle" class="w-6 h-6 text-red-600 dark:text-red-400"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Sanctions</p>
+                            <p id="kpi-sanc" class="text-2xl font-bold text-gray-900 dark:text-gray-100" x-text="results.sanctions?.length || 0"></p>
+                        </div>
+                        <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
+                            <i data-lucide="shield-alert" class="w-6 h-6 text-orange-600 dark:text-orange-400"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Adverse Media</p>
+                            <p id="kpi-adv" class="text-2xl font-bold text-gray-900 dark:text-gray-100" x-text="results.adverse_media?.length || 0"></p>
+                        </div>
+                        <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+                            <i data-lucide="newspaper" class="w-6 h-6 text-purple-600 dark:text-purple-400"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Citations</p>
+                            <p id="kpi-matches" class="text-2xl font-bold text-gray-900 dark:text-gray-100" x-text="results.citations?.length || 0"></p>
+                        </div>
+                        <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                            <i data-lucide="link" class="w-6 h-6 text-green-600 dark:text-green-400"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Results Tabs -->
+        <div class="card">
+            <div class="border-b border-gray-200 dark:border-gray-700">
+                <nav class="flex space-x-8 px-6" data-tabs>
+                    <button @click="activeTab = 'overview'" 
+                            data-tab="overview"
+                            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'overview' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'">
+                        Overview
+                    </button>
+                    <button @click="activeTab = 'company'" 
+                            data-tab="company"
+                            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'company' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'">
+                        Company Profile
+                    </button>
+                    <button @click="activeTab = 'executives'" 
+                            data-tab="executives"
+                            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'executives' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'">
+                        Key People
+                    </button>
+                    <button @click="activeTab = 'risks'" 
+                            data-tab="risks"
+                            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'risks' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'">
+                        Risk Factors
+                    </button>
+                    <button @click="activeTab = 'raw'" 
+                            data-tab="raw"
+                            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                            :class="activeTab === 'raw' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'">
+                        Raw Data
+                    </button>
+                </nav>
+            </div>
+            
+            <div class="p-6">
+                <!-- Overview Tab -->
+                <div x-show="activeTab === 'overview'" data-tab-panel="overview" class="space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2">
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Executive Summary</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                                <p id="ai-comment" class="text-gray-700 dark:text-gray-300 leading-relaxed" x-text="results.executive_summary || 'No summary available'"></p>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Risk Metrics</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                                <div id="risk-bar" class="h-64 w-full"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Company Information</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                                <div id="web-company-info" class="space-y-3 text-gray-700 dark:text-gray-300">
+                                    <div><strong>Name:</strong> <span x-text="results.company_name || '—'"></span></div>
+                                    <div><strong>Website:</strong> <span x-text="results.website || '—'"></span></div>
+                                    <div><strong>Industry:</strong> <span x-text="results.industry || '—'"></span></div>
+                                    <div><strong>Founded:</strong> <span x-text="results.founded_year || '—'"></span></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Key Executives</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                                <div id="web-executives" class="space-y-3 text-gray-700 dark:text-gray-300">
+                                    <template x-if="results.executives && results.executives.length > 0">
+                                        <div class="space-y-3">
+                                            <template x-for="exec in results.executives.slice(0, 5)" :key="exec.name">
+                                                <div>
+                                                    <strong x-text="exec.name || 'Unknown'"></strong> — 
+                                                    <span x-text="exec.position || '—'"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template x-if="!results.executives || results.executives.length === 0">
+                                        <div>No executive information available</div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Adverse Media</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                                <div id="web-adverse" class="space-y-3 text-gray-700 dark:text-gray-300">
+                                    <template x-if="results.adverse_media && results.adverse_media.length > 0">
+                                        <div class="space-y-3">
+                                            <template x-for="item in results.adverse_media.slice(0, 3)" :key="item.title">
+                                                <div>
+                                                    <strong x-text="item.title || item.headline || '—'"></strong>
+                                                    <div class="text-xs">
+                                                        <span x-text="item.source || item.source_name || '—'"></span> • 
+                                                        <span x-text="item.date || item.published_date || '—'"></span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template x-if="!results.adverse_media || results.adverse_media.length === 0">
+                                        <div>No adverse media found</div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Company Profile Tab -->
+                <div x-show="activeTab === 'company'" data-tab-panel="company" class="space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2">
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Company Profile</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                                <p class="text-gray-700 dark:text-gray-300 leading-relaxed" x-text="results.company_profile || 'No company profile available'"></p>
+                            </div>
+                            
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-4">Business Activities</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                                <p class="text-gray-700 dark:text-gray-300 leading-relaxed" x-text="results.business_activities || 'No business activities information available'"></p>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Company Details</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6 space-y-4">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="text-gray-500 dark:text-gray-400">Company Name</div>
+                                    <div class="text-gray-900 dark:text-gray-100 font-medium" x-text="results.company_name || '—'"></div>
+                                    
+                                    <div class="text-gray-500 dark:text-gray-400">Legal Form</div>
+                                    <div class="text-gray-900 dark:text-gray-100 font-medium" x-text="results.legal_form || '—'"></div>
+                                    
+                                    <div class="text-gray-500 dark:text-gray-400">Registration No.</div>
+                                    <div class="text-gray-900 dark:text-gray-100 font-medium" x-text="results.registration_number || '—'"></div>
+                                    
+                                    <div class="text-gray-500 dark:text-gray-400">Founded</div>
+                                    <div class="text-gray-900 dark:text-gray-100 font-medium" x-text="results.founded_year || '—'"></div>
+                                    
+                                    <div class="text-gray-500 dark:text-gray-400">Headquarters</div>
+                                    <div class="text-gray-900 dark:text-gray-100 font-medium" x-text="results.headquarters || '—'"></div>
+                                    
+                                    <div class="text-gray-500 dark:text-gray-400">Industry</div>
+                                    <div class="text-gray-900 dark:text-gray-100 font-medium" x-text="results.industry || '—'"></div>
+                                    
+                                    <div class="text-gray-500 dark:text-gray-400">Website</div>
+                                    <div class="text-gray-900 dark:text-gray-100 font-medium">
+                                        <a x-show="results.website" :href="results.website" target="_blank" class="text-primary-600 dark:text-primary-400 hover:underline" x-text="results.website || '—'"></a>
+                                        <span x-show="!results.website">—</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-4">Jurisdictions</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-if="results.jurisdictions && results.jurisdictions.length > 0">
+                                        <template x-for="jurisdiction in results.jurisdictions" :key="jurisdiction">
+                                            <span class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full text-sm" x-text="jurisdiction"></span>
+                                        </template>
+                                    </template>
+                                    <template x-if="!results.jurisdictions || results.jurisdictions.length === 0">
+                                        <span class="text-gray-500 dark:text-gray-400">No jurisdiction information available</span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Key People Tab -->
+                <div x-show="activeTab === 'executives'" data-tab-panel="executives" class="space-y-6">
+                    <div class="grid grid-cols-1 gap-6">
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Key Executives</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl overflow-hidden">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead class="bg-gray-100 dark:bg-gray-700">
+                                        <tr>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Position</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Risk Level</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Source</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        <template x-if="results.executives && results.executives.length > 0">
+                                            <template x-for="(exec, index) in results.executives" :key="index">
+                                                <tr>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <div class="text-sm font-medium text-gray-900 dark:text-gray-100" x-text="exec.name || 'Unknown'"></div>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <div class="text-sm text-gray-700 dark:text-gray-300" x-text="exec.position || '—'"></div>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <template x-if="exec.risk_level">
+                                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                                                                  :class="{
+                                                                      'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': exec.risk_level === 'Low',
+                                                                      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': exec.risk_level === 'Medium',
+                                                                      'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': exec.risk_level === 'High'
+                                                                  }"
+                                                                  x-text="exec.risk_level"></span>
+                                                        </template>
+                                                        <template x-if="!exec.risk_level">
+                                                            <span class="text-gray-500 dark:text-gray-400">—</span>
+                                                        </template>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                        <template x-if="exec.source_url">
+                                                            <a :href="exec.source_url" target="_blank" class="text-primary-600 dark:text-primary-400 hover:underline">Source</a>
+                                                        </template>
+                                                        <template x-if="!exec.source_url">
+                                                            <span>—</span>
+                                                        </template>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </template>
+                                        <template x-if="!results.executives || results.executives.length === 0">
+                                            <tr>
+                                                <td colspan="4" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                    No executive information available
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Risk Factors Tab -->
+                <div x-show="activeTab === 'risks'" data-tab-panel="risks" class="space-y-6">
+                    <div class="grid grid-cols-1 gap-6">
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Risk Assessment</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                                <p class="text-gray-700 dark:text-gray-300 leading-relaxed" x-text="results.risk_assessment || 'No risk assessment available'"></p>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Sanctions & Watchlists</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl overflow-hidden">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead class="bg-gray-100 dark:bg-gray-700">
+                                        <tr>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">List Name</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Entity Name</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Source</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        <template x-if="results.sanctions && results.sanctions.length > 0">
+                                            <template x-for="(sanction, index) in results.sanctions" :key="index">
+                                                <tr>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <div class="text-sm font-medium text-gray-900 dark:text-gray-100" x-text="sanction.list_name || '—'"></div>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <div class="text-sm text-gray-700 dark:text-gray-300" x-text="sanction.entity_name || '—'"></div>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400" x-text="sanction.date || '—'"></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                        <template x-if="sanction.source_url">
+                                                            <a :href="sanction.source_url" target="_blank" class="text-primary-600 dark:text-primary-400 hover:underline">Source</a>
+                                                        </template>
+                                                        <template x-if="!sanction.source_url">
+                                                            <span>—</span>
+                                                        </template>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </template>
+                                        <template x-if="!results.sanctions || results.sanctions.length === 0">
+                                            <tr>
+                                                <td colspan="4" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                    No sanctions found
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Adverse Media</h4>
+                            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl overflow-hidden">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead class="bg-gray-100 dark:bg-gray-700">
+                                        <tr>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Headline</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Source</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Link</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        <template x-if="results.adverse_media && results.adverse_media.length > 0">
+                                            <template x-for="(item, index) in results.adverse_media" :key="index">
+                                                <tr>
+                                                    <td class="px-6 py-4">
+                                                        <div class="text-sm font-medium text-gray-900 dark:text-gray-100" x-text="item.title || item.headline || '—'"></div>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <div class="text-sm text-gray-700 dark:text-gray-300" x-text="item.source || item.source_name || '—'"></div>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400" x-text="item.date || item.published_date || '—'"></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                        <template x-if="item.url || item.source_url">
+                                                            <a :href="item.url || item.source_url" target="_blank" class="text-primary-600 dark:text-primary-400 hover:underline">View</a>
+                                                        </template>
+                                                        <template x-if="!item.url && !item.source_url">
+                                                            <span>—</span>
+                                                        </template>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </template>
+                                        <template x-if="!results.adverse_media || results.adverse_media.length === 0">
+                                            <tr>
+                                                <td colspan="4" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                    No adverse media found
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Raw Data Tab -->
+                <div x-show="activeTab === 'raw'" data-tab-panel="raw" class="space-y-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Raw JSON Data</h4>
+                        <div class="flex space-x-2">
+                            <button @click="copyRawJson()" class="btn-ghost text-sm">
+                                <i data-lucide="clipboard" class="w-4 h-4 mr-1"></i>
+                                Copy
+                            </button>
+                            <button @click="exportRawJson()" class="btn-ghost text-sm">
+                                <i data-lucide="download" class="w-4 h-4 mr-1"></i>
+                                Export
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="json-container">
+                        <div id="json-viewer" data-json-container data-with-toolbar data-title="Screening Results"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function companyScreening() {
+        return {
+            form: {
+                companyName: '',
+                country: '',
+                domain: '',
+                screeningLevel: 'standard',
+                includeSanctions: true,
+                includeAdverseMedia: true
+            },
+            isScreening: false,
+            hasResults: false,
+            results: {},
+            activeTab: 'overview',
+            
+            init() {
+                // Check for existing results in localStorage
+                const savedResults = localStorage.getItem('companyScreeningResults');
+                if (savedResults) {
+                    try {
+                        this.results = JSON.parse(savedResults);
+                        this.hasResults = true;
+                        
+                        // Initialize JSON viewer with the results
+                        this.$nextTick(() => {
+                            const jsonViewer = document.getElementById('json-viewer');
+                            if (jsonViewer) {
+                                jsonViewer.textContent = JSON.stringify(this.results, null, 2);
+                                // The enhanced-ui.js will initialize the JSON viewer
+                            }
+                            
+                            // Initialize charts
+                            this.renderCharts();
+                        });
+                    } catch (e) {
+                        console.error('Failed to parse saved results', e);
+                    }
+                }
+                
+                // Set up event listeners
+                document.getElementById('new-screening-btn')?.addEventListener('click', () => {
+                    this.startNewScreening();
+                });
+                
+                document.getElementById('export-report-btn')?.addEventListener('click', () => {
+                    this.exportReport();
+                });
+            },
+            
+            startScreening() {
+                if (!this.form.companyName) {
+                    showToast('Please enter a company name', 'error');
+                    return;
+                }
+                
+                this.isScreening = true;
+                
+                // Simulate API call with a timeout
+                setTimeout(() => {
+                    fetch('/api/screen', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            company: this.form.companyName,
+                            country: this.form.country,
+                            domain: this.form.domain,
+                            level: this.form.screeningLevel,
+                            include_sanctions: this.form.includeSanctions,
+                            include_adverse_media: this.form.includeAdverseMedia
+                        })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        this.results = data;
+                        this.hasResults = true;
+                        this.isScreening = false;
+                        
+                        // Save results to localStorage
+                        localStorage.setItem('companyScreeningResults', JSON.stringify(data));
+                        
+                        // Initialize JSON viewer with the results
+                        this.$nextTick(() => {
+                            const jsonViewer = document.getElementById('json-viewer');
+                            if (jsonViewer) {
+                                jsonViewer.textContent = JSON.stringify(data, null, 2);
+                                // The enhanced-ui.js will initialize the JSON viewer
+                            }
+                            
+                            // Initialize charts
+                            this.renderCharts();
+                        });
+                        
+                        showToast('Screening completed successfully', 'success');
+                    })
+                    .catch(error => {
+                        console.error('Screening error:', error);
+                        this.isScreening = false;
+                        showToast(`Error: ${error.message}`, 'error');
+                    });
+                }, 1000);
+            },
+            
+            startNewScreening() {
+                this.hasResults = false;
+                this.results = {};
+                localStorage.removeItem('companyScreeningResults');
+            },
+            
+            exportReport() {
+                if (!this.results || Object.keys(this.results).length === 0) {
+                    showToast('No results to export', 'error');
+                    return;
+                }
+                
+                const jsonString = JSON.stringify(this.results, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `company_screening_${this.form.companyName.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showToast('Report exported successfully', 'success');
+            },
+            
+            copyRawJson() {
+                if (!this.results || Object.keys(this.results).length === 0) {
+                    showToast('No results to copy', 'error');
+                    return;
+                }
+                
+                const jsonString = JSON.stringify(this.results, null, 2);
+                
+                navigator.clipboard.writeText(jsonString)
+                    .then(() => {
+                        showToast('JSON copied to clipboard', 'success');
+                    })
+                    .catch(err => {
+                        showToast('Failed to copy: ' + err, 'error');
+                    });
+            },
+            
+            exportRawJson() {
+                if (!this.results || Object.keys(this.results).length === 0) {
+                    showToast('No results to export', 'error');
+                    return;
+                }
+                
+                const jsonString = JSON.stringify(this.results, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `raw_data_${this.form.companyName.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showToast('Raw data exported successfully', 'success');
+            },
+            
+            renderCharts() {
+                // Render risk breakdown bar chart if needed
+                if (typeof renderRiskBar === 'function' && this.results.metrics) {
+                    renderRiskBar({
+                        adverse_media: this.results.metrics.adverse_media ?? 0,
+                        pep: this.results.metrics.pep ?? 0,
+                        sanctions: this.results.metrics.sanctions ?? 0,
+                        overall_risk: this.results.metrics.overall_risk ?? 0
+                    });
+                }
+                
+                // Render sparkline trend chart if needed
+                if (typeof renderSparkline === 'function') {
+                    renderSparkline();
+                }
+            }
+        };
+    }
+    
+    // Helper function to show toast notifications
+    function showToast(message, type = 'info') {
+        if (window.risklytics && typeof window.risklytics.showToast === 'function') {
+            window.risklytics.showToast(message, type);
+        } else {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, 4000);
+        }
+    }
+</script>
+{% endblock %}

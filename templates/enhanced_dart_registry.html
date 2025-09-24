@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TPRM - DART Registry</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-json-viewer.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
+    <script src="{{ url_for('static', filename='js/enhanced-json-viewer.js') }}"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8" x-data="dartRegistry()">
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex justify-between items-center">
+                <h1 class="text-3xl font-bold text-green-400">DART Registry Lookup</h1>
+                <div class="flex space-x-4">
+                    <a href="/" class="text-green-400 hover:text-green-300">Home</a>
+                    <a href="/enhanced/company_screening" class="text-green-400 hover:text-green-300">Company Screening</a>
+                    <a href="/enhanced/individual_screening" class="text-green-400 hover:text-green-300">Individual Screening</a>
+                </div>
+            </div>
+            <p class="text-gray-400 mt-2">Search Korean companies in the official Financial Supervisory Service registry</p>
+        </header>
+
+        <!-- Search Form -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-8 shadow-lg" x-show="!isLoading && !results">
+            <h2 class="text-xl font-semibold mb-4 text-green-300">DART-Only Search</h2>
+            <div class="bg-gray-700/30 rounded-lg p-4 mb-6 flex items-start">
+                <div class="text-blue-400 mr-3 mt-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <p class="text-gray-300 text-sm">
+                    This search uses only the official DART registry from the Korean Financial Supervisory Service.
+                </p>
+            </div>
+            <form @submit.prevent="startLookup" class="space-y-4">
+                <div>
+                    <label for="company" class="block text-sm font-medium text-gray-300 mb-1">Company Name *</label>
+                    <input type="text" id="company" x-model="formData.company" required
+                        class="w-full px-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
+                </div>
+                <div>
+                    <label for="registry_id" class="block text-sm font-medium text-gray-300 mb-1">Registry ID (optional)</label>
+                    <input type="text" id="registry_id" x-model="formData.registry_id"
+                        class="w-full px-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
+                </div>
+                <div class="flex justify-end mt-6">
+                    <button type="submit"
+                        class="px-6 py-2 bg-green-600 hover:bg-green-700 rounded-md font-medium transition-colors duration-200">
+                        Search Registry
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Loading State -->
+        <div class="bg-gray-800 rounded-lg p-8 mb-8 shadow-lg text-center" x-show="isLoading">
+            <div class="flex flex-col items-center justify-center">
+                <div class="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <h2 class="text-xl font-semibold mb-2 text-green-300">Searching Registry</h2>
+                <p class="text-gray-400" x-text="loadingMessage"></p>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div class="bg-gray-800 rounded-lg p-8 mb-8 shadow-lg" x-show="error" x-cloak>
+            <div class="flex items-center justify-center">
+                <div class="w-16 h-16 rounded-full bg-red-900/30 flex items-center justify-center mr-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-xl font-semibold mb-2 text-red-400">Search Error</h2>
+                    <p class="text-gray-300">Search failed. Please try again.</p>
+                    <button @click="resetForm" class="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors duration-200">
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="bg-gray-800 rounded-lg shadow-lg" x-show="results && !error" x-cloak>
+            <!-- Results Header -->
+            <div class="p-6 border-b border-gray-700">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold text-green-300" x-text="results.company_name"></h2>
+                        <div class="flex items-center mt-1">
+                            <span class="text-gray-400 mr-2">Registry ID:</span>
+                            <span class="px-3 py-1 bg-gray-700 rounded-full text-sm font-medium text-green-300" x-text="results.registry_id"></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm text-gray-400">Status:</span>
+                        <span class="px-3 py-1 rounded-full text-sm font-medium bg-green-900/30 text-green-400" x-text="results.status"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="border-b border-gray-700">
+                <nav class="flex overflow-x-auto" aria-label="Tabs">
+                    <button @click="activeTab = 'overview'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'overview' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Overview
+                    </button>
+                    <button @click="activeTab = 'financial'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'financial' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Financial Summary
+                    </button>
+                    <button @click="activeTab = 'documents'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'documents' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Documents
+                    </button>
+                    <button @click="activeTab = 'structure'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'structure' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Corporate Structure
+                    </button>
+                    <button @click="activeTab = 'raw'" 
+                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
+                        :class="activeTab === 'raw' ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
+                        Raw Data
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="p-6">
+                <!-- Overview Tab -->
+                <div x-show="activeTab === 'overview'">
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-green-300 mb-3">Company Information</h3>
+                        <div class="bg-gray-700/30 rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-700">
+                                <tbody class="divide-y divide-gray-700">
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Registration Date</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.registration_date"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Industry</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.industry_name + ' (' + results.industry_code + ')'"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Address</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.address"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Representative</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.representative"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Capital</td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.capital"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="mb-8" x-show="results.major_shareholders && results.major_shareholders.length > 0">
+                        <h3 class="text-lg font-semibold text-green-300 mb-3">Major Shareholders</h3>
+                        <div class="bg-gray-700/30 rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-700">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Ownership</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Relationship</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-700">
+                                    <template x-for="shareholder in results.major_shareholders" :key="shareholder.name">
+                                        <tr>
+                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="shareholder.name"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="shareholder.ownership"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="shareholder.relationship"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div x-show="results.subsidiaries && results.subsidiaries.length > 0">
+                        <h3 class="text-lg font-semibold text-green-300 mb-3">Subsidiaries</h3>
+                        <div class="bg-gray-700/30 rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-700">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Ownership</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Business</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-700">
+                                    <template x-for="subsidiary in results.subsidiaries" :key="subsidiary.name">
+                                        <tr>
+                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="subsidiary.name"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="subsidiary.ownership"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="subsidiary.business"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Summary Tab -->
+                <div x-show="activeTab === 'financial'">
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-green-300 mb-3">Financial Summary</h3>
+                        <div class="bg-gray-700/30 rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-700">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Metric</th>
+                                        <template x-for="(value, year) in results.financial_summary.revenue" :key="year">
+                                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider" x-text="year"></th>
+                                        </template>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-700">
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-300">Revenue</td>
+                                        <template x-for="(value, year) in results.financial_summary.revenue" :key="year">
+                                            <td class="px-4 py-3 text-sm text-gray-300 text-right" x-text="formatCurrency(value, results.financial_summary.currency)"></td>
+                                        </template>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-300">Profit</td>
+                                        <template x-for="(value, year) in results.financial_summary.profit" :key="year">
+                                            <td class="px-4 py-3 text-sm text-gray-300 text-right" x-text="formatCurrency(value, results.financial_summary.currency)"></td>
+                                        </template>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-300">Assets</td>
+                                        <template x-for="(value, year) in results.financial_summary.assets" :key="year">
+                                            <td class="px-4 py-3 text-sm text-gray-300 text-right" x-text="formatCurrency(value, results.financial_summary.currency)"></td>
+                                        </template>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-lg font-semibold text-green-300 mb-3">Financial Trends</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <div id="financial-chart" class="w-full h-80"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Documents Tab -->
+                <div x-show="activeTab === 'documents'">
+                    <h3 class="text-lg font-semibold text-green-300 mb-3">Available Documents</h3>
+                    
+                    <div class="bg-gray-700/30 rounded-lg overflow-hidden" x-show="results.documents && results.documents.length > 0">
+                        <table class="min-w-full divide-y divide-gray-700">
+                            <thead>
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">ID</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Title</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Date</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-700">
+                                <template x-for="document in results.documents" :key="document.id">
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="document.id"></td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="document.title"></td>
+                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="document.date"></td>
+                                        <td class="px-4 py-3 text-sm">
+                                            <a :href="document.url" target="_blank" class="text-green-400 hover:text-green-300">View</a>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="bg-gray-700/30 rounded-lg p-4 text-gray-400" x-show="!results.documents || results.documents.length === 0">
+                        No documents available.
+                    </div>
+                </div>
+
+                <!-- Corporate Structure Tab -->
+                <div x-show="activeTab === 'structure'">
+                    <div class="mb-8" x-show="results.major_shareholders && results.major_shareholders.length > 0">
+                        <h3 class="text-lg font-semibold text-green-300 mb-3">Ownership Structure</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <div id="ownership-chart" class="w-full h-80"></div>
+                        </div>
+                    </div>
+
+                    <div x-show="results.subsidiaries && results.subsidiaries.length > 0">
+                        <h3 class="text-lg font-semibold text-green-300 mb-3">Corporate Hierarchy</h3>
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <div id="hierarchy-chart" class="w-full h-80"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Raw Data Tab -->
+                <div x-show="activeTab === 'raw'">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-green-300">Raw Data</h3>
+                        <div class="flex space-x-2">
+                            <button @click="copyRawData" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                                Copy
+                            </button>
+                            <button @click="exportRawData" class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm">
+                                Export
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Enhanced JSON Viewer -->
+                    <div id="json-viewer" class="json-viewer" data-theme="dark"></div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-6 border-t border-gray-700 flex justify-between items-center">
+                <div class="text-sm text-gray-400">
+                    Data retrieved at <span x-text="formatTimestamp(results.timestamp)"></span>
+                </div>
+                <button @click="resetForm" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors duration-200">
+                    New Search
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+            <p>&copy; 2025 TPRM Tool. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        function dartRegistry() {
+            return {
+                formData: {
+                    company: '',
+                    registry_id: '',
+                    country: 'Korea'
+                },
+                isLoading: false,
+                loadingMessage: 'Searching DART registry...',
+                results: null,
+                error: false,
+                activeTab: 'overview',
+                loadingMessages: [
+                    'Searching DART registry...',
+                    'Retrieving company information...',
+                    'Fetching financial data...',
+                    'Loading document history...',
+                    'Analyzing corporate structure...'
+                ],
+                loadingInterval: null,
+                
+                startLookup() {
+                    this.isLoading = true;
+                    this.error = false;
+                    this.loadingMessage = this.loadingMessages[0];
+                    let messageIndex = 1;
+                    
+                    // Simulate loading with changing messages
+                    this.loadingInterval = setInterval(() => {
+                        if (messageIndex < this.loadingMessages.length) {
+                            this.loadingMessage = this.loadingMessages[messageIndex];
+                            messageIndex++;
+                        }
+                    }, 1500);
+                    
+                    // Make API call
+                    fetch('/api/dart_lookup', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(this.formData)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        clearInterval(this.loadingInterval);
+                        
+                        if (data.error) {
+                            this.error = true;
+                            this.results = null;
+                        } else {
+                            this.results = data;
+                            this.error = false;
+                            
+                            // Add timestamp if not present
+                            if (!this.results.timestamp) {
+                                this.results.timestamp = new Date().toISOString();
+                            }
+                            
+                            // Initialize the enhanced JSON viewer
+                            setTimeout(() => {
+                                const jsonViewer = document.getElementById('json-viewer');
+                                if (jsonViewer) {
+                                    jsonViewer.setAttribute('data-json', JSON.stringify(data));
+                                    new EnhancedJsonViewer({
+                                        container: jsonViewer,
+                                        data: data,
+                                        theme: 'dark'
+                                    });
+                                }
+                                
+                                this.initCharts();
+                            }, 100);
+                        }
+                        
+                        this.isLoading = false;
+                        this.activeTab = 'overview';
+                    })
+                    .catch(error => {
+                        clearInterval(this.loadingInterval);
+                        this.isLoading = false;
+                        this.error = true;
+                        console.error('Error:', error);
+                    });
+                },
+                
+                resetForm() {
+                    this.results = null;
+                    this.error = false;
+                    this.formData = {
+                        company: '',
+                        registry_id: '',
+                        country: 'Korea'
+                    };
+                },
+                
+                formatTimestamp(timestamp) {
+                    if (!timestamp) return 'Unknown';
+                    const date = new Date(timestamp);
+                    return date.toLocaleString();
+                },
+                
+                formatCurrency(value, currency) {
+                    if (typeof value !== 'number') {
+                        return value;
+                    }
+                    
+                    // Format large numbers in millions or billions
+                    if (value >= 1000000000) {
+                        return `${(value / 1000000000).toFixed(2)}B ${currency}`;
+                    } else if (value >= 1000000) {
+                        return `${(value / 1000000).toFixed(2)}M ${currency}`;
+                    } else {
+                        return `${value.toLocaleString()} ${currency}`;
+                    }
+                },
+                
+                copyRawData() {
+                    navigator.clipboard.writeText(JSON.stringify(this.results, null, 2))
+                        .then(() => alert('Raw data copied to clipboard'))
+                        .catch(err => alert('Failed to copy: ' + err));
+                },
+                
+                exportRawData() {
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.results, null, 2));
+                    const downloadAnchorNode = document.createElement('a');
+                    downloadAnchorNode.setAttribute("href", dataStr);
+                    downloadAnchorNode.setAttribute("download", `${this.results.company_name.replace(/\s+/g, '_')}_dart.json`);
+                    document.body.appendChild(downloadAnchorNode);
+                    downloadAnchorNode.click();
+                    downloadAnchorNode.remove();
+                },
+                
+                initCharts() {
+                    if (!this.results) return;
+                    
+                    // Initialize financial chart
+                    if (this.results.financial_summary) {
+                        const financialChart = echarts.init(document.getElementById('financial-chart'));
+                        
+                        const years = Object.keys(this.results.financial_summary.revenue).sort();
+                        const revenueData = years.map(year => this.results.financial_summary.revenue[year] / 1000000);
+                        const profitData = years.map(year => this.results.financial_summary.profit[year] / 1000000);
+                        
+                        const option = {
+                            backgroundColor: 'transparent',
+                            tooltip: {
+                                trigger: 'axis',
+                                axisPointer: {
+                                    type: 'shadow'
+                                }
+                            },
+                            legend: {
+                                data: ['Revenue', 'Profit'],
+                                textStyle: {
+                                    color: '#e2e8f0'
+                                }
+                            },
+                            grid: {
+                                left: '3%',
+                                right: '4%',
+                                bottom: '3%',
+                                containLabel: true
+                            },
+                            xAxis: {
+                                type: 'category',
+                                data: years,
+                                axisLine: {
+                                    lineStyle: {
+                                        color: '#4b5563'
+                                    }
+                                },
+                                axisLabel: {
+                                    color: '#e2e8f0'
+                                }
+                            },
+                            yAxis: {
+                                type: 'value',
+                                name: 'Million ' + this.results.financial_summary.currency,
+                                nameTextStyle: {
+                                    color: '#e2e8f0'
+                                },
+                                axisLine: {
+                                    lineStyle: {
+                                        color: '#4b5563'
+                                    }
+                                },
+                                axisLabel: {
+                                    color: '#e2e8f0'
+                                },
+                                splitLine: {
+                                    lineStyle: {
+                                        color: '#374151'
+                                    }
+                                }
+                            },
+                            series: [
+                                {
+                                    name: 'Revenue',
+                                    type: 'bar',
+                                    data: revenueData,
+                                    itemStyle: {
+                                        color: '#10b981'
+                                    }
+                                },
+                                {
+                                    name: 'Profit',
+                                    type: 'bar',
+                                    data: profitData,
+                                    itemStyle: {
+                                        color: '#3b82f6'
+                                    }
+                                }
+                            ]
+                        };
+                        
+                        financialChart.setOption(option);
+                        
+                        // Handle resize
+                        window.addEventListener('resize', () => {
+                            financialChart.resize();
+                        });
+                    }
+                    
+                    // Initialize ownership chart if shareholders exist
+                    if (this.results.major_shareholders && this.results.major_shareholders.length > 0) {
+                        const ownershipChart = echarts.init(document.getElementById('ownership-chart'));
+                        
+                        const shareholders = this.results.major_shareholders.map(s => s.name);
+                        const ownership = this.results.major_shareholders.map(s => {
+                            // Convert percentage string to number
+                            const match = s.ownership.match(/(\d+(\.\d+)?)%/);
+                            return match ? parseFloat(match[1]) : 0;
+                        });
+                        
+                        const option = {
+                            backgroundColor: 'transparent',
+                            tooltip: {
+                                trigger: 'item',
+                                formatter: '{a} <br/>{b}: {c}%'
+                            },
+                            legend: {
+                                orient: 'vertical',
+                                right: 10,
+                                top: 'center',
+                                data: shareholders,
+                                textStyle: {
+                                    color: '#e2e8f0'
+                                }
+                            },
+                            series: [
+                                {
+                                    name: 'Ownership',
+                                    type: 'pie',
+                                    radius: ['40%', '70%'],
+                                    avoidLabelOverlap: false,
+                                    itemStyle: {
+                                        borderRadius: 10,
+                                        borderColor: '#1f2937',
+                                        borderWidth: 2
+                                    },
+                                    label: {
+                                        show: false,
+                                        position: 'center'
+                                    },
+                                    emphasis: {
+                                        label: {
+                                            show: true,
+                                            fontSize: '18',
+                                            fontWeight: 'bold',
+                                            formatter: '{b}: {c}%'
+                                        }
+                                    },
+                                    labelLine: {
+                                        show: false
+                                    },
+                                    data: shareholders.map((name, index) => {
+                                        return {
+                                            name: name,
+                                            value: ownership[index]
+                                        };
+                                    })
+                                }
+                            ]
+                        };
+                        
+                        ownershipChart.setOption(option);
+                        
+                        // Handle resize
+                        window.addEventListener('resize', () => {
+                            ownershipChart.resize();
+                        });
+                    }
+                    
+                    // Initialize hierarchy chart if subsidiaries exist
+                    if (this.results.subsidiaries && this.results.subsidiaries.length > 0) {
+                        const hierarchyChart = echarts.init(document.getElementById('hierarchy-chart'));
+                        
+                        // Create hierarchy data
+                        const data = {
+                            name: this.results.company_name,
+                            children: this.results.subsidiaries.map(sub => {
+                                return {
+                                    name: sub.name,
+                                    value: sub.ownership,
+                                    itemStyle: {
+                                        color: '#10b981'
+                                    }
+                                };
+                            })
+                        };
+                        
+                        const option = {
+                            backgroundColor: 'transparent',
+                            tooltip: {
+                                trigger: 'item',
+                                formatter: '{b}: {c}'
+                            },
+                            series: [
+                                {
+                                    type: 'tree',
+                                    data: [data],
+                                    top: '10%',
+                                    left: '10%',
+                                    bottom: '10%',
+                                    right: '10%',
+                                    symbolSize: 12,
+                                    label: {
+                                        position: 'left',
+                                        verticalAlign: 'middle',
+                                        align: 'right',
+                                        color: '#e2e8f0'
+                                    },
+                                    leaves: {
+                                        label: {
+                                            position: 'right',
+                                            verticalAlign: 'middle',
+                                            align: 'left'
+                                        }
+                                    },
+                                    emphasis: {
+                                        focus: 'descendant'
+                                    },
+                                    expandAndCollapse: true,
+                                    animationDuration: 550,
+                                    animationDurationUpdate: 750,
+                                    lineStyle: {
+                                        color: '#4b5563',
+                                        width: 1
+                                    },
+                                    itemStyle: {
+                                        color: '#3b82f6'
+                                    }
+                                }
+                            ]
+                        };
+                        
+                        hierarchyChart.setOption(option);
+                        
+                        // Handle resize
+                        window.addEventListener('resize', () => {
+                            hierarchyChart.resize();
+                        });
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+</html>
