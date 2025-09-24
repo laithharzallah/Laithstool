@@ -169,27 +169,54 @@ def api_screen_individual():
 
 @app.route('/api/dart_lookup', methods=['POST'])
 def api_dart_lookup():
-    """API endpoint for DART registry lookup"""
+    """API endpoint for DART registry lookup (now using live DART)."""
     try:
-        data = request.json
-        company = data.get('company')
-        registry_id = data.get('registry_id')
-        
-        # Log the request
-        app.logger.info(f"DART lookup request: {company} (ID: {registry_id})")
-        
-        # Generate simulated response
-        result = generate_simulated_dart_lookup_result(company, registry_id)
-        
+        payload = request.get_json(force=True, silent=True) or {}
+        company = (payload.get('company') or '').strip()
+        if not company:
+            return jsonify({"error": "company is required"}), 400
+
+        from services.adapters.dart import dart_adapter
+        companies = dart_adapter.search_company(company)
+        if not companies:
+            return jsonify({"error": "No DART results found"}), 404
+
+        first = companies[0]
+        corp_code = first.get('corp_code')
+        detailed = {}
+        if corp_code:
+            try:
+                detailed = dart_adapter.get_complete_company_info(corp_code)
+            except Exception:
+                detailed = {}
+
+        basic = (detailed or {}).get('basic_info') or {}
+        # Map to UI fields expected by enhanced_dart_registry
+        result = {
+            "company_name": basic.get('corp_name') or first.get('name') or company,
+            "registry_id": corp_code or '',
+            "status": "Active",
+            "industry_code": None,
+            "industry_name": None,
+            "registration_date": basic.get('est_dt'),
+            "address": basic.get('adr'),
+            "representative": basic.get('ceo_nm'),
+            "capital": None,
+            "major_shareholders": detailed.get('shareholders', []),
+            "subsidiaries": [],
+            "financial_summary": {
+                "currency": None,
+                "revenue": {},
+                "profit": {},
+                "assets": {}
+            },
+            "documents": [],
+            "timestamp": datetime.now().isoformat()
+        }
         return jsonify(result)
-            
     except Exception as e:
         app.logger.error(f"API error: {str(e)}")
-        return jsonify({
-            "error": "Invalid request",
-            "details": str(e),
-            "status": "error"
-        }), 400
+        return jsonify({"error": "Invalid request", "details": str(e), "status": "error"}), 400
 
 # --- Real DART search endpoint (uses services.adapters.dart) ---
 @app.route('/api/dart/search', methods=['POST'])
