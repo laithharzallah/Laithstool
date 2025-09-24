@@ -86,7 +86,7 @@
         <div class="bg-gray-800 rounded-lg shadow-lg" x-show="results" x-cloak>
             <!-- Results Header -->
             <div class="p-6 border-b border-gray-700">
-                <div class="flex justify-between items-center">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
                         <h2 class="text-2xl font-bold text-blue-300" x-text="results.company_name"></h2>
                         <p class="text-gray-400 mt-1" x-text="results.country"></p>
@@ -102,103 +102,44 @@
                                 }"
                                 x-text="results.overall_risk_level"></span>
                         </div>
-                        <template x-if="results._providers && results._providers.length">
-                            <div class="hidden md:flex items-center gap-2">
-                                <span class="text-xs text-gray-400">Providers:</span>
-                                <template x-for="p in results._providers" :key="p">
-                                    <span class="px-2 py-1 rounded-full text-xs bg-gray-700 text-gray-300" x-text="p"></span>
-                                </template>
-                            </div>
-                        </template>
+                        <button @click="openRawModal()" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs">View Raw JSON</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Tabs -->
-            <div class="border-b border-gray-700">
-                <nav class="flex overflow-x-auto" aria-label="Tabs">
-                    <button @click="activeTab = 'overview'" 
-                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
-                        :class="activeTab === 'overview' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
-                        Overview
-                    </button>
-                    <button @click="activeTab = 'company'" 
-                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
-                        :class="activeTab === 'company' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
-                        Company Profile
-                    </button>
-                    <button @click="activeTab = 'executives'" 
-                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
-                        :class="activeTab === 'executives' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
-                        Key People
-                    </button>
-                    <button @click="activeTab = 'risk'" 
-                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
-                        :class="activeTab === 'risk' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
-                        Risk Factors
-                    </button>
-                    <button @click="activeTab = 'raw'" 
-                        class="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-200"
-                        :class="activeTab === 'raw' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-300'">
-                        Raw Data
-                    </button>
-                </nav>
-            </div>
-
-            <!-- Tab Content -->
-            <div class="p-6">
-                <!-- Overview Tab -->
-                <div x-show="activeTab === 'overview'">
-                    <div class="mb-8">
+            <!-- Content Grid -->
+            <div class="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Main Content -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Executive Summary -->
+                    <div class="bg-gray-700/30 rounded-lg p-5">
                         <h3 class="text-lg font-semibold text-blue-300 mb-3">Executive Summary</h3>
                         <p class="text-gray-300" x-text="results.executive_summary"></p>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <div class="bg-gray-700/50 rounded-lg p-4 flex flex-col items-center">
-                            <div class="text-3xl font-bold mb-2" x-text="results.metrics?.sanctions || 0"
-                                :class="{
-                                    'text-red-400': (results.metrics?.sanctions || 0) > 0,
-                                    'text-green-400': (results.metrics?.sanctions || 0) === 0
-                                }"></div>
-                            <div class="text-sm text-gray-400">Sanctions</div>
+                    <!-- Company Info -->
+                    <div class="bg-gray-700/30 rounded-lg">
+                        <div class="p-5 border-b border-gray-700">
+                            <h3 class="text-lg font-semibold text-blue-300">Company Information</h3>
                         </div>
-                        <div class="bg-gray-700/50 rounded-lg p-4 flex flex-col items-center">
-                            <div class="text-3xl font-bold mb-2" x-text="results.metrics?.adverse_media || 0"
-                                :class="{
-                                    'text-red-400': (results.metrics?.adverse_media || 0) > 5,
-                                    'text-yellow-400': (results.metrics?.adverse_media || 0) > 0 && (results.metrics?.adverse_media || 0) <= 5,
-                                    'text-green-400': (results.metrics?.adverse_media || 0) === 0
-                                }"></div>
-                            <div class="text-sm text-gray-400">Adverse Media</div>
-                        </div>
-                        <div class="bg-gray-700/50 rounded-lg p-4 flex flex-col items-center">
-                            <div class="text-3xl font-bold mb-2" x-text="results.executives?.length || 0"
-                                class="text-blue-400"></div>
-                            <div class="text-sm text-gray-400">Key Executives</div>
-                        </div>
-                    </div>
-
-                    <div class="mb-8">
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Company Information</h3>
-                        <div class="bg-gray-700/30 rounded-lg overflow-hidden">
+                        <div class="p-5">
                             <table class="min-w-full divide-y divide-gray-700">
                                 <tbody class="divide-y divide-gray-700">
                                     <tr>
-                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Industry</td>
-                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.industry || 'N/A'"></td>
+                                        <td class="px-2 py-3 text-sm font-medium text-gray-400">Industry</td>
+                                        <td class="px-2 py-3 text-sm text-gray-300" x-text="results.industry || 'N/A'"></td>
                                     </tr>
                                     <tr>
-                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Founded</td>
-                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.founded_year || 'N/A'"></td>
+                                        <td class="px-2 py-3 text-sm font-medium text-gray-400">Founded</td>
+                                        <td class="px-2 py-3 text-sm text-gray-300" x-text="results.founded_year || 'N/A'"></td>
                                     </tr>
                                     <tr>
-                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Headquarters</td>
-                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.headquarters || 'N/A'"></td>
+                                        <td class="px-2 py-3 text-sm font-medium text-gray-400">Headquarters</td>
+                                        <td class="px-2 py-3 text-sm text-gray-300" x-text="results.headquarters || 'N/A'"></td>
                                     </tr>
                                     <tr>
-                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Website</td>
-                                        <td class="px-4 py-3 text-sm text-blue-300">
+                                        <td class="px-2 py-3 text-sm font-medium text-gray-400">Website</td>
+                                        <td class="px-2 py-3 text-sm text-blue-300">
                                             <template x-if="results.website">
                                                 <a :href="results.website" target="_blank" class="hover:underline" x-text="results.website"></a>
                                             </template>
@@ -207,165 +148,28 @@
                                             </template>
                                         </td>
                                     </tr>
-                                    <tr>
-                                        <td class="px-4 py-3 text-sm font-medium text-gray-400">Legal Form</td>
-                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="results.legal_form || 'N/A'"></td>
-                                    </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    <div class="mb-8" x-show="results.real_data && results.real_data.ownership_structure">
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Ownership Structure</h3>
-                        <div class="bg-gray-700/30 rounded-lg overflow-hidden">
-                            <table class="min-w-full divide-y divide-gray-700">
-                                <thead>
-                                    <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Shareholder</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Ownership</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-700">
-                                    <template x-for="owner in results.real_data.ownership_structure" :key="owner.name">
-                                        <tr>
-                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="owner.name"></td>
-                                            <td class="px-4 py-3 text-sm text-gray-300" x-text="owner.percentage"></td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
+                    <!-- Adverse Media -->
+                    <div class="bg-gray-700/30 rounded-lg">
+                        <div class="p-5 border-b border-gray-700 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-blue-300">Adverse Media</h3>
+                            <span class="text-xs text-gray-400" x-text="(results.adverse_media?.length || 0) + ' items'"></span>
                         </div>
-                    </div>
-
-                    <div>
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Risk Assessment</h3>
-                        <div class="bg-gray-700/30 rounded-lg p-4">
-                            <p class="text-gray-300" x-text="results.risk_assessment"></p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Company Profile Tab -->
-                <div x-show="activeTab === 'company'">
-                    <div class="mb-8">
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Company Profile</h3>
-                        <div class="bg-gray-700/30 rounded-lg p-4">
-                            <p class="text-gray-300" x-text="results.company_profile || 'No company profile available.'"></p>
-                        </div>
-                    </div>
-
-                    <div class="mb-8">
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Business Activities</h3>
-                        <div class="bg-gray-700/30 rounded-lg p-4">
-                            <p class="text-gray-300" x-text="results.business_activities || 'No business activities information available.'"></p>
-                        </div>
-                    </div>
-
-                    <div class="mb-8" x-show="results.real_data && results.real_data.notable_projects">
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Notable Projects</h3>
-                        <div class="bg-gray-700/30 rounded-lg p-4">
-                            <ul class="list-disc pl-5 text-gray-300">
-                                <template x-for="project in results.real_data.notable_projects" :key="project">
-                                    <li x-text="project" class="mb-1"></li>
-                                </template>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Jurisdictions</h3>
-                        <div class="bg-gray-700/30 rounded-lg p-4">
-                            <div class="flex flex-wrap gap-2">
-                                <template x-for="jurisdiction in results.jurisdictions" :key="jurisdiction">
-                                    <span class="px-3 py-1 bg-gray-600 rounded-full text-sm text-gray-300" x-text="jurisdiction"></span>
-                                </template>
-                                <span x-show="!results.jurisdictions || results.jurisdictions.length === 0" class="text-gray-400">No jurisdictions information available.</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Executives Tab -->
-                <div x-show="activeTab === 'executives'">
-                    <h3 class="text-lg font-semibold text-blue-300 mb-3">Key Executives</h3>
-                    
-                    <div class="bg-gray-700/30 rounded-lg overflow-hidden" x-show="results.executives && results.executives.length > 0">
-                        <table class="min-w-full divide-y divide-gray-700">
-                            <thead>
-                                <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Position</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Risk Level</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-700">
-                                <template x-for="executive in results.executives" :key="executive.name + executive.position">
-                                    <tr>
-                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="executive.name"></td>
-                                        <td class="px-4 py-3 text-sm text-gray-300" x-text="executive.position"></td>
-                                        <td class="px-4 py-3">
-                                            <span class="px-2 py-1 rounded-full text-xs font-medium"
-                                                :class="{
-                                                    'bg-red-900/30 text-red-400': executive.risk_level === 'High',
-                                                    'bg-yellow-900/30 text-yellow-400': executive.risk_level === 'Medium',
-                                                    'bg-green-900/30 text-green-400': executive.risk_level === 'Low'
-                                                }"
-                                                x-text="executive.risk_level"></span>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <div class="bg-gray-700/30 rounded-lg p-4 text-gray-400" x-show="!results.executives || results.executives.length === 0">
-                        No executive information available.
-                    </div>
-                </div>
-
-                <!-- Risk Factors Tab -->
-                <div x-show="activeTab === 'risk'">
-                    <div class="mb-8">
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Sanctions</h3>
-                        <div class="bg-gray-700/30 rounded-lg p-4">
-                            <div x-show="results.sanctions && results.sanctions.length > 0">
-                                <table class="min-w-full divide-y divide-gray-700">
-                                    <thead>
-                                        <tr>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Authority</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Type</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-700">
-                                        <template x-for="sanction in results.sanctions" :key="sanction.id">
-                                            <tr>
-                                                <td class="px-4 py-3 text-sm text-gray-300" x-text="sanction.authority"></td>
-                                                <td class="px-4 py-3 text-sm text-gray-300" x-text="sanction.type"></td>
-                                                <td class="px-4 py-3 text-sm text-gray-300" x-text="sanction.date"></td>
-                                            </tr>
-                                        </template>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div x-show="!results.sanctions || results.sanctions.length === 0" class="text-gray-400">
-                                No sanctions found.
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mb-8">
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Adverse Media</h3>
-                        <div class="bg-gray-700/30 rounded-lg p-4">
+                        <div class="p-5">
                             <div x-show="results.adverse_media && results.adverse_media.length > 0">
                                 <div class="space-y-4">
-                                    <template x-for="media in results.adverse_media" :key="media.id">
-                                        <div class="border-b border-gray-700 pb-4 last:border-0 last:pb-0">
+                                    <template x-for="media in results.adverse_media" :key="media.url || media.title">
+                                        <div class="border border-gray-700 rounded p-4">
                                             <h4 class="font-medium text-gray-200 mb-1" x-text="media.title"></h4>
-                                            <p class="text-sm text-gray-400 mb-2" x-text="media.date"></p>
-                                            <p class="text-gray-300" x-text="media.summary"></p>
-                                            <a :href="media.url" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm mt-2 inline-block">Source</a>
+                                            <p class="text-xs text-gray-400 mb-2" x-text="media.date"></p>
+                                            <p class="text-gray-300 text-sm" x-text="media.summary"></p>
+                                            <div class="mt-2">
+                                                <a :href="media.url" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm">Source</a>
+                                            </div>
                                         </div>
                                     </template>
                                 </div>
@@ -376,55 +180,108 @@
                         </div>
                     </div>
 
-                    <div>
-                        <h3 class="text-lg font-semibold text-blue-300 mb-3">Citations</h3>
-                        <div class="bg-gray-700/30 rounded-lg p-4">
-                            <div x-show="results.citations && results.citations.length > 0">
-                                <ul class="space-y-2">
-                                    <template x-for="citation in results.citations" :key="citation.url">
-                                        <li>
-                                            <a :href="citation.url" target="_blank" class="text-blue-400 hover:text-blue-300" x-text="citation.title"></a>
-                                        </li>
-                                    </template>
-                                </ul>
+                    <!-- Executives -->
+                    <div class="bg-gray-700/30 rounded-lg">
+                        <div class="p-5 border-b border-gray-700 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-blue-300">Key Executives</h3>
+                            <span class="text-xs text-gray-400" x-text="(results.executives?.length || 0) + ' listed'"></span>
+                        </div>
+                        <div class="p-5">
+                            <div class="bg-gray-700/10 rounded-lg overflow-hidden" x-show="results.executives && results.executives.length > 0">
+                                <table class="min-w-full divide-y divide-gray-700">
+                                    <thead>
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Position</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Risk</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-700">
+                                        <template x-for="executive in results.executives" :key="executive.name + (executive.position||'')">
+                                            <tr>
+                                                <td class="px-4 py-3 text-sm text-gray-300" x-text="executive.name"></td>
+                                                <td class="px-4 py-3 text-sm text-gray-300" x-text="executive.position"></td>
+                                                <td class="px-4 py-3">
+                                                    <span class="px-2 py-1 rounded-full text-xs font-medium"
+                                                        :class="{
+                                                            'bg-red-900/30 text-red-400': executive.risk_level === 'High',
+                                                            'bg-yellow-900/30 text-yellow-400': executive.risk_level === 'Medium',
+                                                            'bg-green-900/30 text-green-400': executive.risk_level === 'Low'
+                                                        }"
+                                                        x-text="executive.risk_level"></span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
                             </div>
-                            <div x-show="!results.citations || results.citations.length === 0" class="text-gray-400">
-                                No citations available.
+                            <div class="text-gray-400" x-show="!results.executives || results.executives.length === 0">
+                                No executive information available.
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Raw Data Tab -->
-                <div x-show="activeTab === 'raw'">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-blue-300">Raw Data</h3>
-                        <div class="flex space-x-2">
-                            <button @click="copyRawData" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
-                                Copy
-                            </button>
-                            <button @click="exportRawData" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">
-                                Export
-                            </button>
+                <!-- Sidebar -->
+                <aside class="space-y-6">
+                    <!-- KPIs -->
+                    <div class="bg-gray-700/30 rounded-lg p-5">
+                        <h3 class="text-sm font-semibold text-gray-300 mb-4">Key Indicators</h3>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="bg-gray-800/50 rounded p-3 text-center">
+                                <div class="text-2xl font-bold" :class="{'text-red-400': (results.metrics?.sanctions||0)>0, 'text-green-400': (results.metrics?.sanctions||0)===0}" x-text="results.metrics?.sanctions || 0"></div>
+                                <div class="text-xs text-gray-400 mt-1">Sanctions</div>
+                            </div>
+                            <div class="bg-gray-800/50 rounded p-3 text-center">
+                                <div class="text-2xl font-bold" :class="{'text-red-400': (results.metrics?.adverse_media||0)>5, 'text-yellow-400': (results.metrics?.adverse_media||0)>0 && (results.metrics?.adverse_media||0)<=5, 'text-green-400': (results.metrics?.adverse_media||0)===0}" x-text="results.metrics?.adverse_media || 0"></div>
+                                <div class="text-xs text-gray-400 mt-1">Adverse</div>
+                            </div>
+                            <div class="bg-gray-800/50 rounded p-3 text-center">
+                                <div class="text-2xl font-bold text-blue-400" x-text="results.executives?.length || 0"></div>
+                                <div class="text-xs text-gray-400 mt-1">Executives</div>
+                            </div>
                         </div>
                     </div>
-                    
-                    <!-- Enhanced JSON Viewer -->
-                    <div id="json-viewer" class="json-viewer" data-theme="dark"></div>
-                </div>
+
+                    <!-- Providers -->
+                    <div class="bg-gray-700/30 rounded-lg p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-semibold text-gray-300">Providers</h3>
+                            <span class="text-xs text-gray-400" x-text="results._search_timestamp ? 'at ' + formatTimestamp(results._search_timestamp) : ''"></span>
+                        </div>
+                        <div class="flex flex-wrap gap-2" x-show="results._providers && results._providers.length">
+                            <template x-for="p in results._providers" :key="p">
+                                <span class="px-2 py-1 rounded-full text-xs bg-gray-800 text-gray-300" x-text="p"></span>
+                            </template>
+                        </div>
+                        <div class="text-xs text-gray-500" x-show="!results._providers || results._providers.length===0">No providers reported</div>
+                        <div class="text-xs text-red-400 mt-3" x-show="results._errors">Error: <span x-text="results._errors"></span></div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="bg-gray-700/30 rounded-lg p-5 flex items-center justify-between">
+                        <button @click="resetForm" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors duration-200">New Screening</button>
+                        <button @click="exportRawData" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm transition-colors duration-200">Export JSON</button>
+                    </div>
+                </aside>
             </div>
+        </div>
 
-            <!-- Footer -->
-            <div class="p-6 border-t border-gray-700 flex justify-between items-center">
-                <div class="text-sm text-gray-400">
-                    Screening completed at <span x-text="formatTimestamp(results.timestamp)"></span>
-                    <template x-if="results._providers && results._providers.length">
-                        <span> • Providers: <span class="text-blue-300" x-text="results._providers.join(', ')"></span></span>
-                    </template>
+        <!-- Raw JSON Modal -->
+        <div x-show="rawModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center">
+            <div class="absolute inset-0 bg-black bg-opacity-60" @click="closeRawModal()"></div>
+            <div class="relative bg-gray-900 border border-gray-700 rounded-lg w-11/12 lg:w-3/4 max-h-[85vh] overflow-hidden shadow-xl">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+                    <h3 class="text-sm font-semibold text-gray-200">Raw Screening JSON</h3>
+                    <div class="flex items-center gap-2">
+                        <button @click="copyRawData" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs">Copy</button>
+                        <button @click="exportRawData" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs">Export</button>
+                        <button @click="closeRawModal()" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs">Close</button>
+                    </div>
                 </div>
-                <button @click="resetForm" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors duration-200">
-                    New Screening
-                </button>
+                <div class="p-4 overflow-auto">
+                    <pre class="text-xs text-gray-300 whitespace-pre-wrap" x-text="rawJson"></pre>
+                </div>
             </div>
         </div>
 
@@ -458,6 +315,8 @@
                     'Finalizing risk assessment...'
                 ],
                 loadingInterval: null,
+                rawModalOpen: false,
+                rawJson: '',
                 
                 startScreening() {
                     this.isLoading = true;
@@ -487,6 +346,7 @@
                         this.isLoading = false;
                         this.providerStatus = data?._providers || null;
                         this.activeTab = 'overview';
+                        this.rawJson = JSON.stringify(data, null, 2);
                         
                         // Initialize the enhanced JSON viewer
                         setTimeout(() => {
@@ -507,6 +367,8 @@
                         alert('Error: ' + error.message);
                     });
                 },
+                openRawModal() { this.rawModalOpen = true; },
+                closeRawModal() { this.rawModalOpen = false; },
                 
                 resetForm() {
                     this.results = null;
