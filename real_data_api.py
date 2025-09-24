@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # API Keys from environment variables
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "AIzaSyAQBFGrDga0yLzkzC6tqPUGtPNKcXfXseM")
 GOOGLE_CSE_ID = os.environ.get("GOOGLE_CSE_ID", "877f37933f2584660")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "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")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY")
 DART_API_KEY = os.environ.get("DART_API_KEY", "dart:41e3e5a7cb9e450b235a6a79d2e538ac83c711e7")
 DILISENSE_API_KEY = os.environ.get("DILISENSE_API_KEY", "dilisense gdhkt7qNGJ8SwzC7zAnLy4vY6Fl4xXef3gHWyrhh")
 
