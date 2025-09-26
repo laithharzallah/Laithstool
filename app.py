@@ -347,23 +347,23 @@ def api_dart_search():
 # Setup web routes
 @app.route('/')
 def index():
-    """Home page"""
-    return redirect(url_for('enhanced_company_screening'))
+    """Home page - Dashboard"""
+    return render_template('dashboard.html')
 
 @app.route('/enhanced/company_screening')
 def enhanced_company_screening():
     """Enhanced company screening page"""
-    return render_template('enhanced_company_screening.html')
+    return render_template('company_screening_enhanced.html')
 
 @app.route('/enhanced/individual_screening')
 def enhanced_individual_screening():
     """Enhanced individual screening page"""
-    return render_template('enhanced_individual_screening.html')
+    return render_template('individual_screening_enhanced.html')
 
 @app.route('/enhanced/dart_registry')
 def enhanced_dart_registry():
     """Enhanced DART registry page"""
-    return render_template('enhanced_dart_registry.html')
+    return render_template('dart_registry_enhanced.html')
 
 # Diagnostics to verify providers/keys presence live
 @app.route('/debug/providers', methods=['GET'])
