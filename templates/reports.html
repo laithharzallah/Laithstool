@@ -1,18 +1,413 @@
-{% extends "intelligence_base.html" %}
+{% extends "base.html" %}
+
+{% block title %}Reports & Analytics - TPRM Tool{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <div class="glass-panel p-6">
-        <h1 class="text-2xl font-bold tracking-wide text-white/90">Reports</h1>
-        <p class="text-white/60 mt-1">Generate and manage risk assessment reports</p>
+<div class="container mx-auto px-4 py-8" x-data="reportsApp()">
+    <!-- Header -->
+    <header class="mb-8">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-white">Reports & Analytics</h1>
+                <p class="text-gray-400 mt-2">Screening history, trends, and risk analytics dashboard</p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <select x-model="selectedPeriod" @change="updateData()" 
+                        class="form-input text-sm w-auto">
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="90d">Last 90 Days</option>
+                    <option value="1y">Last Year</option>
+                </select>
+                <button @click="exportReport()" class="btn-primary text-sm">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-4-4m4 4l4-4m3 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Export Report
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- KPI Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm font-medium">Total Screenings</p>
+                    <p class="text-3xl font-bold text-white mt-2" x-text="kpis.totalScreenings"></p>
+                    <p class="text-green-400 text-sm mt-1">
+                        <span x-text="kpis.screeningGrowth"></span>% vs previous period
+                    </p>
+                </div>
+                <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm font-medium">High Risk Entities</p>
+                    <p class="text-3xl font-bold text-red-400 mt-2" x-text="kpis.highRiskCount"></p>
+                    <p class="text-red-400 text-sm mt-1">
+                        <span x-text="kpis.highRiskPercentage"></span>% of total
+                    </p>
+                </div>
+                <div class="w-12 h-12 bg-red-500/20 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm font-medium">Average Response Time</p>
+                    <p class="text-3xl font-bold text-blue-400 mt-2" x-text="kpis.avgResponseTime"></p>
+                    <p class="text-green-400 text-sm mt-1">-12% improvement</p>
+                </div>
+                <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm font-medium">Coverage Score</p>
+                    <p class="text-3xl font-bold text-green-400 mt-2" x-text="kpis.coverageScore + '%'"></p>
+                    <p class="text-green-400 text-sm mt-1">Data completeness</p>
+                </div>
+                <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
     </div>
-    
-    <div class="glass-panel p-6">
-        <div class="text-center py-12 text-white/40">
-            <i data-lucide="file-text" class="w-16 h-16 mx-auto mb-4 opacity-50"></i>
-            <h3 class="text-lg font-medium mb-2">Report Generation</h3>
-            <p>Coming soon: Advanced reporting system with customizable templates and export options.</p>
+
+    <!-- Charts Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <!-- Screening Trends -->
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h3 class="text-xl font-semibold text-white mb-6">Screening Trends</h3>
+            <div id="trends-chart" class="h-80"></div>
+        </div>
+
+        <!-- Risk Distribution -->
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h3 class="text-xl font-semibold text-white mb-6">Risk Distribution</h3>
+            <div id="risk-chart" class="h-80"></div>
+        </div>
+    </div>
+
+    <!-- Recent Screenings Table -->
+    <div class="bg-gray-800 rounded-xl border border-gray-700 mb-8">
+        <div class="p-6 border-b border-gray-700">
+            <h3 class="text-xl font-semibold text-white mb-4">Recent Screenings</h3>
+            <div class="flex items-center space-x-3">
+                <input type="text" x-model="searchQuery" @input="filterResults()" 
+                       placeholder="Search screenings..." 
+                       class="form-input text-sm w-64">
+                <select x-model="filterType" @change="filterResults()" 
+                        class="form-input text-sm w-auto">
+                    <option value="all">All Types</option>
+                    <option value="company">Company</option>
+                    <option value="individual">Individual</option>
+                    <option value="dart">DART</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-700">
+                <thead class="bg-gray-700/50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Entity</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Risk Level</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    <template x-for="screening in filteredScreenings" :key="screening.id">
+                        <tr class="hover:bg-gray-700/30 transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-white" x-text="screening.name"></div>
+                                <div class="text-sm text-gray-400" x-text="screening.country"></div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-xs font-medium rounded-full"
+                                      :class="{
+                                          'bg-blue-500/20 text-blue-400': screening.type === 'company',
+                                          'bg-purple-500/20 text-purple-400': screening.type === 'individual',
+                                          'bg-green-500/20 text-green-400': screening.type === 'dart'
+                                      }"
+                                      x-text="screening.type.charAt(0).toUpperCase() + screening.type.slice(1)"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-xs font-medium rounded-full"
+                                      :class="{
+                                          'bg-green-500/20 text-green-400': screening.riskLevel === 'Low',
+                                          'bg-yellow-500/20 text-yellow-400': screening.riskLevel === 'Medium',
+                                          'bg-red-500/20 text-red-400': screening.riskLevel === 'High'
+                                      }"
+                                      x-text="screening.riskLevel"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400" x-text="formatDate(screening.date)"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button @click="viewScreening(screening)" class="text-blue-400 hover:text-blue-300 mr-3">View</button>
+                                <button @click="exportScreening(screening)" class="text-green-400 hover:text-green-300">Export</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function reportsApp() {
+    return {
+        selectedPeriod: '30d',
+        searchQuery: '',
+        filterType: 'all',
+        kpis: {
+            totalScreenings: 247,
+            highRiskCount: 18,
+            highRiskPercentage: 7.3,
+            avgResponseTime: '2.4s',
+            screeningGrowth: 23,
+            coverageScore: 94
+        },
+        screenings: [
+            {
+                id: 1,
+                name: 'Acme Corporation',
+                country: 'United States',
+                type: 'company',
+                riskLevel: 'Medium',
+                date: '2025-01-15T10:30:00Z'
+            },
+            {
+                id: 2,
+                name: 'John Smith',
+                country: 'United Kingdom',
+                type: 'individual',
+                riskLevel: 'Low',
+                date: '2025-01-15T09:15:00Z'
+            },
+            {
+                id: 3,
+                name: 'Samsung Electronics',
+                country: 'South Korea',
+                type: 'dart',
+                riskLevel: 'Low',
+                date: '2025-01-15T08:45:00Z'
+            },
+            {
+                id: 4,
+                name: 'Global Trade Inc',
+                country: 'Germany',
+                type: 'company',
+                riskLevel: 'High',
+                date: '2025-01-14T16:20:00Z'
+            }
+        ],
+        filteredScreenings: [],
+        
+        init() {
+            this.filteredScreenings = [...this.screenings];
+            this.initCharts();
+        },
+        
+        updateData() {
+            console.log('Updating data for period:', this.selectedPeriod);
+        },
+        
+        filterResults() {
+            this.filteredScreenings = this.screenings.filter(screening => {
+                const matchesSearch = screening.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+                                    screening.country.toLowerCase().includes(this.searchQuery.toLowerCase());
+                const matchesType = this.filterType === 'all' || screening.type === this.filterType;
+                return matchesSearch && matchesType;
+            });
+        },
+        
+        formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        },
+        
+        viewScreening(screening) {
+            const routes = {
+                'company': '/enhanced/company_screening',
+                'individual': '/enhanced/individual_screening',
+                'dart': '/enhanced/dart_registry'
+            };
+            window.location.href = routes[screening.type] || '/';
+        },
+        
+        exportScreening(screening) {
+            const data = JSON.stringify(screening, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${screening.name.replace(/\s+/g, '_')}_screening.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        },
+        
+        exportReport() {
+            const reportData = {
+                period: this.selectedPeriod,
+                kpis: this.kpis,
+                screenings: this.screenings,
+                generatedAt: new Date().toISOString()
+            };
+            
+            const data = JSON.stringify(reportData, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `TPRM_Report_${this.selectedPeriod}_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        },
+        
+        initCharts() {
+            // Trends Chart
+            const trendsChart = echarts.init(document.getElementById('trends-chart'));
+            const trendsOption = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: '#374151',
+                    borderColor: '#4B5563',
+                    textStyle: { color: '#F3F4F6' }
+                },
+                legend: {
+                    data: ['Company', 'Individual', 'DART'],
+                    textStyle: { color: '#9CA3AF' }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    axisLine: { lineStyle: { color: '#4B5563' }},
+                    axisLabel: { color: '#9CA3AF' }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLine: { lineStyle: { color: '#4B5563' }},
+                    axisLabel: { color: '#9CA3AF' },
+                    splitLine: { lineStyle: { color: '#374151' }}
+                },
+                series: [
+                    {
+                        name: 'Company',
+                        type: 'line',
+                        smooth: true,
+                        data: [12, 19, 15, 28, 24, 18, 22],
+                        itemStyle: { color: '#3B82F6' }
+                    },
+                    {
+                        name: 'Individual',
+                        type: 'line',
+                        smooth: true,
+                        data: [8, 14, 11, 18, 16, 12, 15],
+                        itemStyle: { color: '#8B5CF6' }
+                    },
+                    {
+                        name: 'DART',
+                        type: 'line',
+                        smooth: true,
+                        data: [5, 8, 6, 12, 9, 7, 10],
+                        itemStyle: { color: '#10B981' }
+                    }
+                ]
+            };
+            trendsChart.setOption(trendsOption);
+            
+            // Risk Distribution Chart
+            const riskChart = echarts.init(document.getElementById('risk-chart'));
+            const riskOption = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} ({d}%)',
+                    backgroundColor: '#374151',
+                    borderColor: '#4B5563',
+                    textStyle: { color: '#F3F4F6' }
+                },
+                legend: {
+                    orient: 'vertical',
+                    right: '10%',
+                    top: 'center',
+                    textStyle: { color: '#9CA3AF' }
+                },
+                series: [
+                    {
+                        type: 'pie',
+                        radius: ['40%', '70%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 10,
+                            borderColor: '#1F2937',
+                            borderWidth: 2
+                        },
+                        label: { show: false },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: '16',
+                                fontWeight: 'bold'
+                            }
+                        },
+                        data: [
+                            { value: 180, name: 'Low Risk', itemStyle: { color: '#10B981' }},
+                            { value: 49, name: 'Medium Risk', itemStyle: { color: '#F59E0B' }},
+                            { value: 18, name: 'High Risk', itemStyle: { color: '#EF4444' }}
+                        ]
+                    }
+                ]
+            };
+            riskChart.setOption(riskOption);
+            
+            // Handle resize
+            window.addEventListener('resize', () => {
+                trendsChart.resize();
+                riskChart.resize();
+            });
+        }
+    };
+}
+</script>
 {% endblock %}

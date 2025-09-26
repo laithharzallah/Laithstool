@@ -1,29 +1,15 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TPRM - Individual Screening</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-json-viewer.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
-    <script src="{{ url_for('static', filename='js/enhanced-json-viewer.js') }}"></script>
-</head>
-<body class="bg-gray-900 text-white min-h-screen">
+{% extends "base.html" %}
+
+{% block title %}Individual Screening - TPRM Tool{% endblock %}
+
+{% block content %}
     <div class="container mx-auto px-4 py-8" x-data="individualScreening()">
         <!-- Header -->
         <header class="mb-8">
-            <div class="flex justify-between items-center">
-                <h1 class="text-3xl font-bold text-purple-400">TPRM Individual Screening</h1>
-                <div class="flex space-x-4">
-                    <a href="/" class="text-purple-400 hover:text-purple-300">Home</a>
-                    <a href="/enhanced/company_screening" class="text-purple-400 hover:text-purple-300">Company Screening</a>
-                    <a href="/enhanced/dart_registry" class="text-purple-400 hover:text-purple-300">DART Registry</a>
-                </div>
+            <div>
+                <h1 class="text-3xl font-bold text-purple-400">Individual Screening</h1>
+                <p class="text-gray-400 mt-2">Comprehensive PEP, sanctions, and adverse media screening for individuals</p>
             </div>
-            <p class="text-gray-400 mt-2">Screen individuals for third-party risk management</p>
         </header>
 
         <!-- Screening Form -->
@@ -443,12 +429,11 @@
             </div>
         </div>
 
-        <!-- Footer -->
-        <footer class="mt-12 text-center text-gray-500 text-sm">
-            <p>&copy; 2025 TPRM Tool. All rights reserved.</p>
-        </footer>
     </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
     <script>
         function individualScreening() {
             return {
@@ -555,5 +540,4 @@
             };
         }
     </script>
-</body>
-</html>
+{% endblock %}
