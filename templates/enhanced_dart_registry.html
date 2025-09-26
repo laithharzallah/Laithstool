@@ -1,34 +1,20 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TPRM - DART Registry</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-json-viewer.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
-    <script src="{{ url_for('static', filename='js/enhanced-json-viewer.js') }}"></script>
-</head>
-<body class="bg-gray-900 text-white min-h-screen">
+{% extends "base.html" %}
+
+{% block title %}DART Registry - TPRM Tool{% endblock %}
+
+{% block content %}
     <div class="container mx-auto px-4 py-8" x-data="dartRegistry()">
         <!-- Header -->
         <header class="mb-8">
-            <div class="flex justify-between items-center">
-                <h1 class="text-3xl font-bold text-green-400">DART Registry Lookup</h1>
-                <div class="flex space-x-4">
-                    <a href="/" class="text-green-400 hover:text-green-300">Home</a>
-                    <a href="/enhanced/company_screening" class="text-green-400 hover:text-green-300">Company Screening</a>
-                    <a href="/enhanced/individual_screening" class="text-green-400 hover:text-green-300">Individual Screening</a>
-                </div>
+            <div>
+                <h1 class="text-3xl font-bold text-green-400">DART Registry</h1>
+                <p class="text-gray-400 mt-2">Official Korean Financial Supervisory Service company registry and financial data</p>
             </div>
-            <p class="text-gray-400 mt-2">Search Korean companies in the official Financial Supervisory Service registry</p>
         </header>
 
         <!-- Search Form -->
-        <div class="bg-gray-800 rounded-lg p-6 mb-8 shadow-lg" x-show="!isLoading && !results">
-            <h2 class="text-xl font-semibold mb-4 text-green-300">DART-Only Search</h2>
+        <div class="bg-gray-800 rounded-lg p-6 mb-8 shadow-lg" x-show="!isLoading && !results && !searchResults">
+            <h2 class="text-xl font-semibold mb-4 text-green-300">DART Registry Search</h2>
             <div class="bg-gray-700/30 rounded-lg p-4 mb-6 flex items-start">
                 <div class="text-blue-400 mr-3 mt-1">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -36,10 +22,40 @@
                     </svg>
                 </div>
                 <p class="text-gray-300 text-sm">
-                    This search uses only the official DART registry from the Korean Financial Supervisory Service.
+                    Search the official DART registry from the Korean Financial Supervisory Service. Use detailed search to get comprehensive company information.
                 </p>
             </div>
-            <form @submit.prevent="startLookup" class="space-y-4">
+            
+            <!-- Search Tabs -->
+            <div class="flex space-x-1 mb-6">
+                <button @click="searchMode = 'search'" :class="searchMode === 'search' ? 'bg-green-600' : 'bg-gray-700'"
+                        class="px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                    Company Search
+                </button>
+                <button @click="searchMode = 'lookup'" :class="searchMode === 'lookup' ? 'bg-green-600' : 'bg-gray-700'"
+                        class="px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                    Registry Lookup
+                </button>
+            </div>
+            
+            <!-- Company Search Form -->
+            <form x-show="searchMode === 'search'" @submit.prevent="startSearch" class="space-y-4">
+                <div>
+                    <label for="search_company" class="block text-sm font-medium text-gray-300 mb-1">Company Name *</label>
+                    <input type="text" id="search_company" x-model="searchData.company" required
+                        class="w-full px-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="e.g., Samsung Electronics">
+                </div>
+                <div class="flex justify-end mt-6">
+                    <button type="submit"
+                        class="px-6 py-2 bg-green-600 hover:bg-green-700 rounded-md font-medium transition-colors duration-200">
+                        Search Companies
+                    </button>
+                </div>
+            </form>
+            
+            <!-- Registry Lookup Form -->
+            <form x-show="searchMode === 'lookup'" @submit.prevent="startLookup" class="space-y-4">
                 <div>
                     <label for="company" class="block text-sm font-medium text-gray-300 mb-1">Company Name *</label>
                     <input type="text" id="company" x-model="formData.company" required
@@ -53,7 +69,7 @@
                 <div class="flex justify-end mt-6">
                     <button type="submit"
                         class="px-6 py-2 bg-green-600 hover:bg-green-700 rounded-md font-medium transition-colors duration-200">
-                        Search Registry
+                        Get Details
                     </button>
                 </div>
             </form>
@@ -65,6 +81,60 @@
                 <div class="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                 <h2 class="text-xl font-semibold mb-2 text-green-300">Searching Registry</h2>
                 <p class="text-gray-400" x-text="loadingMessage"></p>
+            </div>
+        </div>
+
+        <!-- Search Results -->
+        <div class="bg-gray-800 rounded-lg shadow-lg mb-8" x-show="searchResults && !error" x-cloak>
+            <div class="p-6 border-b border-gray-700">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-semibold text-green-300">Search Results</h2>
+                    <span class="text-sm text-gray-400" x-text="`${searchResults?.companies?.length || 0} companies found`"></span>
+                </div>
+            </div>
+            
+            <div class="p-6">
+                <div class="grid gap-4">
+                    <template x-for="company in (searchResults?.companies || [])" :key="company.corp_code || company.name">
+                        <div class="bg-gray-700/30 rounded-lg p-4 border border-gray-600 hover:border-green-500 transition-colors cursor-pointer"
+                             @click="selectCompany(company)">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <h3 class="text-lg font-semibold text-white mb-2" x-text="company.name || company.corp_name"></h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <span class="text-gray-400">Corp Code:</span>
+                                            <span class="text-gray-300 ml-2" x-text="company.corp_code || 'N/A'"></span>
+                                        </div>
+                                        <div x-show="company.detailed_info?.basic_info?.est_dt">
+                                            <span class="text-gray-400">Established:</span>
+                                            <span class="text-gray-300 ml-2" x-text="company.detailed_info?.basic_info?.est_dt"></span>
+                                        </div>
+                                        <div x-show="company.detailed_info?.basic_info?.ceo_nm">
+                                            <span class="text-gray-400">CEO:</span>
+                                            <span class="text-gray-300 ml-2" x-text="company.detailed_info?.basic_info?.ceo_nm"></span>
+                                        </div>
+                                        <div x-show="company.detailed_info?.basic_info?.adr">
+                                            <span class="text-gray-400">Address:</span>
+                                            <span class="text-gray-300 ml-2" x-text="company.detailed_info?.basic_info?.adr"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex-shrink-0 ml-4">
+                                    <button class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm text-white">
+                                        View Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <div class="mt-6 flex justify-center">
+                    <button @click="resetSearch" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors duration-200">
+                        New Search
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -346,15 +416,18 @@
             </div>
         </div>
 
-        <!-- Footer -->
-        <footer class="mt-12 text-center text-gray-500 text-sm">
-            <p>&copy; 2025 TPRM Tool. All rights reserved.</p>
-        </footer>
     </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
     <script>
         function dartRegistry() {
             return {
+                searchMode: 'search',
+                searchData: {
+                    company: ''
+                },
                 formData: {
                     company: '',
                     registry_id: '',
@@ -363,6 +436,7 @@
                 isLoading: false,
                 loadingMessage: 'Searching DART registry...',
                 results: null,
+                searchResults: null,
                 error: false,
                 activeTab: 'overview',
                 loadingMessages: [
@@ -373,6 +447,92 @@
                     'Analyzing corporate structure...'
                 ],
                 loadingInterval: null,
+                
+                startSearch() {
+                    this.isLoading = true;
+                    this.error = false;
+                    this.searchResults = null;
+                    this.results = null;
+                    this.loadingMessage = 'Searching companies...';
+                    
+                    fetch('/api/dart/search', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ company: this.searchData.company })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        this.isLoading = false;
+                        
+                        if (data.error) {
+                            this.error = true;
+                            this.searchResults = null;
+                        } else {
+                            this.searchResults = data;
+                            this.error = false;
+                        }
+                    })
+                    .catch(error => {
+                        this.isLoading = false;
+                        this.error = true;
+                        console.error('Search error:', error);
+                    });
+                },
+                
+                selectCompany(company) {
+                    // Convert search result to detailed view
+                    if (company.detailed_info) {
+                        const basic = company.detailed_info.basic_info || {};
+                        this.results = {
+                            company_name: basic.corp_name || company.name,
+                            registry_id: company.corp_code,
+                            status: "Active",
+                            industry_code: null,
+                            industry_name: null,
+                            registration_date: basic.est_dt,
+                            address: basic.adr,
+                            representative: basic.ceo_nm,
+                            capital: null,
+                            major_shareholders: company.detailed_info.shareholders || [],
+                            subsidiaries: [],
+                            financial_summary: {
+                                currency: null,
+                                revenue: {},
+                                profit: {},
+                                assets: {}
+                            },
+                            documents: [],
+                            timestamp: new Date().toISOString()
+                        };
+                    } else {
+                        // Fallback to basic info
+                        this.results = {
+                            company_name: company.name,
+                            registry_id: company.corp_code,
+                            status: "Active",
+                            timestamp: new Date().toISOString()
+                        };
+                    }
+                    
+                    this.searchResults = null;
+                    this.activeTab = 'overview';
+                    
+                    // Initialize JSON viewer
+                    setTimeout(() => {
+                        const jsonViewer = document.getElementById('json-viewer');
+                        if (jsonViewer) {
+                            jsonViewer.setAttribute('data-json', JSON.stringify(this.results));
+                            new EnhancedJsonViewer({
+                                container: jsonViewer,
+                                data: this.results,
+                                theme: 'dark'
+                            });
+                        }
+                        this.initCharts();
+                    }, 100);
+                },
                 
                 startLookup() {
                     this.isLoading = true;
@@ -441,11 +601,21 @@
                 
                 resetForm() {
                     this.results = null;
+                    this.searchResults = null;
                     this.error = false;
                     this.formData = {
                         company: '',
                         registry_id: '',
                         country: 'Korea'
+                    };
+                },
+                
+                resetSearch() {
+                    this.searchResults = null;
+                    this.results = null;
+                    this.error = false;
+                    this.searchData = {
+                        company: ''
                     };
                 },
                 
@@ -721,5 +891,4 @@
             };
         }
     </script>
-</body>
-</html>
+{% endblock %}

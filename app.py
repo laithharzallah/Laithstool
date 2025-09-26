@@ -347,8 +347,8 @@ def api_dart_search():
 # Setup web routes
 @app.route('/')
 def index():
-    """Home page"""
-    return redirect(url_for('enhanced_company_screening'))
+    """Home page - Dashboard"""
+    return render_template('dashboard.html')
 
 @app.route('/enhanced/company_screening')
 def enhanced_company_screening():
@@ -364,6 +364,11 @@ def enhanced_individual_screening():
 def enhanced_dart_registry():
     """Enhanced DART registry page"""
     return render_template('enhanced_dart_registry.html')
+
+@app.route('/reports')
+def reports():
+    """Reports and analytics page"""
+    return render_template('reports.html')
 
 # Diagnostics to verify providers/keys presence live
 @app.route('/debug/providers', methods=['GET'])

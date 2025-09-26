@@ -1,33 +1,23 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TPRM - Company Screening</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-json-viewer.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
-    <script src="{{ url_for('static', filename='js/enhanced-json-viewer.js') }}"></script>
-</head>
-<body class="bg-gray-900 text-white min-h-screen">
+{% extends "base.html" %}
+
+{% block title %}Company Screening - TPRM Tool{% endblock %}
+
+{% block content %}
     <div class="container mx-auto px-4 py-8" x-data="companyScreening()">
         <!-- Header -->
         <header class="mb-8">
-            <div class="flex justify-between items-center">
-                <h1 class="text-3xl font-bold text-blue-400">TPRM Company Screening</h1>
-                <div class="flex space-x-4">
-                    <a href="/" class="text-blue-400 hover:text-blue-300">Home</a>
-                    <a href="/enhanced/individual_screening" class="text-blue-400 hover:text-blue-300">Individual Screening</a>
-                    <a href="/enhanced/dart_registry" class="text-blue-400 hover:text-blue-300">DART Registry</a>
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <h1 class="text-3xl font-bold text-blue-400">Company Screening</h1>
+                    <p class="text-gray-400 mt-2">Comprehensive third-party risk assessment for companies</p>
                 </div>
-            </div>
-            <p class="text-gray-400 mt-2">Screen companies for third-party risk management</p>
-            <div class="mt-4 flex flex-wrap gap-2" x-show="providerStatus">
-                <template x-for="p in providerStatus" :key="p">
-                    <span class="px-2 py-1 rounded-full text-xs bg-gray-700 text-gray-300">Provider: <span class="text-blue-300" x-text="p"></span></span>
-                </template>
+                <div class="flex flex-wrap gap-2" x-show="providerStatus">
+                    <template x-for="p in providerStatus" :key="p">
+                        <span class="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                            <span x-text="p"></span>
+                        </span>
+                    </template>
+                </div>
             </div>
         </header>
 
@@ -285,12 +275,11 @@
             </div>
         </div>
 
-        <!-- Footer -->
-        <footer class="mt-12 text-center text-gray-500 text-sm">
-            <p>&copy; 2025 TPRM Tool. All rights reserved.</p>
-        </footer>
     </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
     <script>
         function companyScreening() {
             return {
@@ -418,5 +407,4 @@
             };
         }
     </script>
-</body>
-</html>
+{% endblock %}
