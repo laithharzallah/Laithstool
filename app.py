@@ -32,35 +32,91 @@ def api_screen():
     addition to legacy fields (non-breaking).
     """
     try:
+        from utils.validation import (
+            validate_company_name, validate_country, validate_domain, 
+            validate_screening_level, ValidationError, sanitize_output
+        )
+        
         data = request.json or {}
-        company = (data.get('company') or '').strip()
-        country = (data.get('country') or '').strip()
-        domain = (data.get('domain') or '').strip()
-        level = (data.get('level') or 'standard').strip()
-
-        if not company:
-            return jsonify({"error": "company is required"}), 400
+        
+        # Validate inputs
+        try:
+            company = validate_company_name(data.get('company'))
+            country = validate_country(data.get('country'))
+            domain = validate_domain(data.get('domain'))
+            level = validate_screening_level(data.get('level'))
+        except ValidationError as ve:
+            return jsonify({"error": str(ve), "status": "validation_error"}), 400
 
         app.logger.info(f"Company screening request: {company} ({country})")
 
+        # Check cache first
+        from utils.cache import cached, CACHE_TTL
+        cache_key = f"company_screen:{company}:{country}:{domain}:{level}"
+        
+        @cached(ttl_seconds=CACHE_TTL['company_screening'])
+        def get_cached_result(comp, ctry, dom):
+            # This function will be cached
+            return None  # Return None to indicate cache miss
+        
+        # Try cache (we'll implement actual caching in the service layer)
+        # For now, proceed with the real-time search service
+        
         # Use the real-time search service (uses Google CSE when keys set, and OpenAI for structuring)
         from services.real_time_search import real_time_search_service
         try:
+            # Use thread-safe event loop handling for production
+            loop = None
             try:
-                web = asyncio.run(
-                    real_time_search_service.comprehensive_search(company=company, country=country, domain=domain)
-                )
+                loop = asyncio.get_running_loop()
             except RuntimeError:
+                loop = None
+            
+            if loop and loop.is_running():
+                # We're in an existing event loop (e.g., Jupyter, some WSGI servers)
+                import concurrent.futures
+                import threading
+                
+                result = None
+                exception = None
+                
+                def run_in_thread():
+                    nonlocal result, exception
+                    try:
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        try:
+                            result = new_loop.run_until_complete(
+                                real_time_search_service.comprehensive_search(company=company, country=country, domain=domain)
+                            )
+                        finally:
+                            new_loop.close()
+                    except Exception as e:
+                        exception = e
+                
+                thread = threading.Thread(target=run_in_thread)
+                thread.start()
+                thread.join(timeout=30)  # 30 second timeout
+                
+                if exception:
+                    raise exception
+                web = result or {"categorized_results": {}, "error": "Timeout"}
+            else:
+                # No existing event loop, create one
                 loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
                 try:
-                    asyncio.set_event_loop(loop)
                     web = loop.run_until_complete(
                         real_time_search_service.comprehensive_search(company=company, country=country, domain=domain)
                     )
                 finally:
                     loop.close()
+                    asyncio.set_event_loop(None)
         except Exception as se:
             app.logger.error(f"Real-time search failed: {se}")
+            # Fall back to simulation data if real search fails
+            if os.getenv('USE_SIMULATION', 'false').lower() == 'true':
+                return jsonify(generate_simulated_company_result(company, country, domain, level))
             web = {"categorized_results": {}, "error": str(se)}
 
         cat = (web or {}).get('categorized_results') or {}
@@ -162,46 +218,94 @@ def api_screen():
             except Exception as _e:
                 app.logger.warning(f"Enhanced screening disabled: {_e}")
 
-        return jsonify(result)
+        # Sanitize output before sending to frontend
+        return jsonify(sanitize_output(result))
 
     except Exception as e:
-        app.logger.error(f"API error: {str(e)}")
+        app.logger.error(f"API error: {str(e)}", exc_info=True)
         return jsonify({
-            "error": "Invalid request",
-            "details": str(e),
-            "status": "error"
-        }), 400
+            "error": "An error occurred processing your request",
+            "status": "error",
+            "request_id": datetime.now().isoformat()
+        }), 500
 
 @app.route('/api/screen_individual', methods=['POST'])
 def api_screen_individual():
     """API endpoint for individual screening (Dilisense-backed)."""
     try:
+        from utils.validation import (
+            validate_person_name, validate_country, validate_date_of_birth,
+            validate_screening_level, ValidationError, sanitize_output
+        )
+        
         data = request.get_json(force=True, silent=True) or {}
-        name = (data.get('name') or '').strip()
-        country = (data.get('country') or '').strip()
-        date_of_birth = (data.get('date_of_birth') or '').strip()
-        level = (data.get('level') or 'standard').strip()
-
-        if not name:
-            return jsonify({"error": "name is required"}), 400
+        
+        # Validate inputs
+        try:
+            name = validate_person_name(data.get('name'))
+            country = validate_country(data.get('country'))
+            date_of_birth = validate_date_of_birth(data.get('date_of_birth'))
+            level = validate_screening_level(data.get('level'))
+        except ValidationError as ve:
+            return jsonify({"error": str(ve), "status": "validation_error"}), 400
 
         app.logger.info(f"Individual screening request: {name} ({country})")
 
         # Call Dilisense asynchronously with safe loop handling
         from services.dilisense import dilisense_service
         try:
+            # Use thread-safe event loop handling for production
+            loop = None
             try:
-                dil = asyncio.run(dilisense_service.screen_individual(name, country, date_of_birth))
+                loop = asyncio.get_running_loop()
             except RuntimeError:
+                loop = None
+            
+            if loop and loop.is_running():
+                # We're in an existing event loop
+                import threading
+                
+                result = None
+                exception = None
+                
+                def run_in_thread():
+                    nonlocal result, exception
+                    try:
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        try:
+                            result = new_loop.run_until_complete(
+                                dilisense_service.screen_individual(name, country, date_of_birth)
+                            )
+                        finally:
+                            new_loop.close()
+                    except Exception as e:
+                        exception = e
+                
+                thread = threading.Thread(target=run_in_thread)
+                thread.start()
+                thread.join(timeout=30)  # 30 second timeout
+                
+                if exception:
+                    raise exception
+                dil = result or {}
+            else:
+                # No existing event loop, create one
                 loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
                 try:
-                    asyncio.set_event_loop(loop)
-                    dil = loop.run_until_complete(dilisense_service.screen_individual(name, country, date_of_birth))
+                    dil = loop.run_until_complete(
+                        dilisense_service.screen_individual(name, country, date_of_birth)
+                    )
                 finally:
                     loop.close()
+                    asyncio.set_event_loop(None)
         except Exception as se:
             app.logger.error(f"Dilisense screening failed: {se}")
-            return jsonify({"error": "Screening failed", "details": str(se)}), 500
+            # Fall back to simulation data if real search fails
+            if os.getenv('USE_SIMULATION', 'false').lower() == 'true':
+                return jsonify(generate_simulated_individual_result(name, country, date_of_birth, level))
+            return jsonify({"error": "Screening service temporarily unavailable", "status": "error"}), 503
 
         # Map to legacy-friendly structure used by UI
         sanctions_hits = int(((dil or {}).get('sanctions') or {}).get('total_hits', 0))
@@ -237,24 +341,30 @@ def api_screen_individual():
             "raw": dil,
         }
 
-        return jsonify(response)
+        # Sanitize output before sending to frontend
+        return jsonify(sanitize_output(response))
 
     except Exception as e:
-        app.logger.error(f"API error: {str(e)}")
+        app.logger.error(f"API error: {str(e)}", exc_info=True)
         return jsonify({
-            "error": "Invalid request",
-            "details": str(e),
-            "status": "error"
-        }), 400
+            "error": "An error occurred processing your request",
+            "status": "error",
+            "request_id": datetime.now().isoformat()
+        }), 500
 
 @app.route('/api/dart_lookup', methods=['POST'])
 def api_dart_lookup():
     """API endpoint for DART registry lookup (now using live DART)."""
     try:
+        from utils.validation import validate_company_name, ValidationError, sanitize_output
+        
         payload = request.get_json(force=True, silent=True) or {}
-        company = (payload.get('company') or '').strip()
-        if not company:
-            return jsonify({"error": "company is required"}), 400
+        
+        # Validate inputs
+        try:
+            company = validate_company_name(payload.get('company'))
+        except ValidationError as ve:
+            return jsonify({"error": str(ve), "status": "validation_error"}), 400
 
         from services.adapters.dart import dart_adapter
         companies = dart_adapter.search_company(company)
@@ -293,10 +403,14 @@ def api_dart_lookup():
             "documents": [],
             "timestamp": datetime.now().isoformat()
         }
-        return jsonify(result)
+        return jsonify(sanitize_output(result))
     except Exception as e:
-        app.logger.error(f"API error: {str(e)}")
-        return jsonify({"error": "Invalid request", "details": str(e), "status": "error"}), 400
+        app.logger.error(f"API error: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "An error occurred processing your request", 
+            "status": "error",
+            "request_id": datetime.now().isoformat()
+        }), 500
 
 # --- Real DART search endpoint (uses services.adapters.dart) ---
 @app.route('/api/dart/search', methods=['POST'])
@@ -353,17 +467,17 @@ def index():
 @app.route('/enhanced/company_screening')
 def enhanced_company_screening():
     """Enhanced company screening page"""
-    return render_template('company_screening_enhanced.html')
+    return render_template('enhanced_company_screening.html')
 
 @app.route('/enhanced/individual_screening')
 def enhanced_individual_screening():
     """Enhanced individual screening page"""
-    return render_template('individual_screening_enhanced.html')
+    return render_template('enhanced_individual_screening.html')
 
 @app.route('/enhanced/dart_registry')
 def enhanced_dart_registry():
     """Enhanced DART registry page"""
-    return render_template('dart_registry_enhanced.html')
+    return render_template('enhanced_dart_registry.html')
 
 # Diagnostics to verify providers/keys presence live
 @app.route('/debug/providers', methods=['GET'])
@@ -381,6 +495,26 @@ def debug_providers():
         return jsonify(info)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/status/<request_id>', methods=['GET'])
+def api_status(request_id):
+    """Get status of a long-running request"""
+    # For now, return a simple status
+    # In production, this would check actual job status
+    return jsonify({
+        "request_id": request_id,
+        "status": "completed",
+        "progress": 100,
+        "message": "Request completed"
+    })
+
+
+@app.route('/api/cache/stats', methods=['GET'])
+def api_cache_stats():
+    """Get cache statistics"""
+    from utils.cache import get_cache_stats
+    return jsonify(get_cache_stats())
 
 def generate_simulated_company_result(company, country, domain, level):
     """Generate a simulated company screening result for testing"""
