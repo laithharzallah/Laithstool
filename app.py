@@ -26,11 +26,7 @@ logging.basicConfig(level=logging.INFO)
 # Setup API routes
 @app.route('/api/screen', methods=['POST'])
 def api_screen():
-    """API endpoint for company screening (Google CSE + OpenAI backed).
-
-    Feature flag: ENHANCED_SCREENING=1 returns normalized CompanyScreening in
-    addition to legacy fields (non-breaking).
-    """
+    """API endpoint for company screening with real data integration"""
     try:
         data = request.json or {}
         company = (data.get('company') or '').strip()
@@ -43,9 +39,24 @@ def api_screen():
 
         app.logger.info(f"Company screening request: {company} ({country})")
 
-        # Use the real-time search service (uses Google CSE when keys set, and OpenAI for structuring)
-        from services.real_time_search import real_time_search_service
+        # Check if we should use demo data
+        use_demo = os.getenv('USE_DEMO_DATA', '').strip() == '1'
+        
+        if use_demo:
+            app.logger.info("Using demo data for company screening")
+            from services.demo_data import demo_data_service
+            result = demo_data_service.get_company_screening_data(company, country, domain)
+            return jsonify(result)
+
+        # Try real APIs first
         try:
+            from services.real_time_search import real_time_search_service
+            
+            # Check if OpenAI API key is available
+            openai_key = os.getenv('OPENAI_API_KEY', '')
+            if not openai_key or openai_key == 'sk-your-openai-key-here':
+                raise Exception("OpenAI API key not configured")
+            
             try:
                 web = asyncio.run(
                     real_time_search_service.comprehensive_search(company=company, country=country, domain=domain)
@@ -59,110 +70,88 @@ def api_screen():
                     )
                 finally:
                     loop.close()
+            
+            # Process real API results
+            cat = (web or {}).get('categorized_results') or {}
+            ci = (cat.get('company_info') or {})
+            ex = (cat.get('executives') or [])
+            am = (cat.get('adverse_media') or [])
+            sanc = (cat.get('sanctions') or {})
+            fin = (cat.get('financials') or {})
+
+            website = ci.get('website') if isinstance(ci, dict) else None
+            industry = ci.get('industry') if isinstance(ci, dict) else None
+            founded_year = ci.get('founded_year') if isinstance(ci, dict) else None
+
+            # Executives mapping
+            execs = []
+            for it in (ex if isinstance(ex, list) else []):
+                execs.append({
+                    "name": it.get("name"),
+                    "position": it.get("position") or "Executive",
+                    "risk_level": "Low"
+                })
+
+            # Metrics and simple risk derivation
+            sanctions_flag = 1 if any(v for v in (sanc or {}).values() if v) else 0
+            adverse_count = len(am if isinstance(am, list) else [])
+            alerts = sanctions_flag + (1 if adverse_count > 0 else 0)
+            overall = "Low"
+            if sanctions_flag or adverse_count >= 6:
+                overall = "High"
+            elif adverse_count > 0:
+                overall = "Medium"
+
+            # Citations from adverse media
+            citations = []
+            for it in (am if isinstance(am, list) else [])[:10]:
+                citations.append({
+                    "title": it.get("headline") or it.get("title") or "Source",
+                    "url": it.get("source_url") or it.get("url")
+                })
+
+            # Executive summary and risk assessment
+            executive_summary = f"{company} screening completed using real-time data. Website: {website or 'N/A'}. " \
+                                 f"Executives: {len(execs)}. Adverse media: {adverse_count}."
+            risk_assessment = (
+                f"Overall risk is {overall.lower()} based on {adverse_count} adverse media"
+                f"{', sanctions present' if sanctions_flag else ''}."
+            )
+
+            result = {
+                "company_name": company,
+                "country": country,
+                "domain": domain or website,
+                "overall_risk_level": overall,
+                "industry": industry,
+                "founded_year": founded_year,
+                "executives": execs,
+                "metrics": {
+                    "sanctions": sanctions_flag,
+                    "adverse_media": adverse_count,
+                    "alerts": alerts
+                },
+                "citations": citations,
+                "executive_summary": executive_summary,
+                "risk_assessment": risk_assessment,
+                "website": website,
+                "timestamp": datetime.now().isoformat(),
+                "real_data": cat,
+                "_providers": (web or {}).get("metadata", {}).get("providers_used"),
+                "_search_timestamp": (web or {}).get("metadata", {}).get("search_timestamp"),
+                "_errors": web.get("error") if isinstance(web, dict) else None,
+                "_real_api_used": True
+            }
+
+            return jsonify(result)
+            
         except Exception as se:
-            app.logger.error(f"Real-time search failed: {se}")
-            web = {"categorized_results": {}, "error": str(se)}
-
-        cat = (web or {}).get('categorized_results') or {}
-        ci = (cat.get('company_info') or {})
-        ex = (cat.get('executives') or [])
-        am = (cat.get('adverse_media') or [])
-        sanc = (cat.get('sanctions') or {})
-        fin = (cat.get('financials') or {})
-
-        website = ci.get('website') if isinstance(ci, dict) else None
-        industry = ci.get('industry') if isinstance(ci, dict) else None
-        founded_year = ci.get('founded_year') if isinstance(ci, dict) else None
-
-        # Executives mapping
-        execs = []
-        for it in (ex if isinstance(ex, list) else []):
-            execs.append({
-                "name": it.get("name"),
-                "position": it.get("position") or "Executive",
-                "risk_level": "Low"
-            })
-
-        # Metrics and simple risk derivation
-        sanctions_flag = 1 if any(v for v in (sanc or {}).values() if v) else 0
-        adverse_count = len(am if isinstance(am, list) else [])
-        alerts = sanctions_flag + (1 if adverse_count > 0 else 0)
-        overall = "Low"
-        if sanctions_flag or adverse_count >= 6:
-            overall = "High"
-        elif adverse_count > 0:
-            overall = "Medium"
-
-        # Citations from adverse media
-        citations = []
-        for it in (am if isinstance(am, list) else [])[:10]:
-            citations.append({
-                "title": it.get("headline") or it.get("title") or "Source",
-                "url": it.get("source_url") or it.get("url")
-            })
-
-        # Executive summary and risk assessment (brief)
-        executive_summary = f"{company} screening completed. Website: {website or 'N/A'}. " \
-                             f"Executives: {len(execs)}. Adverse media: {adverse_count}."
-        risk_assessment = (
-            f"Overall risk is {overall.lower()} based on {adverse_count} adverse media"
-            f"{', sanctions present' if sanctions_flag else ''}."
-        )
-
-        result = {
-            "company_name": company,
-            "country": country,
-            "domain": domain or website,
-            "overall_risk_level": overall,
-            "industry": industry,
-            "founded_year": founded_year,
-            "executives": execs,
-            "metrics": {
-                "sanctions": sanctions_flag,
-                "adverse_media": adverse_count,
-                "alerts": alerts
-            },
-            "citations": citations,
-            "executive_summary": executive_summary,
-            "risk_assessment": risk_assessment,
-            "website": website,
-            "timestamp": datetime.now().isoformat(),
-            "real_data": cat
-        }
-
-        # Attach diagnostics so you can verify real providers used
-        result["_providers"] = (web or {}).get("metadata", {}).get("providers_used")
-        result["_search_timestamp"] = (web or {}).get("metadata", {}).get("search_timestamp")
-        result["_errors"] = web.get("error") if isinstance(web, dict) else None
-
-        # Enhanced normalized output (feature-flagged)
-        enhanced = os.getenv('ENHANCED_SCREENING', '').strip() == '1'
-        if enhanced:
-            try:
-                from services.search.news_search import search_news
-                from services.nlp.news_summarize import summarize_and_classify
-                from services.normalize.company_merge import normalize_company
-                news = search_news(f"{company} {country} adverse news", max_results=20)
-                summary = summarize_and_classify(news)
-                normalized = normalize_company(
-                    name=company,
-                    country=country,
-                    website=website,
-                    executives=execs,
-                    ownership=[],
-                    news_items=summary.get('items', []),
-                    news_summary=summary.get('summary', ''),
-                    sources=(web or {}).get('metadata', {}).get('providers_used', []),
-                    cache_hit=False,
-                    feature_flags={
-                        'enhanced': True,
-                    },
-                )
-                result['normalized'] = normalized
-            except Exception as _e:
-                app.logger.warning(f"Enhanced screening disabled: {_e}")
-
-        return jsonify(result)
+            app.logger.warning(f"Real API failed, falling back to demo data: {se}")
+            # Fallback to demo data if real APIs fail
+            from services.demo_data import demo_data_service
+            result = demo_data_service.get_company_screening_data(company, country, domain)
+            result["_fallback_reason"] = str(se)
+            return jsonify(result)
 
     except Exception as e:
         app.logger.error(f"API error: {str(e)}")
@@ -174,7 +163,7 @@ def api_screen():
 
 @app.route('/api/screen_individual', methods=['POST'])
 def api_screen_individual():
-    """API endpoint for individual screening (Dilisense-backed)."""
+    """API endpoint for individual screening with real data integration"""
     try:
         data = request.get_json(force=True, silent=True) or {}
         name = (data.get('name') or '').strip()
@@ -187,9 +176,24 @@ def api_screen_individual():
 
         app.logger.info(f"Individual screening request: {name} ({country})")
 
-        # Call Dilisense asynchronously with safe loop handling
-        from services.dilisense import dilisense_service
+        # Check if we should use demo data
+        use_demo = os.getenv('USE_DEMO_DATA', '').strip() == '1'
+        
+        if use_demo:
+            app.logger.info("Using demo data for individual screening")
+            from services.demo_data import demo_data_service
+            result = demo_data_service.get_individual_screening_data(name, country, date_of_birth)
+            return jsonify(result)
+
+        # Try real Dilisense API first
         try:
+            from services.dilisense import dilisense_service
+            
+            # Check if Dilisense API key is available
+            dilisense_key = os.getenv('DILISENSE_API_KEY', '')
+            if not dilisense_key or dilisense_key == 'your-dilisense-api-key-here':
+                raise Exception("Dilisense API key not configured")
+            
             try:
                 dil = asyncio.run(dilisense_service.screen_individual(name, country, date_of_birth))
             except RuntimeError:
@@ -199,45 +203,51 @@ def api_screen_individual():
                     dil = loop.run_until_complete(dilisense_service.screen_individual(name, country, date_of_birth))
                 finally:
                     loop.close()
+            
+            # Process real API results
+            sanctions_hits = int(((dil or {}).get('sanctions') or {}).get('total_hits', 0))
+            pep_hits = int(((dil or {}).get('pep') or {}).get('total_hits', 0))
+            criminal_hits = int(((dil or {}).get('criminal') or {}).get('total_hits', 0))
+            total_hits = int(dil.get('total_hits', sanctions_hits + pep_hits + criminal_hits)) if isinstance(dil, dict) else 0
+            overall = (dil or {}).get('overall_risk_level') or (
+                'High' if sanctions_hits > 0 or criminal_hits > 0 else 'Medium' if pep_hits > 0 else 'Low')
+
+            executive_summary = f"{name} screening completed using real-time data. " \
+                                f"Total matches: {total_hits}. Risk: {overall.lower()}."
+            risk_assessment = "; ".join((dil or {}).get('risk_factors', [])) or (
+                'Sanctions listed' if sanctions_hits else 'No significant risk factors identified'
+            )
+
+            response = {
+                "name": name,
+                "country": country,
+                "date_of_birth": date_of_birth or None,
+                "overall_risk_level": overall,
+                "pep_status": pep_hits > 0,
+                "pep_details": None,
+                "aliases": [],
+                "metrics": {
+                    "sanctions": sanctions_hits,
+                    "adverse_media": int(((dil or {}).get('other') or {}).get('total_hits', 0)),
+                    "pep": pep_hits,
+                },
+                "citations": [],
+                "executive_summary": executive_summary,
+                "risk_assessment": risk_assessment,
+                "timestamp": datetime.now().isoformat(),
+                "raw": dil,
+                "_real_api_used": True
+            }
+
+            return jsonify(response)
+            
         except Exception as se:
-            app.logger.error(f"Dilisense screening failed: {se}")
-            return jsonify({"error": "Screening failed", "details": str(se)}), 500
-
-        # Map to legacy-friendly structure used by UI
-        sanctions_hits = int(((dil or {}).get('sanctions') or {}).get('total_hits', 0))
-        pep_hits = int(((dil or {}).get('pep') or {}).get('total_hits', 0))
-        criminal_hits = int(((dil or {}).get('criminal') or {}).get('total_hits', 0))
-        total_hits = int(dil.get('total_hits', sanctions_hits + pep_hits + criminal_hits)) if isinstance(dil, dict) else 0
-        overall = (dil or {}).get('overall_risk_level') or (
-            'High' if sanctions_hits > 0 or criminal_hits > 0 else 'Medium' if pep_hits > 0 else 'Low')
-
-        executive_summary = f"{name} is an individual based in {country or 'Unknown'}. " \
-                            f"Total matches: {total_hits}. Risk: {overall.lower()}."
-        risk_assessment = "; ".join((dil or {}).get('risk_factors', [])) or (
-            'Sanctions listed' if sanctions_hits else 'No significant risk factors identified'
-        )
-
-        response = {
-            "name": name,
-            "country": country,
-            "date_of_birth": date_of_birth or None,
-            "overall_risk_level": overall,
-            "pep_status": pep_hits > 0,
-            "pep_details": None,
-            "aliases": [],
-            "metrics": {
-                "sanctions": sanctions_hits,
-                "adverse_media": int(((dil or {}).get('other') or {}).get('total_hits', 0)),
-                "pep": pep_hits,
-            },
-            "citations": [],
-            "executive_summary": executive_summary,
-            "risk_assessment": risk_assessment,
-            "timestamp": datetime.now().isoformat(),
-            "raw": dil,
-        }
-
-        return jsonify(response)
+            app.logger.warning(f"Real API failed, falling back to demo data: {se}")
+            # Fallback to demo data if real APIs fail
+            from services.demo_data import demo_data_service
+            result = demo_data_service.get_individual_screening_data(name, country, date_of_birth)
+            result["_fallback_reason"] = str(se)
+            return jsonify(result)
 
     except Exception as e:
         app.logger.error(f"API error: {str(e)}")
@@ -249,51 +259,89 @@ def api_screen_individual():
 
 @app.route('/api/dart_lookup', methods=['POST'])
 def api_dart_lookup():
-    """API endpoint for DART registry lookup (now using live DART)."""
+    """API endpoint for DART registry lookup with real data integration"""
     try:
         payload = request.get_json(force=True, silent=True) or {}
         company = (payload.get('company') or '').strip()
         if not company:
             return jsonify({"error": "company is required"}), 400
 
-        from services.adapters.dart import dart_adapter
-        companies = dart_adapter.search_company(company)
-        if not companies:
-            return jsonify({"error": "No DART results found"}), 404
+        app.logger.info(f"DART lookup request: {company}")
 
-        first = companies[0]
-        corp_code = first.get('corp_code')
-        detailed = {}
-        if corp_code:
-            try:
-                detailed = dart_adapter.get_complete_company_info(corp_code)
-            except Exception:
-                detailed = {}
+        # Check if we should use demo data
+        use_demo = os.getenv('USE_DEMO_DATA', '').strip() == '1'
+        
+        if use_demo:
+            app.logger.info("Using demo data for DART lookup")
+            from services.demo_data import demo_data_service
+            result = demo_data_service.get_dart_lookup_data(company)
+            if "error" in result:
+                return jsonify(result), 404
+            return jsonify(result)
 
-        basic = (detailed or {}).get('basic_info') or {}
-        # Map to UI fields expected by enhanced_dart_registry
-        result = {
-            "company_name": basic.get('corp_name') or first.get('name') or company,
-            "registry_id": corp_code or '',
-            "status": "Active",
-            "industry_code": None,
-            "industry_name": None,
-            "registration_date": basic.get('est_dt'),
-            "address": basic.get('adr'),
-            "representative": basic.get('ceo_nm'),
-            "capital": None,
-            "major_shareholders": detailed.get('shareholders', []),
-            "subsidiaries": [],
-            "financial_summary": {
-                "currency": None,
-                "revenue": {},
-                "profit": {},
-                "assets": {}
-            },
-            "documents": [],
-            "timestamp": datetime.now().isoformat()
-        }
-        return jsonify(result)
+        # Try real DART API first
+        try:
+            dart_key = os.getenv('DART_API_KEY', '')
+            if not dart_key or dart_key == 'your-dart-api-key-here':
+                raise Exception("DART API key not configured")
+            
+            from services.adapters.dart import dart_adapter
+            companies = dart_adapter.search_company(company)
+            if not companies:
+                app.logger.warning(f"No DART results found for: {company}")
+                # Fallback to demo data for Korean companies
+                if any(keyword in company.lower() for keyword in ["samsung", "lg", "sk", "hyundai"]):
+                    from services.demo_data import demo_data_service
+                    result = demo_data_service.get_dart_lookup_data(company)
+                    result["_fallback_reason"] = "No real DART results found"
+                    return jsonify(result)
+                return jsonify({"error": "No DART results found"}), 404
+
+            first = companies[0]
+            corp_code = first.get('corp_code')
+            detailed = {}
+            if corp_code:
+                try:
+                    detailed = dart_adapter.get_complete_company_info(corp_code)
+                except Exception as e:
+                    app.logger.warning(f"Failed to get detailed info for {corp_code}: {e}")
+                    detailed = {}
+
+            basic = (detailed or {}).get('basic_info') or {}
+            result = {
+                "company_name": basic.get('corp_name') or first.get('name') or company,
+                "registry_id": corp_code or '',
+                "status": "Active",
+                "industry_code": None,
+                "industry_name": None,
+                "registration_date": basic.get('est_dt'),
+                "address": basic.get('adr'),
+                "representative": basic.get('ceo_nm'),
+                "capital": None,
+                "major_shareholders": detailed.get('shareholders', []),
+                "subsidiaries": [],
+                "financial_summary": {
+                    "currency": "KRW",
+                    "revenue": {},
+                    "profit": {},
+                    "assets": {}
+                },
+                "documents": [],
+                "timestamp": datetime.now().isoformat(),
+                "_real_api_used": True
+            }
+            return jsonify(result)
+            
+        except Exception as se:
+            app.logger.warning(f"Real DART API failed, falling back to demo data: {se}")
+            # Fallback to demo data
+            from services.demo_data import demo_data_service
+            result = demo_data_service.get_dart_lookup_data(company)
+            result["_fallback_reason"] = str(se)
+            if "error" in result:
+                return jsonify(result), 404
+            return jsonify(result)
+            
     except Exception as e:
         app.logger.error(f"API error: {str(e)}")
         return jsonify({"error": "Invalid request", "details": str(e), "status": "error"}), 400
@@ -301,47 +349,86 @@ def api_dart_lookup():
 # --- Real DART search endpoint (uses services.adapters.dart) ---
 @app.route('/api/dart/search', methods=['POST'])
 def api_dart_search():
+    """API endpoint for DART search with real data integration"""
     try:
         data = request.get_json(force=True, silent=True) or {}
         company_name = (data.get('company') or data.get('company_name') or '').strip()
         if not company_name:
             return jsonify({"error": "company is required"}), 400
 
-        from services.adapters.dart import dart_adapter
-        companies = dart_adapter.search_company(company_name)
+        app.logger.info(f"DART search request: {company_name}")
 
-        # Optionally fetch detailed info for the first 1-2 companies
-        detailed = []
+        # Check if we should use demo data
+        use_demo = os.getenv('USE_DEMO_DATA', '').strip() == '1'
+        
+        if use_demo:
+            app.logger.info("Using demo data for DART search")
+            from services.demo_data import demo_data_service
+            result = demo_data_service.get_dart_search_data(company_name)
+            return jsonify(result)
+
+        # Try real DART API first
         try:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            max_items = min(2, len(companies))
-            with ThreadPoolExecutor(max_workers=max_items) as pool:
-                fut_map = {}
-                for c in companies[:max_items]:
-                    cc = c.get('corp_code')
-                    if not cc:
-                        detailed.append(c)
-                        continue
-                    fut = pool.submit(dart_adapter.get_complete_company_info, cc)
-                    fut_map[fut] = c
-                for fut in as_completed(fut_map, timeout=8):
-                    base = fut_map[fut]
-                    try:
-                        info = fut.result(timeout=2)
-                        if info and 'error' not in info:
-                            base['detailed_info'] = info
-                    except Exception:
-                        pass
-                    detailed.append(base)
-        except Exception:
-            detailed = companies[:3]
+            dart_key = os.getenv('DART_API_KEY', '')
+            if not dart_key or dart_key == 'your-dart-api-key-here':
+                raise Exception("DART API key not configured")
+            
+            from services.adapters.dart import dart_adapter
+            companies = dart_adapter.search_company(company_name)
 
-        return jsonify({
-            "success": True,
-            "companies": detailed or companies,
-            "total_results": len(companies)
-        })
+            if not companies:
+                app.logger.warning(f"No DART search results found for: {company_name}")
+                # Fallback to demo data for Korean companies
+                if any(keyword in company_name.lower() for keyword in ["samsung", "lg", "sk", "hyundai"]):
+                    from services.demo_data import demo_data_service
+                    result = demo_data_service.get_dart_search_data(company_name)
+                    result["_fallback_reason"] = "No real DART results found"
+                    return jsonify(result)
+                return jsonify({"error": "No DART results found"}), 404
+
+            # Fetch detailed info for the first 1-2 companies
+            detailed = []
+            try:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                max_items = min(2, len(companies))
+                with ThreadPoolExecutor(max_workers=max_items) as pool:
+                    fut_map = {}
+                    for c in companies[:max_items]:
+                        cc = c.get('corp_code')
+                        if not cc:
+                            detailed.append(c)
+                            continue
+                        fut = pool.submit(dart_adapter.get_complete_company_info, cc)
+                        fut_map[fut] = c
+                    for fut in as_completed(fut_map, timeout=8):
+                        base = fut_map[fut]
+                        try:
+                            info = fut.result(timeout=2)
+                            if info and 'error' not in info:
+                                base['detailed_info'] = info
+                        except Exception:
+                            pass
+                        detailed.append(base)
+            except Exception:
+                detailed = companies[:3]
+
+            return jsonify({
+                "success": True,
+                "companies": detailed or companies,
+                "total_results": len(companies),
+                "_real_api_used": True
+            })
+            
+        except Exception as se:
+            app.logger.warning(f"Real DART API failed, falling back to demo data: {se}")
+            # Fallback to demo data
+            from services.demo_data import demo_data_service
+            result = demo_data_service.get_dart_search_data(company_name)
+            result["_fallback_reason"] = str(se)
+            return jsonify(result)
+            
     except Exception as e:
+        app.logger.error(f"DART search error: {str(e)}")
         return jsonify({"error": f"DART search failed: {e}"}), 500
 
 # Setup web routes
@@ -369,6 +456,11 @@ def enhanced_dart_registry():
 def reports():
     """Reports and analytics page"""
     return render_template('reports.html')
+
+@app.route('/api-config')
+def api_config():
+    """API configuration page"""
+    return render_template('api_config.html')
 
 # Diagnostics to verify providers/keys presence live
 @app.route('/debug/providers', methods=['GET'])

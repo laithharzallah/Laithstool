@@ -103,6 +103,14 @@
                         </svg>
                         Reports
                     </a>
+                    
+                    <a href="/api-config" class="nav-link" :class="{'text-yellow-400': !apiConfig.configured}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        API Config
+                    </a>
                 </div>
 
                 <!-- Right Side Actions -->
@@ -138,10 +146,60 @@
                     <a href="/enhanced/individual_screening" class="mobile-nav-link">Individual Screening</a>
                     <a href="/enhanced/dart_registry" class="mobile-nav-link">DART Registry</a>
                     <a href="/reports" class="mobile-nav-link">Reports</a>
+                    <a href="/api-config" class="mobile-nav-link" :class="{'text-yellow-400': !apiConfig.configured}">API Configuration</a>
                 </div>
             </div>
         </div>
     </nav>
+
+    <!-- Demo Mode Banner -->
+    <div x-show="!apiConfig.configured" x-cloak class="bg-yellow-600/20 border-b border-yellow-600/30">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                    <div>
+                        <p class="text-yellow-200 font-medium">Demo Mode Active</p>
+                        <p class="text-yellow-300 text-sm">Configure API keys to access real-time data</p>
+                    </div>
+                </div>
+                <button @click="showApiHelp = !showApiHelp" class="text-yellow-200 hover:text-white text-sm font-medium">
+                    Configure APIs
+                </button>
+            </div>
+            
+            <!-- API Configuration Help -->
+            <div x-show="showApiHelp" x-cloak class="mt-4 p-4 bg-gray-800/50 rounded-lg">
+                <h4 class="text-white font-medium mb-3">Required API Keys:</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <p class="text-yellow-200 font-medium">OPENAI_API_KEY</p>
+                        <p class="text-gray-300">For AI-powered analysis and data extraction</p>
+                    </div>
+                    <div>
+                        <p class="text-yellow-200 font-medium">DART_API_KEY</p>
+                        <p class="text-gray-300">For Korean company registry access</p>
+                    </div>
+                    <div>
+                        <p class="text-yellow-200 font-medium">GOOGLE_API_KEY + GOOGLE_CSE_ID</p>
+                        <p class="text-gray-300">For real-time web search capabilities</p>
+                    </div>
+                    <div>
+                        <p class="text-yellow-200 font-medium">DILISENSE_API_KEY</p>
+                        <p class="text-gray-300">For sanctions and PEP screening</p>
+                    </div>
+                </div>
+                <div class="mt-4 p-3 bg-blue-500/20 rounded-lg">
+                    <p class="text-blue-200 text-sm">
+                        <strong>Note:</strong> Set these as environment variables or in your .env file. 
+                        The application will automatically switch to real data when keys are configured.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main class="flex-1">
@@ -176,6 +234,14 @@
                 currentPage: window.location.pathname.split('/').pop() || 'dashboard',
                 mobileMenuOpen: false,
                 providerStatus: null,
+                showApiHelp: false,
+                apiConfig: {
+                    configured: false,
+                    openai: false,
+                    dart: false,
+                    google: false,
+                    dilisense: false
+                },
                 
                 init() {
                     this.loadProviderStatus();
@@ -187,9 +253,16 @@
                         if (response.ok) {
                             const data = await response.json();
                             this.providerStatus = data.providers || [];
+                            
+                            // Update API configuration status
+                            this.apiConfig.openai = data.OPENAI || false;
+                            this.apiConfig.dart = data.DART_API_KEY || false;
+                            this.apiConfig.google = (data.GOOGLE_API && data.GOOGLE_CSE_ID) || false;
+                            this.apiConfig.configured = this.apiConfig.openai && this.apiConfig.dart && this.apiConfig.google;
                         }
                     } catch (e) {
                         console.log('Provider status not available');
+                        this.apiConfig.configured = false;
                     }
                 }
             };
