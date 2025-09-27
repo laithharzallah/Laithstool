@@ -4,6 +4,8 @@ Enhanced TPRM Tool with Professional JSON Visualization
 import os
 import json
 import asyncio
+import threading
+import concurrent.futures
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from dotenv import load_dotenv
@@ -74,8 +76,6 @@ def api_screen():
             
             if loop and loop.is_running():
                 # We're in an existing event loop (e.g., Jupyter, some WSGI servers)
-                import concurrent.futures
-                import threading
                 
                 result = None
                 exception = None
@@ -263,7 +263,6 @@ def api_screen_individual():
             
             if loop and loop.is_running():
                 # We're in an existing event loop
-                import threading
                 
                 result = None
                 exception = None
