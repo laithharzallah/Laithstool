@@ -315,8 +315,29 @@ def api_screen_individual():
         overall = (dil or {}).get('overall_risk_level') or (
             'High' if sanctions_hits > 0 or criminal_hits > 0 else 'Medium' if pep_hits > 0 else 'Low')
 
-        executive_summary = f"{name} is an individual based in {country or 'Unknown'}. " \
-                            f"Total matches: {total_hits}. Risk: {overall.lower()}."
+        # Extract PEP details from Dilisense response
+        pep_details = None
+        if pep_hits > 0 and isinstance(dil, dict):
+            pep_data = dil.get('pep', {})
+            if isinstance(pep_data, dict) and pep_data.get('items'):
+                # Get the first PEP entry for details
+                first_pep = pep_data['items'][0] if isinstance(pep_data['items'], list) else {}
+                pep_details = {
+                    "position": first_pep.get('position', 'Political Position'),
+                    "country": first_pep.get('country', country or 'Unknown'),
+                    "since": first_pep.get('since', first_pep.get('start_date', 'Unknown')),
+                    "source": first_pep.get('source', 'Dilisense'),
+                    "level": first_pep.get('level', 'Senior'),
+                    "description": first_pep.get('description', ''),
+                    "end_date": first_pep.get('end_date', ''),
+                    "reason": first_pep.get('reason', 'Political exposure')
+                }
+
+        executive_summary = f"{name} is an individual based in {country or 'Unknown'}. "
+        if pep_hits > 0 and pep_details:
+            executive_summary += f"Identified as a Politically Exposed Person ({pep_details['position']}). "
+        executive_summary += f"Total matches: {total_hits}. Risk: {overall.lower()}."
+        
         risk_assessment = "; ".join((dil or {}).get('risk_factors', [])) or (
             'Sanctions listed' if sanctions_hits else 'No significant risk factors identified'
         )
@@ -327,8 +348,8 @@ def api_screen_individual():
             "date_of_birth": date_of_birth or None,
             "overall_risk_level": overall,
             "pep_status": pep_hits > 0,
-            "pep_details": None,
-            "aliases": [],
+            "pep_details": pep_details,
+            "aliases": dil.get('aliases', []) if isinstance(dil, dict) else [],
             "metrics": {
                 "sanctions": sanctions_hits,
                 "adverse_media": int(((dil or {}).get('other') or {}).get('total_hits', 0)),

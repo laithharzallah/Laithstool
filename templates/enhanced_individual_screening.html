@@ -528,6 +528,10 @@
                                             <td class="font-medium text-gray-400">Since</td>
                                             <td x-text="results.pep_details?.since || 'Not specified'"></td>
                                         </tr>
+                                        <tr x-show="results.pep_details?.end_date">
+                                            <td class="font-medium text-gray-400">Until</td>
+                                            <td x-text="results.pep_details?.end_date"></td>
+                                        </tr>
                                         <tr>
                                             <td class="font-medium text-gray-400">Source</td>
                                             <td x-text="results.pep_details?.source || 'Not specified'"></td>
@@ -537,6 +541,14 @@
                                             <td>
                                                 <span class="badge badge-warning" x-text="results.pep_details?.level || 'Senior'"></span>
                                             </td>
+                                        </tr>
+                                        <tr x-show="results.pep_details?.reason">
+                                            <td class="font-medium text-gray-400">Reason</td>
+                                            <td x-text="results.pep_details?.reason"></td>
+                                        </tr>
+                                        <tr x-show="results.pep_details?.description">
+                                            <td class="font-medium text-gray-400">Description</td>
+                                            <td x-text="results.pep_details?.description"></td>
                                         </tr>
                                     </tbody>
                                 </table>

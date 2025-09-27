@@ -229,12 +229,10 @@ class RealTimeSearchService:
 
             ex = processed_results.get("executives", {}).get("results", {})
             ex_data = ex.get("executives", []) if isinstance(ex, dict) else []
-            # If executives are null, create basic fallback
-            if not ex_data or all(not e.get("name") for e in ex_data):
-                ex_data = [
-                    {"name": "CEO", "position": "Chief Executive Officer", "company": company, "background": None, "source_url": None, "source": "Company leadership"},
-                    {"name": "Chairman", "position": "Chairman of the Board", "company": company, "background": None, "source_url": None, "source": "Company leadership"}
-                ]
+            # If executives are null or have no actual names, don't create fake fallback
+            if not ex_data or all(not e.get("name") or e.get("name") in ["CEO", "Chairman", "President", "Executive", "Director"] for e in ex_data):
+                # Empty list is better than fake data
+                ex_data = []
             categorized_results["executives"] = ex_data
 
             am = processed_results.get("adverse_media", {}).get("results", {})
@@ -321,9 +319,12 @@ class RealTimeSearchService:
                 if not domain and cc.upper() == "SA":
                     query += " site:*.sa"
             elif intent == "executives":
-                query = f"{company} {cc} leadership management executives team board{site_hint}".strip()
+                query = f"{company} {cc} leadership management executives team board directors CEO chairman{site_hint}".strip()
                 if not domain and cc.upper() == "SA":
                     query += " site:*.sa"
+            elif intent == "adverse_media":
+                # More comprehensive adverse media search
+                query = f"{company} {cc} scandal controversy lawsuit liquidation bankruptcy fraud investigation negative news".strip()
             else:
                 query = f"{company} {cc} {intent}".strip()
 
@@ -341,7 +342,12 @@ class RealTimeSearchService:
                     if intent == "executives":
                         cse_queries.append(f"{company} leadership team executives")
                     elif intent == "adverse_media":
-                        cse_queries.append(f"{company} controversy scandal lawsuit")
+                        cse_queries.extend([
+                            f"{company} controversy scandal lawsuit",
+                            f"{company} liquidation bankruptcy financial problems",
+                            f"{company} fraud investigation regulatory issues",
+                            f"{company} negative news problems issues"
+                        ])
                     
                     for cse_query in cse_queries:
                         try:
@@ -577,17 +583,22 @@ Search the web thoroughly and extract factual information. Return ONLY the JSON 
 Extract ONLY the following fields about executives of: {company}{country_filter}.
 If information is not available, return null.
 
+CRITICAL: Extract ACTUAL PERSON NAMES, not just titles. For example:
+- CORRECT: {{"name": "Satya Nadella", "position": "CEO"}}
+- WRONG: {{"name": "CEO", "position": "Chief Executive Officer"}}
+- WRONG: {{"name": "Chairman", "position": "Chairman of the Board"}}
+
 Return in EXACT JSON format:
 
 {{
     "executives": [
         {{
-            "name": "<full name of executive or null>",
-            "position": "<job title or position or null>",
+            "name": "<full name of the actual person, NOT just their title>",
+            "position": "<job title or position>",
             "company": "{company}",
-            "background": "<brief background or experience or null>",
-            "source_url": "<URL where found or null>",
-            "source": "<website or source name or null>"
+            "background": "<brief background or experience>",
+            "source_url": "<URL where found>",
+            "source": "<website or source name>"
         }}
     ],
     "search_results": [
@@ -601,7 +612,7 @@ Return in EXACT JSON format:
     ]
 }}
 
-Search the web thoroughly for current CEO, board members, and top executives. Return ONLY the JSON structure above."""
+Search the web thoroughly for the NAMES of current CEO, Chairman, board members, and top executives. Focus on finding their actual names, not just their titles."""
                 
             elif intent == "financials":
                 search_prompt = f"""Search the internet for financial information about {company}{country_filter}.

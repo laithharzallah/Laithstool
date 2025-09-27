@@ -139,6 +139,18 @@ class DARTAdapter:
             if not cc:
                 continue
             match = False
+            # More flexible matching - check if any part of the query matches
+            query_parts = q.split()
+            if not query_parts:
+                query_parts = [q]
+            
+            for part in query_parts:
+                if len(part) >= 2:  # Skip single characters
+                    if part in key_ko or part in key_en:
+                        match = True
+                        break
+            
+            # Also check original aliases
             if any(a in key_ko for a in aliases) or any(a in key_en for a in aliases):
                 match = True
             if q and stock and q in stock:
