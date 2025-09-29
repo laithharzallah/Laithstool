@@ -129,6 +129,16 @@ def api_screen():
         website = ci.get('website') if isinstance(ci, dict) else None
         industry = ci.get('industry') if isinstance(ci, dict) else None
         founded_year = ci.get('founded_year') if isinstance(ci, dict) else None
+        # Best-effort headquarters extraction
+        headquarters = None
+        if isinstance(ci, dict):
+            headquarters = (
+                ci.get('headquarters')
+                or ci.get('hq')
+                or ci.get('headquarters_location')
+                or ci.get('location')
+                or ci.get('address')
+            )
 
         # Executives mapping
         execs = []
@@ -149,12 +159,22 @@ def api_screen():
         elif adverse_count > 0:
             overall = "Medium"
 
-        # Citations from adverse media
+        # Normalize adverse media and derive citations
         citations = []
-        for it in (am if isinstance(am, list) else [])[:10]:
-            citations.append({
-                "title": it.get("headline") or it.get("title") or "Source",
-                "url": it.get("source_url") or it.get("url")
+        adverse_media_norm = []
+        for it in (am if isinstance(am, list) else [])[:25]:
+            title = it.get('headline') or it.get('title') or 'Source'
+            url = it.get('source_url') or it.get('url')
+            if title and url:
+                citations.append({
+                    "title": title,
+                    "url": url
+                })
+            adverse_media_norm.append({
+                "title": title,
+                "date": it.get('published_date') or it.get('date'),
+                "summary": it.get('summary') or it.get('snippet') or it.get('description'),
+                "url": url
             })
 
         # Executive summary and risk assessment (brief)
@@ -172,12 +192,14 @@ def api_screen():
             "overall_risk_level": overall,
             "industry": industry,
             "founded_year": founded_year,
+            "headquarters": headquarters,
             "executives": execs,
             "metrics": {
                 "sanctions": sanctions_flag,
                 "adverse_media": adverse_count,
                 "alerts": alerts
             },
+            "adverse_media": adverse_media_norm,
             "citations": citations,
             "executive_summary": executive_summary,
             "risk_assessment": risk_assessment,
